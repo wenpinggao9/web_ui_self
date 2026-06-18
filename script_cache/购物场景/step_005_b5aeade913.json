@@ -1,0 +1,12 @@
+{
+  "step_no": 5,
+  "raw_text": "鼠标悬浮在页面右上角的用户菜单按钮 \"15373137739\" 上",
+  "action": "hover",
+  "locator": {
+    "strategy": "css",
+    "value": ".el-dropdown [role='button']",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "用户菜单触发器带有 role=button 和 haspopup=menu, 用 css 定位 .el-dropdown 下的 role=button 元素进行悬浮"
+}

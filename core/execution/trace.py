@@ -116,6 +116,15 @@ class ExecutionTrace:
                 f"retry_focus={data.get('retry_focus')} "
                 f"reason={data.get('reason', '')[:120]}[/{color}]"
             )
+        elif phase == "page_recover":
+            reason = data.get("reason") or ""
+            suffix = f" ({reason})" if reason else ""
+            c.print(f"[dim]  ├─ Tab恢复[/dim] → {data.get('url', '')}{suffix}[/dim]")
+        elif phase == "detail_submit_wait":
+            c.print(
+                f"[dim]  ├─ 提交后等待[/dim] outcome={data.get('outcome')} "
+                f"url={data.get('url', '')}"
+            )
         elif phase == "readiness":
             ready = data.get("ready")
             color = "green" if ready else "yellow"

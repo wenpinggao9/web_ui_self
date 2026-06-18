@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 _EMPTY_ROW_MARKERS = ("暂无数据", "无数据", "No data", "no data")
+_SUBMIT_ERROR_MARKERS = ("任务已处理", "请勿重复提交", "不可重复提交")
 
 
 def count_real_table_rows(page: Any) -> int:
@@ -73,10 +74,36 @@ def _page_usable(page: Any) -> bool:
         return False
 
 
-def recover_active_page(page: Any) -> tuple[Any, bool]:
-    """当前 tab 不可用/已关闭时, 切到同 context 内仍打开的 tab."""
+def _read_body_safe(page: Any) -> str:
+    try:
+        return page.inner_text("body")
+    except Exception:
+        return ""
+
+
+def _url_query_id(url: str) -> str:
+    qs = parse_qs(urlparse(url or "").query)
+    for key in ("uniqId", "workId", "orderId"):
+        vals = qs.get(key) or []
+        if vals and str(vals[0]).strip():
+            return str(vals[0]).strip()
+    return ""
+
+
+def _body_has_submit_error(body: str) -> bool:
+    return any(m in body for m in _SUBMIT_ERROR_MARKERS)
+
+
+def recover_active_page(page: Any, prefer: Any = None) -> tuple[Any, bool]:
+    """当前 tab 不可用/已关闭时, 切到同 context 内仍打开的 tab (可优先列表锚点)."""
     if _page_usable(page):
         return page, False
+    if prefer is not None and _page_usable(prefer):
+        try:
+            prefer.bring_to_front()
+        except Exception:
+            pass
+        return prefer, True
     try:
         ctx = page.context
     except Exception:
@@ -92,7 +119,7 @@ def recover_active_page(page: Any) -> tuple[Any, bool]:
 
 
 def wait_and_recover_active_page(
-    page: Any, *, poll_ms: int = 200, max_polls: int = 25,
+    page: Any, *, poll_ms: int = 200, max_polls: int = 25, prefer: Any = None,
 ) -> tuple[Any, bool]:
     """提交/跳转后 tab 可能异步关闭, 轮询直到落到仍存活的 page."""
     recovered = False
@@ -103,7 +130,7 @@ def wait_and_recover_active_page(
     except Exception:
         pass
     for _ in range(max_polls):
-        cur, changed = recover_active_page(cur)
+        cur, changed = recover_active_page(cur, prefer=prefer)
         if changed:
             recovered = True
         if _page_usable(cur):
@@ -131,15 +158,104 @@ def wait_and_recover_active_page(
                 time.sleep(poll_ms / 1000.0)
         else:
             time.sleep(poll_ms / 1000.0)
-    cur, changed = recover_active_page(cur)
+    cur, changed = recover_active_page(cur, prefer=prefer)
     if changed:
         recovered = True
     return cur, recovered
 
 
-def wait_before_assert(page: Any, quiet_ms: int = 300, timeout_ms: int = 3000) -> Any:
+def _reload_list_page(page: Any, *, timeout_ms: int = 15000) -> None:
+    try:
+        page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
+    except Exception:
+        pass
+
+
+def wait_after_detail_submit(
+    page: Any,
+    *,
+    list_anchor: Any = None,
+    url_before: str = "",
+    poll_ms: int = 200,
+    max_polls: int = 50,
+) -> tuple[Any, str, bool]:
+    """详情页提交后等待结局: 关 tab 回列表 / 同 tab 下一题 / 提交失败提示."""
+    uniq_before = _url_query_id(url_before)
+    recovered = False
+    cur = page
+
+    for _ in range(max_polls):
+        if not _page_usable(cur):
+            cur, changed = recover_active_page(cur, prefer=list_anchor)
+            if changed:
+                recovered = True
+        else:
+            body = _read_body_safe(cur)
+            if _body_has_submit_error(body):
+                return cur, "submit_error", recovered
+
+            url_now = (cur.url or "").lower()
+            if "/detail" in url_now:
+                uniq_now = _url_query_id(url_now)
+                if uniq_before and uniq_now and uniq_now != uniq_before:
+                    return cur, "next_detail", recovered
+            elif "/wait-preview" in url_now:
+                _reload_list_page(cur)
+                return cur, "returned_to_list", recovered
+
+        if list_anchor is not None and _page_usable(list_anchor):
+            detail_gone = not _page_usable(cur) or "/detail" not in ((cur.url or "").lower())
+            was_detail = "/detail" in (url_before or "").lower()
+            if was_detail and detail_gone:
+                try:
+                    list_anchor.bring_to_front()
+                except Exception:
+                    pass
+                _reload_list_page(list_anchor)
+                return list_anchor, "returned_to_list", True
+
+        if ctx_sleep := (cur.context if _page_alive(cur) else None):
+            try:
+                for p in ctx_sleep.pages:
+                    if _page_usable(p):
+                        try:
+                            p.wait_for_timeout(poll_ms)
+                        except Exception:
+                            time.sleep(poll_ms / 1000.0)
+                        break
+                else:
+                    time.sleep(poll_ms / 1000.0)
+            except Exception:
+                time.sleep(poll_ms / 1000.0)
+        else:
+            time.sleep(poll_ms / 1000.0)
+
+    cur, changed = recover_active_page(cur, prefer=list_anchor)
+    if changed:
+        recovered = True
+    if _page_usable(cur):
+        body = _read_body_safe(cur)
+        if _body_has_submit_error(body):
+            return cur, "submit_error", recovered
+        return cur, "settled", recovered
+    if list_anchor is not None and _page_usable(list_anchor):
+        _reload_list_page(list_anchor)
+        return list_anchor, "returned_to_list", True
+    return cur, "timeout", recovered
+
+
+def wait_before_assert(
+    page: Any,
+    quiet_ms: int = 300,
+    timeout_ms: int = 3000,
+    list_anchor: Any = None,
+) -> Any:
     """断言前切到存活 tab 并等待页面稳定; 返回可能已切换的 page."""
-    page, _ = wait_and_recover_active_page(page)
+    page, _ = wait_and_recover_active_page(page, max_polls=30, prefer=list_anchor)
+    if not _page_usable(page) and list_anchor is not None and _page_usable(list_anchor):
+        page = list_anchor
+    if not _page_usable(page):
+        return page
     try:
         page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
     except Exception:
@@ -207,6 +323,51 @@ def compare_count(actual: int, threshold: int, op: str) -> bool:
         "<=": actual <= threshold,
         "==": actual == threshold,
     }.get(op, actual == threshold)
+
+
+def iter_real_table_row_texts(page: Any) -> list[str]:
+    """读取列表/表格有效数据行的 inner_text (排除空行与「暂无数据」)."""
+    texts: list[str] = []
+    for sel in (".ant-table-tbody tr", "table tbody tr"):
+        try:
+            rows = page.locator(sel)
+            for i in range(rows.count()):
+                try:
+                    text = rows.nth(i).inner_text(timeout=2000)
+                except Exception:
+                    text = ""
+                t = text.strip()
+                if t and not any(m in t for m in _EMPTY_ROW_MARKERS):
+                    texts.append(t)
+            if texts:
+                return texts
+        except Exception:
+            continue
+    return texts
+
+
+def assert_all_table_rows_contain(page: Any, needle: str) -> tuple[bool, str, int]:
+    """列表页「所有行均含某文本」结构化断言."""
+    rows = iter_real_table_row_texts(page)
+    if not rows:
+        return False, "列表行断言: 未识别到有效数据行", 0
+    bad = [i + 1 for i, t in enumerate(rows) if needle not in t]
+    if bad:
+        sample = bad[:5]
+        extra = f" 等{len(bad)}行" if len(bad) > 5 else ""
+        return False, f"列表行断言: 第 {sample}{extra} 未包含 {needle!r}", len(rows)
+    return True, f"列表行断言: {len(rows)} 行均包含 {needle!r}", len(rows)
+
+
+def assert_no_table_row_contains(page: Any, needle: str) -> tuple[bool, str, int]:
+    """列表页「所有行均不含某文本」结构化断言."""
+    rows = iter_real_table_row_texts(page)
+    if not rows:
+        return True, f"列表行断言: 无数据行, 视为不包含 {needle!r}", 0
+    bad = [i + 1 for i, t in enumerate(rows) if needle in t]
+    if bad:
+        return False, f"列表行断言: 第 {bad[:5]} 行仍包含 {needle!r}", len(rows)
+    return True, f"列表行断言: {len(rows)} 行均不包含 {needle!r}", len(rows)
 
 
 def extract_url_query(page: Any, *keys: str) -> dict[str, str]:

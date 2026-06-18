@@ -1,0 +1,362 @@
+{
+  "/video/welcome\u0001click\u0001点击侧栏菜单待前审进入待前审页面": {
+    "method": "role",
+    "role": "link",
+    "name": "待前审",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=link[name=\"待前审\"]",
+    "score": 1,
+    "ts": 1781507177.005596
+  },
+  "/video/wait-preview\u0001click\u0001点击侧栏菜单待前审进入待前审页面": {
+    "method": "text",
+    "name": "待前审",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"待前审\"",
+    "score": 1,
+    "ts": 1781507184.3014688
+  },
+  "/video/wait-preview\u0001click\u0001在待前审页面点击领取按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "领取",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取\"]",
+    "score": 1,
+    "ts": 1781507203.678786
+  },
+  "/video/detail\u0001click\u0001在详情页选择题目内容涉及不良导向/敏感信息": {
+    "method": "text",
+    "name": "题目内容涉及不良导向/敏感信息",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
+    "score": 1,
+    "ts": 1781507296.975231
+  },
+  "/video/wait-preview\u0001click\u0001点击领取按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "领取",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取\"]",
+    "score": 1,
+    "ts": 1781512051.245965
+  },
+  "/video/detail\u0001click\u0001在详情页选择多题": {
+    "method": "text",
+    "name": "多题",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"多题\"",
+    "score": 1,
+    "ts": 1781512250.185639
+  },
+  "/video/welcome\u0001click\u0001点击侧栏菜单全部题目进入全部题目页面": {
+    "method": "role",
+    "role": "link",
+    "name": "全部题目",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=link[name=\"全部题目\"]",
+    "score": 1,
+    "ts": 1781517455.895424
+  },
+  "/video/all-question\u0001click\u0001在筛选区点击来源下拉框": {
+    "method": "label",
+    "name": "来源",
+    "exact": true,
+    "nth": 0,
+    "selector": "label:\"来源\"",
+    "score": 1,
+    "ts": 1781517466.438012
+  },
+  "/video/all-question\u0001click\u0001在下拉选项中点击策略": {
+    "method": "css",
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"策略\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781517473.661025
+  },
+  "/video/all-question\u0001click\u0001在筛选区点击学段下拉框": {
+    "method": "label",
+    "name": "学段",
+    "exact": true,
+    "nth": 0,
+    "selector": "label:\"学段\"",
+    "score": 1,
+    "ts": 1781517481.913651
+  },
+  "/video/all-question\u0001click\u0001在下拉选项中点击大学": {
+    "method": "css",
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"大学\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781517492.797686
+  },
+  "/video/all-question\u0001click\u0001在筛选区点击学科下拉框": {
+    "method": "label",
+    "name": "学科",
+    "exact": true,
+    "nth": 0,
+    "selector": "label:\"学科\"",
+    "score": 1,
+    "ts": 1781517500.821198
+  },
+  "/video/all-question\u0001click\u0001在下拉选项中点击数学": {
+    "method": "css",
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"数学\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781517510.4408472
+  },
+  "/video/all-question\u0001click\u0001在全部题目页面点击来源筛选下拉框": {
+    "method": "label",
+    "name": "来源",
+    "exact": true,
+    "nth": 0,
+    "selector": "label:\"来源\"",
+    "score": 1,
+    "ts": 1781517630.985217
+  },
+  "/video/all-question\u0001click\u0001点击学段筛选下拉框": {
+    "method": "label",
+    "name": "学段",
+    "exact": true,
+    "nth": 0,
+    "selector": "label:\"学段\"",
+    "score": 1,
+    "ts": 1781517644.087359
+  },
+  "/video/all-question\u0001click\u0001在下拉选项中点击小学": {
+    "method": "css",
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"小学\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781517653.077916
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146157001的记录": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781517767.4054809
+  },
+  "/video/welcome\u0001click\u0001点击待前审tab或菜单进入待前审页面": {
+    "method": "role",
+    "role": "link",
+    "name": "待前审",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=link[name=\"待前审\"]",
+    "score": 1,
+    "ts": 1781517794.991831
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146157848的记录": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781520932.205222
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索该工单": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781520960.6104
+  },
+  "/video/wait-preview\u0001click\u0001点击领取题目按钮以获取待完成任务": {
+    "method": "role",
+    "role": "button",
+    "name": "领取题目",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取题目\"]",
+    "score": 1,
+    "ts": 1781524883.245682
+  },
+  "/video/all-question\u0001click\u0001点击全部题目": {
+    "method": "text",
+    "name": "全部题目",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"全部题目\"",
+    "score": 1,
+    "ts": 1781525203.6077409
+  },
+  "/video/wait-preview\u0001click\u0001点击侧栏菜单个人中心展开其子菜单": {
+    "method": "text",
+    "name": "个人中心",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"个人中心\"",
+    "score": 1,
+    "ts": 1781573213.31972
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146204958的记录": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781574646.096739
+  },
+  "/video/wait-preview\u0001click\u0001点击待完成任务的查看": {
+    "method": "role",
+    "role": "button",
+    "name": "查 看",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"查 看\"]",
+    "score": 1,
+    "ts": 1781574854.7784908
+  },
+  "/video/all-question\u0001click\u0001点击侧栏菜单全部题目进入全部题目页面": {
+    "method": "text",
+    "name": "全部题目",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"全部题目\"",
+    "score": 1,
+    "ts": 1781576048.413694
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146207283的题目": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781576286.668256
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮查看结果": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781579497.55903
+  },
+  "/video/wait-preview\u0001click\u0001点击待前审页面中的领取按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "领取",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取\"]",
+    "score": 1,
+    "ts": 1781760279.9114912
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮进行搜索": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781761299.635189
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索该工单ID": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781761355.1475809
+  },
+  "/video/all-question\u0001click\u0001在全部题目页面点击来源下拉框": {
+    "method": "css",
+    "selector": "#source",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781768833.0107598
+  },
+  "/video/all-question\u0001click\u0001在全部题目页面点击学段下拉框": {
+    "method": "css",
+    "selector": "#period",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781768865.71177
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146320123的记录": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781769007.760279
+  },
+  "/video/all-question\u0001click\u0001点击来源筛选下拉框": {
+    "method": "css",
+    "selector": "#source",
+    "nth": 0,
+    "in_dialog": false,
+    "score": 1,
+    "ts": 1781779090.937919
+  },
+  "/video/wait-preview\u0001click\u0001点击侧栏菜单待前审进入待前审列表页面": {
+    "method": "text",
+    "name": "待前审",
+    "exact": true,
+    "nth": 0,
+    "selector": "text:exact:\"待前审\"",
+    "score": 1,
+    "ts": 1781779824.268596
+  },
+  "/video/wait-preview\u0001click\u0001点击待前审列表中任务的查看": {
+    "method": "role",
+    "role": "button",
+    "name": "查 看",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"查 看\"]",
+    "score": 1,
+    "ts": 1781779849.614113
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781786738.742523
+  }
+}

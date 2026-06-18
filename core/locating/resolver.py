@@ -11,10 +11,11 @@ from typing import Any, Optional
 
 from rich.console import Console
 
-from ..dom import extract_dom_index
+from ..dom.semantic_dom import build_locator_info, extract_dom_index, extract_semantic_items
 from .cache import SelectorCache
 from .llm_decider import LLMElementDecider
 from .memory import SelectorMemory
+from .node_refiner import refine_node_index
 from .normalize import validate_selector
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
@@ -62,6 +63,7 @@ class LocatorResolver:
         dom_limit: int = 80,
         exclude: Optional[list[str]] = None,
         hint: Optional[str] = None,
+        action_value: str = "",
     ) -> Optional[dict]:
         url = _url(page)
         excl = set(exclude or [])
@@ -118,6 +120,7 @@ class LocatorResolver:
         if self.rule_engine:
             info = self.rule_engine.resolve(
                 page, intent, action_type, hint=hint, exclude=excl,
+                framework_selectors=self._framework_selectors,
             )
             if not info:
                 chain.add("L3规则", "未命中")
@@ -146,6 +149,9 @@ class LocatorResolver:
             chain.add("L4学习", "未启用")
 
         # L5 大模型
+        items = extract_semantic_items(
+            page, dialog_first=True, selectors=self._framework_selectors,
+        )[:dom_limit]
         dom = extract_dom_index(
             page, limit=dom_limit, dialog_first=True,
             selectors=self._framework_selectors,
@@ -157,6 +163,15 @@ class LocatorResolver:
         for line in dom.numbered_text.split("\n"):
             self.console.print(f"  [dim]   {line}[/dim]")
         info, llm_index = self.decider.decide(dom, intent, action_type, exclude=list(excl), hint=hint)
+        if info and llm_index is not None:
+            refined_idx, skill_name = refine_node_index(
+                items, llm_index, intent, action_type, action_value=action_value,
+            )
+            if skill_name and refined_idx != llm_index:
+                chain.add("L5纠偏", "命中", f"{llm_index}->{refined_idx}", note=skill_name)
+                llm_index = refined_idx
+                info = build_locator_info(items[refined_idx])
+                info = dict(info)
         if info:
             note = f"index={llm_index}" if llm_index is not None else ""
             chain.add("L5大模型", "命中", info["selector"], note)

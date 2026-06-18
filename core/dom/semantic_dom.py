@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from .parent_index import attach_parent_indices
+
 # JS 模板, 占位符会被实际选择器替换
 _SNAPSHOT_JS_TEMPLATE = """
 () => {
@@ -75,6 +77,15 @@ _SNAPSHOT_JS_TEMPLATE = """
     return false;
   }
 
+  function parentElementId(el) {
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+      if (p.id) return p.id;
+      p = p.parentElement;
+    }
+    return '';
+  }
+
   document.querySelectorAll(SEL).forEach(el => {
     if (!isVisible(el)) return;
     const item = {
@@ -83,11 +94,23 @@ _SNAPSHOT_JS_TEMPLATE = """
       name: el.getAttribute('aria-label') || el.getAttribute('name') || '',
       id: (el.id && !el.id.startsWith('el-id-')) ? el.id : '',
       _id: el.id || '',
+      _parent_id: parentElementId(el),
       testid: el.getAttribute('data-testid') || '',
       text: (el.innerText || el.value || '').trim().slice(0, 40),
       placeholder: el.getAttribute('placeholder') || '',
       type: el.getAttribute('type') || '',
       haspopup: el.getAttribute('aria-haspopup') || '',
+      class: (el.className && typeof el.className === 'string') ? el.className.slice(0, 160) : '',
+      readOnly: !!el.readOnly,
+      zIndex: (() => {
+        let cur = el, z = null;
+        while (cur && cur !== document.body) {
+          const st = window.getComputedStyle(cur);
+          if (st && st.zIndex && st.zIndex !== 'auto') { z = st.zIndex; break; }
+          cur = cur.parentElement;
+        }
+        return z;
+      })(),
       scope: findScope(el),
       in_viewport: isInViewport(el),
       hidden: isHidden(el),
@@ -113,9 +136,12 @@ _SNAPSHOT_JS_TEMPLATE = """
     const item = {
       tag: 'container', role: el.getAttribute('role') || '', name: '',
       id: (el.id && !el.id.startsWith('el-id-')) ? el.id : '',
-      _id: el.id || '', testid: el.getAttribute('data-testid') || '',
+      _id: el.id || '', _parent_id: parentElementId(el), testid: el.getAttribute('data-testid') || '',
       text: (el.innerText || '').trim().slice(0, 40),
       placeholder: '', type: '', haspopup: el.getAttribute('aria-haspopup') || '',
+      class: (el.className && typeof el.className === 'string') ? el.className.slice(0, 160) : '',
+      readOnly: false,
+      zIndex: null,
       scope: findScope(el), inner_id: innerId,
       in_viewport: isInViewport(el), hidden: isHidden(el),
       in_dialog: closestMatch(el, DIALOG_SEL), in_form: closestMatch(el, FORM_SEL),
@@ -133,9 +159,12 @@ _SNAPSHOT_JS_TEMPLATE = """
     const item = {
       tag: 'dropdown', role: el.getAttribute('role') || '', name: '',
       id: (el.id && !el.id.startsWith('el-id-')) ? el.id : '',
-      _id: el.id || '', testid: el.getAttribute('data-testid') || '',
+      _id: el.id || '', _parent_id: parentElementId(el), testid: el.getAttribute('data-testid') || '',
       text: (el.innerText || '').trim().slice(0, 80),
       placeholder: '', type: '', haspopup: '',
+      class: (el.className && typeof el.className === 'string') ? el.className.slice(0, 160) : '',
+      readOnly: false,
+      zIndex: null,
       scope: findScope(el),
       in_viewport: isInViewport(el), hidden: isHidden(el),
       in_dialog: closestMatch(el, DIALOG_SEL), in_form: closestMatch(el, FORM_SEL),
@@ -153,9 +182,12 @@ _SNAPSHOT_JS_TEMPLATE = """
     const item = {
       tag: 'option', role: el.getAttribute('role') || '', name: '',
       id: (el.id && !el.id.startsWith('el-id-')) ? el.id : '',
-      _id: el.id || '', testid: el.getAttribute('data-testid') || '',
+      _id: el.id || '', _parent_id: parentElementId(el), testid: el.getAttribute('data-testid') || '',
       text: (el.innerText || el.textContent || '').trim().slice(0, 40),
       placeholder: '', type: '', haspopup: '',
+      class: (el.className && typeof el.className === 'string') ? el.className.slice(0, 160) : '',
+      readOnly: false,
+      zIndex: null,
       scope: findScope(el),
       in_viewport: isInViewport(el), hidden: isHidden(el),
       in_dialog: closestMatch(el, DIALOG_SEL), in_form: closestMatch(el, FORM_SEL),
@@ -247,6 +279,7 @@ def _snapshot_items(
     has_dialog = payload.get("has_dialog", False)
     if dialog_first:
         items = _reorder_dialog_form_first(items, has_dialog)
+    attach_parent_indices(items)
     return items
 
 
@@ -270,6 +303,16 @@ class DomIndex:
 
     def __len__(self) -> int:
         return len(self.selectors)
+
+
+def extract_semantic_items(
+    page: Any,
+    dialog_first: bool = True,
+    stable: bool = True,
+    selectors: Optional[dict[str, str]] = None,
+) -> list[dict]:
+    """返回原始语义 DOM 条目列表, 供 L5 纠偏脚本使用."""
+    return _snapshot_items(page, dialog_first, stable, selectors)
 
 
 def extract_dom_index(

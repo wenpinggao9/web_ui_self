@@ -1,0 +1,12 @@
+{
+  "step_no": 30,
+  "raw_text": "点击 \"支付宝支付\"",
+  "action": "click",
+  "locator": {
+    "strategy": "text",
+    "value": "支付宝支付",
+    "exact": true,
+    "fallback": []
+  },
+  "description": "DOM 中支付宝支付是 dialog 内的文本元素, 用精确文本定位避免子串冲突"
+}

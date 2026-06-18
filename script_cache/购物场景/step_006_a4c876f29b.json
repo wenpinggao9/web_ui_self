@@ -1,0 +1,18 @@
+{
+  "step_no": 6,
+  "raw_text": "等待菜单中 \"收货地址\" 选项出现",
+  "action": "assert",
+  "locator": {
+    "strategy": "role",
+    "role": "menuitem",
+    "name": "收货地址",
+    "exact": false,
+    "fallback": []
+  },
+  "assertion": {
+    "type": "visible",
+    "ignore_case": false,
+    "negate": false
+  },
+  "description": "等待下拉菜单中'收货地址' menuitem 可见 (当前 hidden, 等待其出现)"
+}

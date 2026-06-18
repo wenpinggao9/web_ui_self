@@ -1,0 +1,50 @@
+[
+  {
+    "step_no": 1,
+    "raw_text": "在详情页选择'题目内容涉及不良导向/敏感信息'",
+    "action": "click",
+    "status": "PASS",
+    "duration_ms": 15403,
+    "error": null,
+    "screenshot": null,
+    "message": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>",
+    "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
+    "locator_repr": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
+    "heal_attempts": 0,
+    "code": null,
+    "resolved_html": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>",
+    "post_check_ok": true
+  },
+  {
+    "step_no": 2,
+    "raw_text": "点击'提交'按钮",
+    "action": "click",
+    "status": "PASS",
+    "duration_ms": 35663,
+    "error": null,
+    "screenshot": null,
+    "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | 提交后等待页面结局超时",
+    "selector": "role=button[name=\"提 交\"]",
+    "locator_repr": "role=button[name=\"提 交\"]",
+    "heal_attempts": 0,
+    "code": null,
+    "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | 提交后等待页面结局超时",
+    "post_check_ok": true
+  },
+  {
+    "step_no": 3,
+    "raw_text": "验证页面自动加载下一个任务的详情页",
+    "action": "assert_text",
+    "status": "PASS",
+    "duration_ms": 20467,
+    "error": null,
+    "screenshot": null,
+    "message": "否定断言: 页面不包含 '提交失败'",
+    "selector": null,
+    "locator_repr": null,
+    "heal_attempts": 0,
+    "code": null,
+    "resolved_html": "否定断言: 页面不包含 '提交失败'",
+    "post_check_ok": true
+  }
+]

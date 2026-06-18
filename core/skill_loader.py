@@ -19,6 +19,101 @@ import yaml
 _FULL_HTML_CATEGORIES = {"select", "tree", "cascader"}
 
 
+def load_skill_frontmatter(path: str | Path) -> dict[str, Any]:
+    """读取 skill.md 的 YAML frontmatter 元数据."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    raw = p.read_text(encoding="utf-8")
+    front, _ = _split_frontmatter(raw)
+    meta = yaml.safe_load(front) if front else {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def load_entrypoints(path: str | Path) -> dict[str, dict[str, Any]]:
+    """解析 skill.md frontmatter 中的 entrypoints 声明."""
+    meta = load_skill_frontmatter(path)
+    eps = meta.get("entrypoints") or {}
+    if not isinstance(eps, dict):
+        return {}
+    return {k: v for k, v in eps.items() if isinstance(v, dict)}
+
+
+def invoke_entrypoint(
+    path: str | Path,
+    name: str,
+    /,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """按 frontmatter entrypoints 声明调用技能入口.
+
+    支持:
+      - kind=python + module + callable (进程内 import 调用)
+      - kind=python + script + args (子进程, JSON 入出参协议)
+    """
+    import importlib
+    import json
+    import subprocess
+    import sys
+    import tempfile
+
+    eps = load_entrypoints(path)
+    ep = eps.get(name)
+    if not ep:
+        raise KeyError(f"entrypoint not found: {name}")
+
+    kind = str(ep.get("kind") or "python")
+    if kind != "python":
+        raise ValueError(f"unsupported entrypoint kind: {kind}")
+
+    if ep.get("module") and ep.get("callable"):
+        mod = importlib.import_module(str(ep["module"]))
+        fn = getattr(mod, str(ep["callable"]), None)
+        if not callable(fn):
+            raise AttributeError(f"callable not found: {ep['module']}.{ep['callable']}")
+        return fn(*args, **kwargs)
+
+    script_tpl = ep.get("script")
+    if script_tpl:
+        base_dir = Path(path).parent
+        script = Path(str(script_tpl).replace("{baseDir}", str(base_dir)))
+        if not script.is_file():
+            raise FileNotFoundError(script)
+
+        with tempfile.NamedTemporaryFile("w", suffix=".in.json", delete=False, encoding="utf-8") as fin:
+            json.dump({"args": list(args), "kwargs": kwargs}, fin, ensure_ascii=False)
+            in_path = fin.name
+        out_path = in_path.replace(".in.json", ".out.json")
+
+        cmd_args = []
+        for arg in ep.get("args") or []:
+            s = str(arg).replace("{baseDir}", str(base_dir))
+            s = s.replace("{input_json}", in_path).replace("{output_json}", out_path)
+            cmd_args.append(s)
+
+        proc = subprocess.run(
+            [sys.executable, str(script), *cmd_args],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr or proc.stdout or f"entrypoint failed: {name}")
+
+        try:
+            with open(out_path, encoding="utf-8") as fout:
+                payload = json.load(fout)
+        finally:
+            Path(in_path).unlink(missing_ok=True)
+            Path(out_path).unlink(missing_ok=True)
+
+        if isinstance(payload, dict) and "result" in payload:
+            return payload["result"]
+        return payload
+
+    raise ValueError(f"invalid entrypoint config: {name}")
+
+
 def load_skill_text(path: str | Path) -> str:
     """读取 skill.md 并整理成适合注入 LLM system prompt 的文本."""
     p = Path(path)

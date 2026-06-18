@@ -1,0 +1,12 @@
+{
+  "step_no": 26,
+  "raw_text": "关闭 \"选择支付方式\"",
+  "action": "click",
+  "locator": {
+    "strategy": "css",
+    "value": "div[role='dialog'][aria-label='选择支付方式'] button.el-dialog__headerbtn",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "关闭'选择支付方式'对话框, DOM 中有 role=dialog name='选择支付方式', 点击其关闭按钮"
+}

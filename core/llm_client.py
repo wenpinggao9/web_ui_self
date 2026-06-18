@@ -127,11 +127,13 @@ class _OpenAICompatClient(BaseLLMClient):
             kwargs["response_format"] = {"type": "json_object"}
 
         try:
+            print(f"🤖 请求LLM [{self._model}]")
             resp = self._client.chat.completions.create(**kwargs)
         except Exception as e:
             # 模型不支持 response_format 时自动降级
             if self._use_response_format and "response_format" in str(e).lower():
                 kwargs.pop("response_format", None)
+                print(f"🤖 请求LLM [{self._model}] (降级无json模式)")
                 resp = self._client.chat.completions.create(**kwargs)
             else:
                 raise

@@ -1,0 +1,13 @@
+{
+  "step_no": 15,
+  "raw_text": "点击区县下拉框",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "combobox",
+    "exact": false,
+    "nth": 2,
+    "fallback": []
+  },
+  "description": "DOM 中有 3 个 combobox (省/市/区县), 区县是第 3 个即 nth=2, 点击展开区县下拉框"
+}

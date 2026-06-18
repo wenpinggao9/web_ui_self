@@ -15,12 +15,26 @@ from ..planning import PlannedAction
 from ..variable_substitution import substitute_variables
 from .trace import ExecutionTrace
 from .assert_or import combined_or_intent, is_or_assert, try_or_branches, try_or_heuristic
+from .assert_scope import (
+    build_semantic_text_summary,
+    extract_page_regions,
+    format_scope_note_for_semantic,
+    parse_assert_scope,
+    should_disable_semantic_fallback,
+    try_field_value_assert,
+    try_scoped_literal,
+)
 from .script_helpers import (
+    assert_all_table_rows_contain,
+    assert_no_table_row_contains,
     count_real_table_rows,
     extract_url_query,
     recover_active_page,
+    wait_after_detail_submit,
     wait_and_recover_active_page,
     wait_before_assert,
+    wait_for_list_count_at_least,
+    _page_usable,
 )
 from .assert_codegen import (
     record_assert_count,
@@ -50,6 +64,8 @@ class ActionDispatcher:
         session_ops_cfg: Optional[dict[str, Any]] = None,
         page_capture: Optional[dict[str, Any]] = None,
         llm: Optional[Any] = None,              # LLM 实例, 用于语义断言
+        console: Optional[Any] = None,
+        prompts: Optional[Any] = None,          # PromptLoader
     ) -> None:
         self.page = page
         self.resolver = resolver
@@ -62,6 +78,9 @@ class ActionDispatcher:
         self.api_context: dict[str, Any] = {}    # api_call 返回的变量, 用于后续动作替换
         self._last_click_label: Optional[str] = None
         self._llm_instance = llm
+        self.console = console
+        self._prompts = prompts
+        self._list_tab_anchor: Optional[Any] = None
         self.popup_recovery_steps: list[PlannedAction] = []
         self._popup_dismiss_used = False
         self.popup_dismiss_before_intents: list[str] = []
@@ -93,9 +112,13 @@ class ActionDispatcher:
         """当前 page 已关闭时切到仍打开的 tab (多 tab / 提交关详情页)."""
         before = self.page
         if poll:
-            self.page, recovered = wait_and_recover_active_page(self.page)
+            self.page, recovered = wait_and_recover_active_page(
+                self.page, prefer=self._list_tab_anchor,
+            )
         else:
-            self.page, recovered = recover_active_page(self.page)
+            self.page, recovered = recover_active_page(
+                self.page, prefer=self._list_tab_anchor,
+            )
         if recovered and self.trace:
             try:
                 url = self.page.url or ""
@@ -106,12 +129,18 @@ class ActionDispatcher:
 
     def _prepare_page_for_assert(self) -> None:
         """断言前: 轮询恢复存活 tab 并等待 DOM 稳定."""
+        self._ensure_list_anchor()
         before = self.page
         try:
             before_url = before.url or ""
         except Exception:
             before_url = ""
-        self.page = wait_before_assert(self.page, timeout_ms=5000)
+        self.page = wait_before_assert(
+            self.page, timeout_ms=5000, list_anchor=self._list_tab_anchor,
+        )
+        if not _page_usable(self.page) and self._list_tab_anchor is not None:
+            if _page_usable(self._list_tab_anchor):
+                self.page = self._list_tab_anchor
         if not self.trace:
             return
         try:
@@ -123,14 +152,26 @@ class ActionDispatcher:
 
     def _read_body_text(self) -> str:
         """读取页面正文; 遇 TargetClosedError 时先恢复 tab 再重试."""
+        self.page, _ = wait_and_recover_active_page(
+            self.page, max_polls=20, prefer=self._list_tab_anchor,
+        )
+        if not _page_usable(self.page):
+            if self._list_tab_anchor is not None and _page_usable(self._list_tab_anchor):
+                self.page = self._list_tab_anchor
+            else:
+                return ""
         try:
             return self.page.inner_text("body")
         except Exception:
-            self.page = wait_before_assert(self.page, timeout_ms=5000)
+            self.page = wait_before_assert(
+                self.page, timeout_ms=5000, list_anchor=self._list_tab_anchor,
+            )
+            if not _page_usable(self.page):
+                return ""
             try:
                 return self.page.inner_text("body")
             except Exception:
-                return self.page.content()
+                return ""
 
     def dispatch(self, action: PlannedAction, case_id: str = "") -> tuple[bool, str]:
         """执行单个动作, 返回是否成功以及供日志/后校验使用的说明."""
@@ -222,6 +263,7 @@ class ActionDispatcher:
             info = self.resolver.resolve(
                 self.page, action.intent, action.type,
                 exclude=action.exclude_selectors, hint=action.resolve_hint,
+                action_value=action.value or "",
             )
         if not info:
             return None, None
@@ -302,6 +344,13 @@ class ActionDispatcher:
             backfill_click_from_html(action, target_html)
             self._remember_click_label(action, target_html)
             record_post_click_wait(action, url_before, url_after)
+            if self._is_detail_submit_click(action, url_before):
+                ok_submit, submit_msg = self._wait_after_detail_submit(url_before)
+                if not ok_submit:
+                    if self.trace:
+                        self.trace.emit("page_switch", url=url_after, intent=action.intent)
+                    return ok_submit, submit_msg
+                suffix = f"{suffix} | {submit_msg}"
             if self.trace:
                 self.trace.emit("page_switch", url=url_after, intent=action.intent)
             return True, f"点击 {action.intent}{suffix}"
@@ -320,6 +369,59 @@ class ActionDispatcher:
         return False, f"未支持的已定位动作: {t}"
 
     _NEW_TAB_INTENT_RE = re.compile(r"查看|新标签|新窗口|新开")
+    _SUBMIT_CLICK_RE = re.compile(r"提交")
+
+    def _is_detail_submit_click(self, action: PlannedAction, url_before: str) -> bool:
+        if action.type != "click" or not self._SUBMIT_CLICK_RE.search(action.intent or ""):
+            return False
+        if "/detail" in (url_before or "").lower():
+            return True
+        try:
+            return "/detail" in (self.page.url or "").lower()
+        except Exception:
+            return False
+
+    def _ensure_list_anchor(self) -> None:
+        """从 context 中查找仍存活的列表 Tab 作为锚点 (未经过「查看」开 Tab 时兜底)."""
+        if self._list_tab_anchor is not None and _page_usable(self._list_tab_anchor):
+            return
+        try:
+            for p in self.page.context.pages:
+                if _page_usable(p) and count_real_table_rows(p) > 0:
+                    self._list_tab_anchor = p
+                    return
+        except Exception:
+            pass
+
+    def _wait_after_detail_submit(self, url_before: str) -> tuple[bool, str]:
+        self._ensure_list_anchor()
+        max_polls = max(25, self.default_timeout // 200)
+        self.page, outcome, recovered = wait_after_detail_submit(
+            self.page,
+            list_anchor=self._list_tab_anchor,
+            url_before=url_before,
+            max_polls=max_polls,
+        )
+        if self.trace:
+            try:
+                url = self.page.url or ""
+            except Exception:
+                url = ""
+            self.trace.emit(
+                "detail_submit_wait",
+                outcome=outcome,
+                url=url,
+                recovered=recovered,
+            )
+        if outcome == "submit_error":
+            return False, "提交失败: 页面提示任务已处理或不可重复提交"
+        labels = {
+            "returned_to_list": "提交后已回到列表页",
+            "next_detail": "提交后已加载下一任务详情",
+            "settled": "提交后页面已稳定",
+            "timeout": "提交后等待页面结局超时",
+        }
+        return True, labels.get(outcome, f"提交后页面: {outcome}")
 
     def _should_follow_new_tab(self, action: PlannedAction, loc: Any) -> bool:
         """仅「查看」等会新开标签页的点击才跟随 popup, 避免普通按钮误切 tab."""
@@ -352,6 +454,7 @@ class ActionDispatcher:
         """点击后跟随新 Tab (如「查看」打开详情页)."""
         ctx = self.page.context
         list_page = self.page
+        self._list_tab_anchor = list_page
         count_before = len(ctx.pages)
 
         # 1) 等待 popup/new tab (expect_page 内 click 已执行, 超时勿重复点)
@@ -362,6 +465,7 @@ class ActionDispatcher:
             new_page.wait_for_load_state("domcontentloaded", timeout=timeout)
             self._close_stale_secondary_tabs(ctx, {list_page, new_page}, list_page.url or "")
             self.page = new_page
+            self._list_tab_anchor = list_page
             try:
                 new_page.bring_to_front()
             except Exception:
@@ -384,6 +488,7 @@ class ActionDispatcher:
                             pass
                         self._close_stale_secondary_tabs(ctx, {list_page, p}, list_page.url or "")
                         self.page = p
+                        self._list_tab_anchor = list_page
                         try:
                             p.bring_to_front()
                         except Exception:
@@ -487,12 +592,39 @@ class ActionDispatcher:
         """列表/表格已有有效数据行, 常见于「领取/新建」按钮已灰但目标状态已达成."""
         return self._count_real_table_rows() > 0
 
+    def _should_semantic_fallback(self, scope) -> bool:
+        return not should_disable_semantic_fallback(scope)
+
+    def _try_assert_list_rows(
+        self, action: PlannedAction, target: str, scope,
+    ) -> Optional[tuple[bool, str]]:
+        """列表「所有行含/不含某文本」— 扫表格行, 不依赖整页 body 字面匹配."""
+        intent = action.intent or ""
+        if not target:
+            return None
+        if action.negate:
+            if not scope.negate_table_rows:
+                return None
+            ok, msg, _ = assert_no_table_row_contains(self.page, target)
+            return ok, msg
+        if not scope.all_table_rows:
+            return None
+        try:
+            wait_for_list_count_at_least(self.page, 1, timeout_ms=min(self.default_timeout, 8000))
+        except Exception:
+            pass
+        ok, msg, _ = assert_all_table_rows_contain(self.page, target)
+        return ok, msg
+
     # ---------- 文本断言 (含否定断言 + LLM 语义兜底) ----------
     def _assert_text(self, action: PlannedAction) -> tuple[bool, str]:
         target = (action.value or action.intent or "").strip()
         if not target and not is_or_assert(action):
             return False, "断言缺少目标文本"
         body_text = self._read_body_text()
+        intent = action.intent or ""
+        scope = parse_assert_scope(intent, value=target, negate=action.negate)
+        regions = extract_page_regions(self.page)
 
         if is_or_assert(action) and not action.negate:
             branches = (action.extras or {}).get("branches") or []
@@ -508,10 +640,24 @@ class ActionDispatcher:
                     if hit[0]:
                         record_or_heuristic(action, self.page, combined_or_intent(action))
                     return hit
-            ok, msg = self._semantic_assert(action, body_text, any_of=True)
+            ok, msg = self._semantic_assert(action, body_text, scope=scope, regions=regions, any_of=True)
             if ok:
                 record_semantic_pass(action, self.page, body_text)
             return ok, msg
+
+        if scope.field_hint and not action.negate:
+            field_hit = try_field_value_assert(scope, regions, scope.field_hint, target)
+            if field_hit is not None:
+                if field_hit[0]:
+                    record_literal(action, target)
+                return field_hit
+
+        if not action.negate:
+            scoped_hit = try_scoped_literal(scope, regions, target)
+            if scoped_hit is not None:
+                if scoped_hit[0]:
+                    record_literal(action, target)
+                return scoped_hit
 
         present = target in body_text
         # negate=true 表示"页面不应包含该文本".
@@ -522,6 +668,11 @@ class ActionDispatcher:
         if present:
             record_literal(action, target)
             return True, (f"断言: 页面{'包含' if present else '不包含'} {target!r}")
+        row_hit = self._try_assert_list_rows(action, target, scope)
+        if row_hit is not None:
+            if row_hit[0]:
+                record_literal(action, target)
+            return row_hit
         control = self._try_assert_control_mode(action)
         if control is not None:
             if control[0]:
@@ -530,7 +681,9 @@ class ActionDispatcher:
                     want_single = bool(re.search(r"单选|不能多选|互斥", action.intent or ""))
                     record_control_mode(action, stats, want_single=want_single)
             return control
-        ok, msg = self._semantic_assert(action, body_text)
+        if not self._should_semantic_fallback(scope):
+            return False, f"断言未通过: {action.intent!r} (目标文本 {target!r})"
+        ok, msg = self._semantic_assert(action, body_text, scope=scope, regions=regions)
         if ok:
             record_semantic_pass(action, self.page, body_text)
         return ok, msg
@@ -573,28 +726,50 @@ class ActionDispatcher:
 
     # ---------- LLM 语义断言兜底 ----------
     def _semantic_assert(
-        self, action: PlannedAction, body_text: str, *, any_of: bool = False,
+        self,
+        action: PlannedAction,
+        body_text: str,
+        *,
+        scope=None,
+        regions: Optional[dict[str, str]] = None,
+        any_of: bool = False,
     ) -> tuple[bool, str]:
         """精确匹配失败时, 让 LLM 根据页面状态判断断言意图是否满足."""
         or_mode = any_of or is_or_assert(action)
-        system = """你是 UI 自动化断言校验助手. 根据页面状态判断一个断言是否满足.
-只输出 JSON: {"ok": true/false, "reason": "简短说明"}.
-- DOM 摘要中含 input type=radio / checkbox 时, 可据此判断单选/多选模式.
-- 如果页面中存在与断言意图语义等价的内容, 判 ok=true.
-- reason 用一句话说明判断依据."""
+        if scope is None:
+            target = (action.value or action.intent or "").strip()
+            scope = parse_assert_scope(action.intent or "", value=target, negate=action.negate)
+        if regions is None:
+            regions = extract_page_regions(self.page)
+
+        default_system = """你是 UI 自动化断言校验助手. 根据页面状态判断一个断言是否满足.
+只输出 JSON: {"ok": true/false, "reason": "简短说明"}."""
+        system = default_system
+        if self._prompts is not None:
+            system = self._prompts.system("semantic_assert", default_system)
         if or_mode:
             system += """
 - **或断言**: intent 描述多个可接受结果 (如「没有A则B，有的话C」「B或C」). 只要当前页面满足**任一分支**的语义, 必须判 ok=true.
 - 禁止因仅不符合其中一支就判 false; value 若只写了其中一支的文案, 仍以 intent 全部分支为准."""
 
         dom_summary = extract_semantic_dom(self.page, dialog_first=False)
-        text_summary = body_text[:2000].replace("\n", " ").strip()
+        text_summary = build_semantic_text_summary(body_text, regions, scope)
         or_note = "是 (满足任一分支即可)" if or_mode else "否"
         intent_text = combined_or_intent(action) if or_mode else (action.intent or "")
-        user = f"""断言意图: {intent_text}
+        scope_note = format_scope_note_for_semantic(scope)
+
+        if self.console:
+            self.console.print(f"  [dim]① 提取页面 DOM 摘要 (含标签/class/控件type)[/dim]")
+            self.console.print(f"  [dim]② 提取页面文本摘要[/dim]")
+            self.console.print(f"  [dim]③ 拼装 prompt 调用 LLM 语义分析[/dim]")
+            self.console.print(f"  [dim]   断言意图: {intent_text}[/dim]")
+
+        default_user = f"""断言意图: {intent_text}
 断言目标(value): {action.value or "-"}
 或断言: {or_note}
 当前页面 URL: {self.page.url}
+
+{scope_note}
 
 页面 DOM 摘要 (含控件 type):
 {dom_summary}
@@ -603,12 +778,28 @@ class ActionDispatcher:
 {text_summary}
 
 请输出 {{"ok": true/false, "reason": "..."}} JSON."""
+        if self._prompts is not None:
+            user = self._prompts.user(
+                "semantic_assert",
+                default_user,
+                intent=intent_text,
+                value=action.value or "-",
+                or_note=or_note,
+                url=self.page.url,
+                scope_note=scope_note,
+                dom_summary=dom_summary,
+                text_summary=text_summary,
+            )
+        else:
+            user = default_user
 
         try:
             llm: LLMAdapter = self._llm
             data = llm.complete_json("semantic_assert", system, user).data
             ok = bool(data.get("ok")) if isinstance(data, dict) else False
             reason = str(data.get("reason", "")) if isinstance(data, dict) else ""
+            if self.console:
+                self.console.print(f"  [dim]④ LLM 返回: ok={ok}, reason={reason}[/dim]")
             return ok, f"语义断言: {'满足' if ok else '不满足'} ({reason})"
         except Exception:
             return False, f"语义断言 LLM 调用失败, 精确匹配也未找到 {action.intent!r}"

@@ -1,0 +1,13 @@
+{
+  "step_no": 16,
+  "raw_text": "在弹出选项中点击 \"罗湖区\"",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "option",
+    "name": "罗湖区",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "DOM 中区县下拉列表已展开(非 hidden), 包含 role=option name='罗湖区', 直接用 role 定位点击"
+}

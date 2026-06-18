@@ -1,0 +1,13 @@
+{
+  "step_no": 10,
+  "raw_text": "在 \"联系电话\" 输入框输入 \"15373137739\"",
+  "action": "fill",
+  "locator": {
+    "strategy": "placeholder",
+    "value": "请输入联系电话",
+    "exact": false,
+    "fallback": []
+  },
+  "value": "15373137739",
+  "description": "通过 placeholder 定位联系电话输入框，DOM 中该 placeholder 唯一"
+}

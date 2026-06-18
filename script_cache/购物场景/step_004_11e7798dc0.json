@@ -1,0 +1,12 @@
+{
+  "step_no": 4,
+  "raw_text": "断言页面包含文本 \"15373137739\"",
+  "action": "assert",
+  "assertion": {
+    "type": "contains_text",
+    "expected": "15373137739",
+    "ignore_case": false,
+    "negate": false
+  },
+  "description": "断言页面包含手机号文本 15373137739"
+}

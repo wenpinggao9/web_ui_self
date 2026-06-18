@@ -1,0 +1,13 @@
+{
+  "step_no": 9,
+  "raw_text": "在 \"收件人\" 输入框输入 \"张三\"",
+  "action": "fill",
+  "locator": {
+    "strategy": "placeholder",
+    "value": "请输入收货人姓名",
+    "exact": false,
+    "fallback": []
+  },
+  "value": "张三",
+  "description": "DOM 中 label 为'收货人', 对应 input 的 placeholder 为'请输入收货人姓名', 唯一定位"
+}

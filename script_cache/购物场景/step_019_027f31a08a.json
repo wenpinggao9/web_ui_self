@@ -1,0 +1,13 @@
+{
+  "step_no": 19,
+  "raw_text": "点击 \"全部商品分类\"",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "link",
+    "name": "全部商品分类",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "DOM 中有 <a> 全部商品分类, 用例说点击该文本, DOM 无 button 匹配, 选 link 角色精确匹配"
+}

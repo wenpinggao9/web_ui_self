@@ -6,6 +6,7 @@ run_tests(测试文件):
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Optional
 
@@ -26,10 +27,15 @@ from .locating import (
 from .observability import ObservabilityCollector
 from .output import FileManager
 from .parser import parse_case
-from .planning import ActionPlanner, IntentSplitter, strip_duplicate_menu_clicks
+from .planning import ActionPlanner, strip_duplicate_menu_clicks
 from .planning.page_nav import should_preserve_page_on_case_start
 from .preprocess import PreconditionExpander, sort_cases
-from .preprocess.step_format import build_execution_blocks, flatten_case_for_planning
+from .parser import ExecutionBlock
+from .preprocess.step_format import (
+    build_execution_blocks,
+    flatten_case_for_planning,
+    prepare_execution_plan,
+)
 from .profile import ProfileManager
 from .readiness import ReadinessChecker
 from .resources import ResourceManager
@@ -50,11 +56,13 @@ class UITestAgent:
         self.llm = LLMAdapter(llm_cfg, observe=self._route_llm)
         self.prompts = PromptLoader(self.root / "prompts", llm_cfg.get("prompts"))
 
-        # 步骤㉒ 技能知识注入动作规划
-        skill_text = load_skill_text(self.root / "prompts" / "skill.md")
+        # 步骤㉒ 技能知识注入动作规划 + entrypoints 路径
+        skill_path = self.root / "prompts" / "skill.md"
+        from .locating.skill_invoke import configure_skill_path
+        configure_skill_path(skill_path)
+        skill_text = load_skill_text(skill_path)
         self.precondition = PreconditionExpander(self.llm, self.prompts)
         self.planner = ActionPlanner(self.llm, self.prompts, skill_text=skill_text)
-        self.splitter = IntentSplitter(self.llm, self.prompts)
         self.navigator = Navigator(self.console)
         # 步骤⑳ 资源管理
         self.resources = ResourceManager(self.root)
@@ -218,6 +226,9 @@ class UITestAgent:
         if session_vars:
             case.steps = substitute_in_list(case.steps, session_vars)
             case.expectations = substitute_in_list(case.expectations, session_vars)
+            for block in case.execution_blocks:
+                block.operations[:] = substitute_in_list(block.operations, session_vars)
+                block.expectations[:] = substitute_in_list(block.expectations, session_vars)
 
         # 步骤② 前置条件展开 (旧模式: LLM 文本展开, 仅在没有 API 前置时执行)
         trace = ExecutionTrace(
@@ -284,121 +295,138 @@ class UITestAgent:
                 # 无业务角色: 256-260 已用 self.target 登录
                 pass
 
-            # 步骤⑤ 导航
-            page = self.navigator.navigate(page, case.module_path,
-                                           self.pw_cfg.get("default_timeout_ms", 10000))
+            # 步骤⑤ 导航 (auto_navigate=false 时跳过, 由用例步骤自行导航)
+            if self.runner_cfg.get("auto_navigate", True):
+                page = self.navigator.navigate(page, case.module_path,
+                                               self.pw_cfg.get("default_timeout_ms", 10000))
+            else:
+                self.console.print("[dim]自动导航已关闭, 由用例步骤导航[/dim]")
 
             # 跨用例会话复用: 列表页刷新清筛选; 前置/步骤表明已在子页上下文时不 reload
             if self.runner_cfg.get("cross_case_session", False) and role_contexts:
                 if not should_preserve_page_on_case_start(case.preconditions, case.steps):
                     page.reload(timeout=self.pw_cfg.get("default_timeout_ms", 10000))
 
-            # 步骤⑥ 动作规划 (一次性规划整个 case 的所有步骤和预期)
+            # 步骤⑦ 动作规划 + 意图拆分; 交错式按块, 分离式一次性
             roles = list(session.roles.keys()) if session.roles else None
-            flatten_case_for_planning(case)
-            actions, raw = self.planner.generate_actions(
-                case, roles,
-                current_url=page.url,
-                cross_case_session=self.runner_cfg.get("cross_case_session", False),
-            )
+            cross_session = self.runner_cfg.get("cross_case_session", False)
+            exec_blocks, by_blocks = prepare_execution_plan(case)
+            primary_role: Optional[str] = None
+            dispatcher = None
+            runner = None
 
-            # 打印原始 JSON (拆分前)
-            if raw:
-                self.console.print(
-                    f"  [dim]└─ 规划原始 JSON: {raw}[/dim]"
+            # 模式 2: 预规划动作注入, 跳过 LLM 规划
+            preplanned = getattr(self, "_preplanned_actions", None)
+            if preplanned:
+                self.console.print(f"  [cyan]预规划模式: 使用 {len(preplanned)} 个预定义动作[/cyan]")
+                actions = preplanned
+                raw = ""
+                flatten_case_for_planning(case)
+                self._print_action_list(actions, "预规划动作")
+
+                fm.save_planned_actions(case.case_id, actions)
+
+                from .planning.role_infer import infer_primary_role
+                primary_role = infer_primary_role(case, actions, role_keys)
+                if primary_role:
+                    case.role = primary_role
+                    self.console.print(f"[dim]推断执行角色: {primary_role}[/dim]")
+                    if session.roles and primary_role != first_role:
+                        page = _get_page_for_role(primary_role)
+                        self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
+
+                if not actions:
+                    self.console.print("[yellow]预规划动作为空, 跳过执行[/yellow]")
+                    return {"case_id": case.case_id, "passed": False, "reason": "无动作"}
+
+                self.resolver.set_trace(trace)
+                dispatcher, runner = self._build_runner(
+                    page=page,
+                    trace=trace,
+                    obs=obs,
+                    biz=biz,
+                    profile=profile,
+                    session_vars=session_vars,
+                    _get_page_for_role=_get_page_for_role if session.roles else None,
                 )
+                results = runner.run_actions(actions, case.case_id)
+                passed = bool(results) and all(r.status == "PASS" for r in results)
+                page = dispatcher.page
 
-            # 打印规划结果 (拆分前)
-            plan_count = len(actions)
-            self.console.print(
-                f"  [dim]规划完成 {plan_count} 个动作[/dim]"
-            )
-            for i, a in enumerate(actions, 1):
-                self.console.print(f"    [dim]{i:2d}. {a.type:12s} {a.intent[:50]}{'...' if len(a.intent) > 50 else ''}[/dim]")
-
-            # 步骤⑦ 意图拆分 (每 case 一次 LLM) + 重复菜单点击剥离
-            before_split = len(actions)
-            actions, split_notes, split_raw = self.splitter.split_all_with_raw(actions)
-            actions = strip_duplicate_menu_clicks(actions, case.module_path)
-            after_split = len(actions)
-
-            if split_raw:
-                self.console.print(f"  [dim]└─ 意图拆分原始 JSON: {split_raw}[/dim]")
-                fm.save_intent_split_response(case.case_id, split_raw)
-            if split_notes:
-                for line in split_notes:
-                    self.console.print(f"  [dim]{line}[/dim]")
-            if after_split != before_split:
+            elif by_blocks:
                 self.console.print(
-                    f"  [dim]意图拆分 {before_split} → {after_split} 个动作 (新增 {after_split - before_split})[/dim]"
+                    f"  [dim]交错编排: {len(exec_blocks)} 个执行块 "
+                    f"(原 {len(case.execution_blocks)} 段)[/dim]"
                 )
-                for i, a in enumerate(actions, 1):
-                    tag = "拆分" if getattr(a, "intent_split", False) else "保留"
-                    self.console.print(
-                        f"    [dim]{i:2d}. [{tag}] {a.type:12s} "
-                        f"{a.intent[:50]}{'...' if len(a.intent) > 50 else ''}[/dim]"
-                    )
-            elif not split_notes:
-                self.console.print(f"  [dim]意图拆分: 无需拆分[/dim]")
-            fm.save_raw_response(case.case_id, raw)
-            fm.save_prompt(case.case_id, self._dump_prompt(case))
-            fm.save_planned_actions(case.case_id, actions)
+                actions, raw, passed, primary_role, dispatcher, runner = self._plan_and_run_by_blocks(
+                    case=case,
+                    exec_blocks=exec_blocks,
+                    page=page,
+                    roles=roles,
+                    cross_session=cross_session,
+                    fm=fm,
+                    trace=trace,
+                    obs=obs,
+                    biz=biz,
+                    profile=profile,
+                    session=session,
+                    role_keys=role_keys,
+                    first_role=first_role,
+                    session_vars=session_vars,
+                    _get_page_for_role=_get_page_for_role,
+                )
+                if dispatcher is not None:
+                    page = dispatcher.page
+            else:
+                flatten_case_for_planning(case)
+                actions, raw = self.planner.generate_actions(
+                    case, roles,
+                    current_url=page.url,
+                    cross_case_session=cross_session,
+                )
+                self._print_plan_raw(raw)
+                self._print_action_list(actions, "规划完成")
 
-            # 动作规划后再确定主角色, 避免一律用 roles 里第一个账号(常为 admin)登录
-            from .planning.role_infer import infer_primary_role
-            primary_role = infer_primary_role(case, actions, role_keys)
-            if primary_role:
-                case.role = primary_role
-                self.console.print(f"[dim]推断执行角色: {primary_role}[/dim]")
-                if session.roles and primary_role != first_role:
-                    page = _get_page_for_role(primary_role)
-                    self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
+                actions = strip_duplicate_menu_clicks(actions, case.module_path)
 
-            if not actions:
-                self.console.print("[yellow]规划结果为空, 跳过执行[/yellow]")
-                return {"case_id": case.case_id, "passed": False, "reason": "无动作"}
+                fm.save_raw_response(case.case_id, raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False))
+                fm.save_prompt(case.case_id, self._dump_prompt(case, exec_blocks))
+                fm.save_planned_actions(case.case_id, actions)
 
-            # 步骤⑨⑪⑫⑬⑭ 定位 + 分发 + 后校验重试 + 执行编排
-            self.resolver.set_trace(trace)
-            knowledge = biz.get_knowledge() if biz else {}
-            dispatcher = ActionDispatcher(
-                page, self.resolver,
-                self.pw_cfg.get("default_timeout_ms", 10000),
-                trace=trace,
-                llm=self.llm,
-                api_profile=profile if profile.apis else None,
-                session_ops_cfg=knowledge.get("session_ops"),
-                page_capture=knowledge.get("page_capture"),
-            )
-            # 会话变量注入到 dispatcher 上下文, 供执行期变量替换使用
-            if session_vars:
-                dispatcher.api_context.update(session_vars)
-            retry_ctrl = RetryController(
-                dispatcher, self.post_checker, self.resolver, console=self.console,
-                max_retries=self.runner_cfg.get("post_step_max_retries", 5),
-                trace=trace,
-                readiness_checker=self.readiness,
-            )
-            runner = PlaywrightRunner(
-                dispatcher,
-                out_dir=fm.case_dir(case.case_id),
-                console=self.console,
-                screenshot_on_failure=self.runner_cfg.get("screenshot_on_failure", True),
-                readiness_checker=self.readiness,
-                retry_controller=retry_ctrl,
-                pre_readiness_check=self.runner_cfg.get("pre_readiness_check", False),
-                post_step_check=self.runner_cfg.get("post_step_check", False),
-                observability=obs,
-                trace=trace,
-                page_switcher=_get_page_for_role if session.roles else None,
-            )
-            results = runner.run_actions(actions, case.case_id)
-            passed = bool(results) and all(r.status == "PASS" for r in results)
-            # 合并本用例产生的 api 返回值到会话变量池, 供后续用例使用
-            if session_vars is not None:
+                from .planning.role_infer import infer_primary_role
+                primary_role = infer_primary_role(case, actions, role_keys)
+                if primary_role:
+                    case.role = primary_role
+                    self.console.print(f"[dim]推断执行角色: {primary_role}[/dim]")
+                    if session.roles and primary_role != first_role:
+                        page = _get_page_for_role(primary_role)
+                        self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
+
+                if not actions:
+                    self.console.print("[yellow]规划结果为空, 跳过执行[/yellow]")
+                    return {"case_id": case.case_id, "passed": False, "reason": "无动作"}
+
+                self.resolver.set_trace(trace)
+                dispatcher, runner = self._build_runner(
+                    page=page,
+                    trace=trace,
+                    obs=obs,
+                    biz=biz,
+                    profile=profile,
+                    session_vars=session_vars,
+                    _get_page_for_role=_get_page_for_role if session.roles else None,
+                )
+                results = runner.run_actions(actions, case.case_id)
+                passed = bool(results) and all(r.status == "PASS" for r in results)
+                page = dispatcher.page
+
+            if dispatcher is not None and session_vars is not None:
                 session_vars.update(dispatcher.api_context)
-            # 跨用例: 写回当前标签页, 下一用例从详情/列表的实际停留页继续
-            if role_contexts is not None and self.runner_cfg.get("cross_case_session", False):
+            if (
+                dispatcher is not None
+                and role_contexts is not None
+                and self.runner_cfg.get("cross_case_session", False)
+            ):
                 sync_role = case.role or primary_role or first_role
                 if sync_role and sync_role in role_contexts:
                     ctx, _ = role_contexts[sync_role]
@@ -468,6 +496,172 @@ class UITestAgent:
             )
 
         return {"case_id": case.case_id, "passed": passed}
+
+    def _print_plan_raw(self, raw: Any) -> None:
+        if raw:
+            text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
+            self.console.print(f"  [dim]└─ 规划原始 JSON: {text}[/dim]")
+
+    def _print_action_list(self, actions: list, title: str) -> None:
+        self.console.print(f"  [dim]{title} {len(actions)} 个动作[/dim]")
+        for i, a in enumerate(actions, 1):
+            self.console.print(
+                f"    [dim]{i:2d}. {a.type:12s} {a.intent[:50]}{'...' if len(a.intent) > 50 else ''}[/dim]"
+            )
+
+    def _build_runner(
+        self,
+        *,
+        page,
+        trace: ExecutionTrace,
+        obs: ObservabilityCollector,
+        biz: BusinessLoader | None,
+        profile,
+        session_vars: dict[str, Any] | None,
+        _get_page_for_role,
+        fm: FileManager | None = None,
+        case_id: str = "",
+    ) -> tuple[ActionDispatcher, PlaywrightRunner]:
+        self.resolver.set_trace(trace)
+        knowledge = biz.get_knowledge() if biz else {}
+        dispatcher = ActionDispatcher(
+            page, self.resolver,
+            self.pw_cfg.get("default_timeout_ms", 10000),
+            trace=trace,
+            llm=self.llm,
+            console=self.console,
+            prompts=self.prompts,
+            api_profile=profile if profile.apis else None,
+            session_ops_cfg=knowledge.get("session_ops"),
+            page_capture=knowledge.get("page_capture"),
+        )
+        if session_vars:
+            dispatcher.api_context.update(session_vars)
+        retry_ctrl = RetryController(
+            dispatcher, self.post_checker, self.resolver, console=self.console,
+            max_retries=self.runner_cfg.get("post_step_max_retries", 5),
+            trace=trace,
+            readiness_checker=self.readiness,
+        )
+        out_dir = fm.case_dir(case_id) if fm and case_id else self.root
+        runner = PlaywrightRunner(
+            dispatcher,
+            out_dir=out_dir,
+            console=self.console,
+            screenshot_on_failure=self.runner_cfg.get("screenshot_on_failure", True),
+            readiness_checker=self.readiness,
+            retry_controller=retry_ctrl,
+            pre_readiness_check=self.runner_cfg.get("pre_readiness_check", False),
+            post_step_check=self.runner_cfg.get("post_step_check", False),
+            observability=obs,
+            trace=trace,
+            page_switcher=_get_page_for_role,
+            skill_path=self.root / "prompts" / "skill.md",
+        )
+        return dispatcher, runner
+
+    def _plan_and_run_by_blocks(
+        self,
+        *,
+        case,
+        exec_blocks: list[ExecutionBlock],
+        page,
+        roles,
+        cross_session: bool,
+        fm: FileManager,
+        trace: ExecutionTrace,
+        obs: ObservabilityCollector,
+        biz: BusinessLoader | None,
+        profile,
+        session,
+        role_keys: list[str],
+        first_role: str | None,
+        session_vars: dict[str, Any] | None,
+        _get_page_for_role,
+    ) -> tuple[list, list[Any], bool, Optional[str], ActionDispatcher | None, PlaywrightRunner | None]:
+        from .planning.role_infer import infer_primary_role
+
+        all_actions: list = []
+        all_raws: list[Any] = []
+        primary_role: Optional[str] = None
+        dispatcher: ActionDispatcher | None = None
+        runner: PlaywrightRunner | None = None
+        passed = True
+        total = len(exec_blocks)
+
+        for block_no, block in enumerate(exec_blocks, start=1):
+            if not block.operations and not block.expectations:
+                continue
+
+            ops_preview = "、".join(block.operations[:2])
+            if len(block.operations) > 2:
+                ops_preview += "…"
+            exp_flag = f" + {len(block.expectations)} 条预期" if block.expectations else ""
+            self.console.print(
+                f"  [cyan]── 块 {block_no}/{total}[/cyan] "
+                f"[dim]{ops_preview or '(仅断言)'}{exp_flag}[/dim]"
+            )
+
+            block_actions, raws = self.planner.generate_block_actions(
+                case, block, roles,
+                block_no=block_no,
+                total_blocks=total,
+                current_url=page.url,
+                preconditions=case.preconditions,
+                cross_case_session=cross_session,
+            )
+            all_raws.extend(raws)
+            for raw in raws:
+                self._print_plan_raw(raw)
+
+            block_actions = strip_duplicate_menu_clicks(block_actions, case.module_path)
+            self._print_action_list(block_actions, f"块 {block_no} 规划")
+
+            if primary_role is None and block_actions:
+                primary_role = infer_primary_role(case, block_actions, role_keys)
+                if primary_role:
+                    case.role = primary_role
+                    self.console.print(f"[dim]推断执行角色: {primary_role}[/dim]")
+                    if session.roles and primary_role != first_role:
+                        page = _get_page_for_role(primary_role)
+                        self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
+
+            if dispatcher is None:
+                dispatcher, runner = self._build_runner(
+                    page=page,
+                    trace=trace,
+                    obs=obs,
+                    biz=biz,
+                    profile=profile,
+                    session_vars=session_vars,
+                    _get_page_for_role=_get_page_for_role if session.roles else None,
+                    fm=fm,
+                    case_id=case.case_id,
+                )
+
+            all_actions.extend(block_actions)
+            if not block_actions:
+                continue
+
+            results = runner.run_actions(block_actions, case.case_id)
+            page = dispatcher.page
+            if not results or not all(r.status == "PASS" for r in results):
+                passed = False
+                self.console.print(f"  [red]块 {block_no} 执行失败, 停止后续块[/red]")
+                break
+
+        fm.save_raw_response(
+            case.case_id,
+            json.dumps(all_raws, ensure_ascii=False) if all_raws else "",
+        )
+        fm.save_prompt(case.case_id, self._dump_prompt(case, exec_blocks))
+        fm.save_planned_actions(case.case_id, all_actions)
+
+        if not all_actions:
+            self.console.print("[yellow]规划结果为空, 跳过执行[/yellow]")
+            return [], all_raws, False, primary_role, dispatcher, runner
+
+        return all_actions, all_raws, passed, primary_role, dispatcher, runner
 
     def _dump_prompt(self, case, exec_blocks=None) -> str:
         blocks = exec_blocks or build_execution_blocks(case)

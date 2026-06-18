@@ -1,7 +1,7 @@
-"""框架入口 (v3 重构).
+"""UI 自动化框架 CLI 入口.
 
-单用例:  python run.py natural_cases/login_success.md
-批量目录: python run.py natural_cases/
+单用例:  python run.py 业务/vip视频/大学增加前审/cases/大学增加前审case.md
+批量目录: python run.py 业务/vip视频/大学增加前审/cases/
 
 流程: 解析(Markdown) → 排序 → 前置展开 → 登录 → 导航 → 动作规划 → 意图拆分
       → 语义DOM → 五级定位(阶段A仅大模型) → 分发执行 → 报告.

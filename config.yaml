@@ -72,6 +72,7 @@ runner:
   verbose_trace: true        # 控制台打印规划/定位/分发/后校验等节点详情, 并写 执行追踪.json
   case_sort_llm: false       # 多用例时是否调大模型推断依赖排序 (单用例自动跳过)
   cross_case_session: true  # 跨用例会话保持: true 时角色相同的用例复用同一浏览器上下文
+  auto_navigate: false       # 步骤⑤ 自动导航: true 时根据 module_path 自动点击侧栏菜单; false 时由用例步骤自行导航
   # —— 阶段B 可靠性开关 ——
   pre_readiness_check: true  # 步骤⑩ 步骤前就绪检查 (弹窗/表单优先 + 必填检测 + 恢复动作)
   post_step_check: true      # 步骤⑫ 步骤后校验 (防假操作) + 步骤⑬ 带重试

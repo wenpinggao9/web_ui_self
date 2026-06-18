@@ -1,0 +1,13 @@
+{
+  "step_no": 21,
+  "raw_text": "在商品预览页中筛选出的商品卡片中点击第一个 \"小米 Redmi AirDots\"",
+  "action": "click",
+  "locator": {
+    "strategy": "text",
+    "value": "小米 Redmi AirDots",
+    "exact": false,
+    "nth": 0,
+    "fallback": []
+  },
+  "description": "DOM 摘要中没有显式列出商品卡片元素, 但用例要求点击第一个'小米 Redmi AirDots', 用 text 策略 + nth=0 定位第一个匹配的文本元素"
+}

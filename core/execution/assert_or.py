@@ -64,8 +64,14 @@ def try_or_heuristic(page: Any, intent: str) -> Optional[tuple[bool, str]]:
     want_detail = bool(_DETAIL_BRANCH_RE.search(intent))
     want_list = bool(_LIST_BRANCH_RE.search(intent))
 
-    on_detail = "/detail" in url or "任务id" in body.lower() or "审核原因" in body
-    on_list = "/wait-preview" in url or "待前审" in body
+    on_detail = (
+        "/detail" in url
+        or "请选择审核原因" in body
+        or ("任务id" in body.lower() and "审核原因" in body)
+    )
+    on_list = "/wait-preview" in url or (
+        not on_detail and ("待领取" in body or "领取题目" in body)
+    )
 
     if want_detail and on_detail:
         try:

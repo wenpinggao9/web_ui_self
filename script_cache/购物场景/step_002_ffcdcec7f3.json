@@ -1,0 +1,14 @@
+{
+  "step_no": 2,
+  "raw_text": "在'请输入密码'输入框输入：'123456'",
+  "action": "fill",
+  "locator": {
+    "strategy": "role",
+    "role": "textbox",
+    "name": "请输入密码",
+    "exact": false,
+    "fallback": []
+  },
+  "value": "123456",
+  "description": "DOM 存在子串冲突 (placeholder='请输入密码' 会命中 '请输入密码（6-16位）'), 改用 role=textbox + name 精确匹配, 可唯一定位登录表单的密码输入框"
+}

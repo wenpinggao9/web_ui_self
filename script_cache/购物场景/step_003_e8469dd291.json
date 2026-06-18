@@ -1,0 +1,13 @@
+{
+  "step_no": 3,
+  "raw_text": "点击'登录'按钮",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "button",
+    "name": "登录",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "用例明确说'按钮', DOM 中 role=button name='登录' 唯一 (只有一个 <button> 文本为'登录'), 直接用 role 策略定位"
+}

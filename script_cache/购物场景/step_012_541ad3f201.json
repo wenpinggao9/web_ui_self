@@ -1,0 +1,13 @@
+{
+  "step_no": 12,
+  "raw_text": "在弹出选项中点击 \"广东省\"",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "option",
+    "name": "广东省",
+    "exact": false,
+    "fallback": []
+  },
+  "description": "下拉列表已展开, DOM 中有 role=option name='广东省' 的选项, 直接点击"
+}

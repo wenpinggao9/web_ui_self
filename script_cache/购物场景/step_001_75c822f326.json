@@ -1,0 +1,14 @@
+{
+  "step_no": 1,
+  "raw_text": "在'请输入手机号'输入框输入：'15373137739'",
+  "action": "fill",
+  "locator": {
+    "strategy": "placeholder",
+    "value": "请输入手机号",
+    "exact": false,
+    "nth": 0,
+    "fallback": []
+  },
+  "value": "15373137739",
+  "description": "DOM 中有 2 个 placeholder='请输入手机号' 的 input, 登录表单是第 0 个 (可见), 注册表单是第 1 个 (hidden), 用 nth=0 定位"
+}

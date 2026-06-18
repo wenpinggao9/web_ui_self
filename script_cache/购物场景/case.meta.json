@@ -1,0 +1,9 @@
+{
+  "case_name": "购物场景",
+  "case_hash": "8f065e9779",
+  "url": "http://localhost:4173/#/login",
+  "generated_at": "2026-05-30T09:48:32",
+  "llm_provider": "opus",
+  "llm_model": "claude-opus-4-6",
+  "steps_count": 31
+}

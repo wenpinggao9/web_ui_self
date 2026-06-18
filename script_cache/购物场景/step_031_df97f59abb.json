@@ -1,0 +1,18 @@
+{
+  "step_no": 31,
+  "raw_text": "断言 \"待支付\" 不包含 \"小米 Redmi AirDots\"",
+  "action": "assert",
+  "locator": {
+    "strategy": "css",
+    "value": ".flex.gap-8",
+    "exact": false,
+    "fallback": []
+  },
+  "assertion": {
+    "type": "contains_text",
+    "expected": "小米 Redmi AirDots",
+    "ignore_case": false,
+    "negate": true
+  },
+  "description": "DOM 中没有 role=tabpanel name=\"待支付\", 当前页面待支付 tab 按钮所在区域作为容器; 用 css scope .flex.gap-8 定位订单列表区域, 断言不包含该商品文本"
+}

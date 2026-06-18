@@ -1,4 +1,4 @@
-# UI 自动化 v3 — AI 驱动的自然语言测试框架
+# ui_automation — AI 驱动的自然语言 UI 测试框架
 
 用中文写 Markdown 测试用例，系统自动打开浏览器、自动登录、自动导航、自动把每一步翻译成浏览器操作、自动检查结果、最后给出报告。测试人员不需要写任何代码或选择器，AI 负责理解意图并动态决策。
 
@@ -119,10 +119,13 @@ ui_automation/
 │   ├── remote_agent_runner.py  #   远程代理运行器 + 注册表
 │   └── local_agent.py          #   Flask 本地界面代理 (有头浏览器)
 │
-├── natural_cases/              # 测试用例 (Markdown 格式)
-│   ├── login_success.md
-│   ├── add_address.md
-│   └── shop_scenario.md
+├── 业务/                       # 业务用例与知识 (按项目组织)
+│   └── vip视频/
+│       ├── 业务知识.md
+│       └── 大学增加前审/
+│           ├── 项目配置.yaml
+│           └── cases/
+│               └── 大学增加前审case.md
 │
 └── 智能加速/                   # 运行时自动生成
     ├── 选择器缓存.json
@@ -175,10 +178,10 @@ runner:
 
 ```bash
 # 单个用例
-python run.py natural_cases/login_success.md
+python run.py 业务/vip视频/大学增加前审/cases/大学增加前审case.md
 
 # 整个用例目录
-python run.py natural_cases/
+python run.py 业务/vip视频/大学增加前审/cases/
 ```
 
 ### 4. 查看输出

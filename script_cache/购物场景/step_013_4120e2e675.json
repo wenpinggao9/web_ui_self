@@ -1,0 +1,13 @@
+{
+  "step_no": 13,
+  "raw_text": "点击城市下拉框",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "combobox",
+    "exact": false,
+    "nth": 1,
+    "fallback": []
+  },
+  "description": "DOM 中 3 个 combobox 分别对应省/城市/区县, 城市是第 2 个 (index=1), 点击展开城市下拉"
+}

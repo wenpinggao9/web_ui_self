@@ -1,0 +1,13 @@
+{
+  "step_no": 11,
+  "raw_text": "点击省份下拉框",
+  "action": "click",
+  "locator": {
+    "strategy": "role",
+    "role": "combobox",
+    "exact": false,
+    "nth": 0,
+    "fallback": []
+  },
+  "description": "Element Plus 下拉选择框, 省份是第一个 combobox (nth=0), 点击展开下拉列表"
+}
