@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l core/*.py)",
+      "Bash(.venv/bin/python -c ':*)",
+      "Read(//Users/zyb_1/Documents/code/python/ui_automation/**)",
+      "Bash(.venv/bin/python -c \" import json for f in ['选择器缓存','选择器记忆库','页面结构学习']: try: d=json.load\\(open\\(f'智能加速/{f}.json'\\)\\) print\\(f, '条目数:', len\\(d\\)\\) except Exception as e: print\\(f,'-',e\\) \")",
+      "Bash(ls -td 输出/UI测试/*/)",
+      "Read(//private/tmp/**)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(python3 -m py_compile /Users/zyb_1/Documents/code/python/ui_automation/core/agent.py)"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+# 项目级配置 — 大学增加前审
+base_url: https://www-gwp11-bc.suanshubang.com/video
+
+roles:
+  admin:         { username: "18600638431", verify_code: "111111" }
+  teacherA:      { username: "13621190002", verify_code: "111111" }
+  teacherB:      { username: "13621190001", verify_code: "111111" }
+  teacherC_k12:  { username: "18810812516", verify_code: "111111" }
+  recording:     { username: "15212240001", verify_code: "111111" }

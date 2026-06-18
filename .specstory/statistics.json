@@ -1,0 +1,112 @@
+{
+  "sessions": {
+    "03d7539e-fac8-4687-896f-572269281f90": {
+      "user_message_count": 9,
+      "agent_message_count": 175,
+      "start_timestamp": "2026-06-18T05:40:27.956Z",
+      "end_timestamp": "2026-06-18T06:01:22.841Z",
+      "markdown_size_bytes": 875360,
+      "provider": "claude-code",
+      "last_updated": "2026-06-18T06:01:22Z"
+    },
+    "03dcf13b-157d-4cc1-8e5a-5612a6b8d5a7": {
+      "user_message_count": 52,
+      "agent_message_count": 387,
+      "start_timestamp": "2026-05-23T05:36:36.528Z",
+      "end_timestamp": "2026-05-23T09:52:39.564Z",
+      "markdown_size_bytes": 485692,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "097d250e-109e-4545-a8aa-1653a26b6ca7": {
+      "user_message_count": 85,
+      "agent_message_count": 1446,
+      "start_timestamp": "2026-06-08T07:45:02.944Z",
+      "end_timestamp": "2026-06-11T02:26:52.848Z",
+      "markdown_size_bytes": 1269905,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "0c0e938e-6584-4bea-8b98-44ebf8f85559": {
+      "user_message_count": 2,
+      "agent_message_count": 0,
+      "start_timestamp": "2026-05-23T03:48:04.050Z",
+      "end_timestamp": "2026-05-23T03:48:04.050Z",
+      "markdown_size_bytes": 316,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "1ece916e-1a40-4f54-ac07-2523eb73526a": {
+      "user_message_count": 2,
+      "agent_message_count": 18,
+      "start_timestamp": "2026-05-23T12:00:31+08:00",
+      "end_timestamp": "2026-05-23T12:00:31+08:00",
+      "markdown_size_bytes": 199241,
+      "provider": "cursoride",
+      "last_updated": "2026-05-30T00:44:08Z"
+    },
+    "3ca8bf50-53d3-445e-ba35-fae34641f849": {
+      "user_message_count": 65,
+      "agent_message_count": 980,
+      "start_timestamp": "2026-05-30T08:43:52+08:00",
+      "end_timestamp": "2026-05-30T08:43:52+08:00",
+      "markdown_size_bytes": 1356369,
+      "provider": "cursoride",
+      "last_updated": "2026-06-18T06:10:40Z"
+    },
+    "5f8fb97c-4e97-4874-88a3-9d5b2c8c23ce": {
+      "user_message_count": 7,
+      "agent_message_count": 73,
+      "start_timestamp": "2026-05-22T11:27:41+08:00",
+      "end_timestamp": "2026-05-22T11:27:41+08:00",
+      "markdown_size_bytes": 51931,
+      "provider": "cursoride",
+      "last_updated": "2026-05-23T04:00:35Z"
+    },
+    "b86790fc-69e1-4661-95a0-072e5ec03102": {
+      "user_message_count": 39,
+      "agent_message_count": 457,
+      "start_timestamp": "2026-06-11T14:58:49.387Z",
+      "end_timestamp": "2026-06-12T01:53:14.147Z",
+      "markdown_size_bytes": 815056,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "bb4def47-713a-4e72-b627-4f61eb0f7aef": {
+      "user_message_count": 65,
+      "agent_message_count": 621,
+      "start_timestamp": "2026-05-21T07:07:55.318Z",
+      "end_timestamp": "2026-05-21T07:07:55.318Z",
+      "markdown_size_bytes": 702157,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "c1d0fd92-74b2-45e1-bbff-c7824059ba32": {
+      "user_message_count": 133,
+      "agent_message_count": 843,
+      "start_timestamp": "2026-06-12T01:56:00.158Z",
+      "end_timestamp": "2026-06-16T02:52:19.187Z",
+      "markdown_size_bytes": 1227849,
+      "provider": "claude-code",
+      "last_updated": "2026-06-17T14:46:22Z"
+    },
+    "cd35ac22-1e21-46a1-9c3d-b72021f7ce6a": {
+      "user_message_count": 17,
+      "agent_message_count": 181,
+      "start_timestamp": "2026-05-29T12:16:29.055Z",
+      "end_timestamp": "2026-06-06T03:47:44.189Z",
+      "markdown_size_bytes": 183974,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    },
+    "f117f184-7b28-4b81-95d8-212c2c1f30d9": {
+      "user_message_count": 133,
+      "agent_message_count": 1042,
+      "start_timestamp": "2026-06-11T03:05:20.600Z",
+      "end_timestamp": "2026-06-11T03:05:20.600Z",
+      "markdown_size_bytes": 1243913,
+      "provider": "claude-code",
+      "last_updated": "2026-06-16T04:25:57Z"
+    }
+  }
+}

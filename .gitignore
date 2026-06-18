@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+reports/
+输出/
+智能加速/
+script_cache/
+.DS_Store
+.idea/
+.vscode/

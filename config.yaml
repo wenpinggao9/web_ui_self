@@ -1,0 +1,83 @@
+llm:
+  # provider 三选一: ollama | minimax | opus
+  provider: opus
+
+  # 通用参数
+  max_tokens: 2048
+  temperature: 0.0
+
+  # 本地 Ollama (无需 API Key)
+  ollama:
+    base_url: http://localhost:11434
+    model: deepseek-r1:7b
+    timeout_seconds: 120
+
+  # MiniMax (国内代理网关, OpenAI 兼容)
+  minimax:
+    base_url: https://openproxy-cn.zuoyebang.cc/openproxy/rp/v1
+    api_key: "zyb-73e1f689c56330dcd4b7a2752011857f@qa_safe_coding"
+    model: zyb/MiniMax-M2.5
+    timeout_seconds: 60
+
+  # Opus / 海外 Claude (OpenAI 兼容)
+  opus:
+    base_url: https://openproxy.zuoyebang.cc/openproxy/rp/v1
+    api_key: "zyb-a2e3c5bf0a3a720a9e563154a9b5941a@ZLXN"
+    model: claude-opus-4-6
+    timeout_seconds: 120
+
+  # 【重点3】各 LLM 环节提示词覆盖位. 留空则用 prompts/*.md 文件 (再留空才用代码内置).
+  # 取消注释并填入字符串即可覆盖对应环节; user 模板支持 {{占位符}}.
+  # prompts:
+  #   action_plan:
+  #     system: "自定义系统提示词, 覆盖 prompts/action_plan.system.md"
+  #     user: "自定义用户提示词, 支持 {{module_path}} {{steps}} {{expectations}} 占位符"
+  #   intent_split: {system: "", user: ""}
+  #   element_decide: {system: "", user: ""}
+  #   precondition: {system: "", user: ""}
+  #   case_sort: {system: "", user: ""}
+
+# 步骤④ 自动登录目标 (所有用例统一登录态)
+target:
+  base_url: http://localhost:4173/#/login
+  username: "15373137739"
+  password: "123456"
+  login:
+    login_tab_text: "登录"           # 登录/注册 tab 切换文本, 无则留空
+    username_placeholder: "请输入手机号"
+    password_placeholder: "请输入密码"
+    submit_name: "登录"              # 登录按钮可访问名
+
+# 各系统兜底账号 (项目配置中没有对应角色时回退使用)
+fallback_accounts:
+  vip_video:
+    base_url: https://www-base-bc.suanshubang.com/video
+    roles:
+      admin:         { username: "18600638431", verify_code: "111111" }
+      preview_college_teacherA:      { username: "13621190002", verify_code: "111111" }
+      preview_college_teacherB:      { username: "13621190001", verify_code: "111111" }
+      preview_k12_teacher:  { username: "18810812516", verify_code: "111111" }
+
+playwright:
+  browser: chromium          # chromium | firefox | webkit
+  headless: false
+  default_timeout_ms: 10000
+  viewport:
+    width: 1280
+    height: 800
+
+runner:
+  reports_dir: reports
+  screenshot_on_failure: true
+  verbose_trace: true        # 控制台打印规划/定位/分发/后校验等节点详情, 并写 执行追踪.json
+  case_sort_llm: false       # 多用例时是否调大模型推断依赖排序 (单用例自动跳过)
+  cross_case_session: true  # 跨用例会话保持: true 时角色相同的用例复用同一浏览器上下文
+  # —— 阶段B 可靠性开关 ——
+  pre_readiness_check: true  # 步骤⑩ 步骤前就绪检查 (弹窗/表单优先 + 必填检测 + 恢复动作)
+  post_step_check: true      # 步骤⑫ 步骤后校验 (防假操作) + 步骤⑬ 带重试
+  post_step_max_retries: 5   # 步骤⑬ 带后校验重试上限
+
+# 步骤⑨ 智能加速层 TTL
+acceleration:
+  l1_ttl_minutes: 30   # L1 纯内存缓存, 进程结束即失效
+  l2_ttl_days: 10      # L2 记忆库文件, 超过此天数未更新则清理
