@@ -85,6 +85,49 @@ class ActionDispatcher:
         self._popup_dismiss_used = False
         self.popup_dismiss_before_intents: list[str] = []
         self.idempotent_skip_intents: list[str] = []
+        self._page_snapshot: Optional[dict[str, Any]] = None
+
+    def _snapshot_key(self) -> str:
+        try:
+            return (self.page.url or "").lower()
+        except Exception:
+            return ""
+
+    def invalidate_page_snapshot(self) -> None:
+        self._page_snapshot = None
+
+    def page_snapshot_valid(self) -> bool:
+        key = self._snapshot_key()
+        return bool(key and self._page_snapshot and self._page_snapshot.get("key") == key)
+
+    def refresh_page_snapshot(self, *, dom_summary: Optional[str] = None) -> dict[str, Any]:
+        """操作改页后抓取页面快照, 供后续断言复用 (不再逐步重读 DOM)."""
+        self._ensure_list_anchor()
+        self.page, _ = recover_active_page(self.page, prefer=self._list_tab_anchor)
+        body_text = self._read_body_text()
+        regions = extract_page_regions(self.page)
+        key = self._snapshot_key()
+        self._page_snapshot = {
+            "key": key,
+            "body_text": body_text,
+            "regions": regions,
+            "dom_summary": dom_summary,
+        }
+        if self.trace:
+            self.trace.emit("page_snapshot", url=key, cached=False, reason="after_operation")
+        return self._page_snapshot
+
+    def get_page_snapshot(self, *, allow_capture: bool = False) -> Optional[dict[str, Any]]:
+        """断言读取上一操作后的页面快照; 默认不触发新的 DOM 读取."""
+        if self.page_snapshot_valid():
+            snap = self._page_snapshot
+            if self.trace:
+                self.trace.emit("page_snapshot", url=snap.get("key", ""), cached=True, reason="assert_reuse")
+            return snap
+        if not allow_capture:
+            return None
+        self._prepare_page_for_assert()
+        return self.refresh_page_snapshot()
 
     def record_popup_recovery(self, steps: list[PlannedAction]) -> None:
         """记录运行期弹窗恢复动作, 供 codegen 生成条件式脚本."""
@@ -107,6 +150,7 @@ class ActionDispatcher:
     def set_page(self, page: Any) -> None:
         """新标签页切换后更新页面对象."""
         self.page = page
+        self.invalidate_page_snapshot()
 
     def _ensure_live_page(self, *, poll: bool = False) -> bool:
         """当前 page 已关闭时切到仍打开的 tab (多 tab / 提交关详情页)."""
@@ -178,9 +222,11 @@ class ActionDispatcher:
         # 执行前变量替换: 把 action.value 和 action.intent 中的 ${var} 替换为 api_context 中的值
         self._substitute_action(action)
         t = action.type
-        if t in ("assert_text", "asset", "assert_table", "assert_count"):
-            self._prepare_page_for_assert()
+        if action.is_assert():
+            # 断言不操作页面, 复用上一操作后的 page_snapshot, 此处不 prepare、不重读 DOM.
+            self._ensure_live_page()
         else:
+            self.invalidate_page_snapshot()
             self._ensure_live_page()
         try:
             # 不需要元素定位的动作先直接处理.
@@ -621,10 +667,13 @@ class ActionDispatcher:
         target = (action.value or action.intent or "").strip()
         if not target and not is_or_assert(action):
             return False, "断言缺少目标文本"
-        body_text = self._read_body_text()
         intent = action.intent or ""
         scope = parse_assert_scope(intent, value=target, negate=action.negate)
-        regions = extract_page_regions(self.page)
+        snap = self.get_page_snapshot(allow_capture=True)
+        if snap is None:
+            return False, "断言缺少页面快照: 请先执行会改变页面的操作步骤"
+        body_text = snap["body_text"]
+        regions = snap["regions"]
 
         if is_or_assert(action) and not action.negate:
             branches = (action.extras or {}).get("branches") or []
@@ -640,7 +689,10 @@ class ActionDispatcher:
                     if hit[0]:
                         record_or_heuristic(action, self.page, combined_or_intent(action))
                     return hit
-            ok, msg = self._semantic_assert(action, body_text, scope=scope, regions=regions, any_of=True)
+            ok, msg = self._semantic_assert(
+                action, body_text, scope=scope, regions=regions, any_of=True,
+                dom_summary=snap.get("dom_summary"),
+            )
             if ok:
                 record_semantic_pass(action, self.page, body_text)
             return ok, msg
@@ -683,7 +735,10 @@ class ActionDispatcher:
             return control
         if not self._should_semantic_fallback(scope):
             return False, f"断言未通过: {action.intent!r} (目标文本 {target!r})"
-        ok, msg = self._semantic_assert(action, body_text, scope=scope, regions=regions)
+        ok, msg = self._semantic_assert(
+            action, body_text, scope=scope, regions=regions,
+            dom_summary=snap.get("dom_summary"),
+        )
         if ok:
             record_semantic_pass(action, self.page, body_text)
         return ok, msg
@@ -732,6 +787,7 @@ class ActionDispatcher:
         *,
         scope=None,
         regions: Optional[dict[str, str]] = None,
+        dom_summary: Optional[str] = None,
         any_of: bool = False,
     ) -> tuple[bool, str]:
         """精确匹配失败时, 让 LLM 根据页面状态判断断言意图是否满足."""
@@ -740,7 +796,10 @@ class ActionDispatcher:
             target = (action.value or action.intent or "").strip()
             scope = parse_assert_scope(action.intent or "", value=target, negate=action.negate)
         if regions is None:
-            regions = extract_page_regions(self.page)
+            snap = self.get_page_snapshot(allow_capture=True) or {}
+            regions = snap.get("regions") or {}
+            body_text = snap.get("body_text") or body_text
+            dom_summary = dom_summary if dom_summary is not None else snap.get("dom_summary")
 
         default_system = """你是 UI 自动化断言校验助手. 根据页面状态判断一个断言是否满足.
 只输出 JSON: {"ok": true/false, "reason": "简短说明"}."""
@@ -752,7 +811,10 @@ class ActionDispatcher:
 - **或断言**: intent 描述多个可接受结果 (如「没有A则B，有的话C」「B或C」). 只要当前页面满足**任一分支**的语义, 必须判 ok=true.
 - 禁止因仅不符合其中一支就判 false; value 若只写了其中一支的文案, 仍以 intent 全部分支为准."""
 
-        dom_summary = extract_semantic_dom(self.page, dialog_first=False)
+        if not dom_summary:
+            dom_summary = extract_semantic_dom(self.page, dialog_first=False, stable=False)
+            if self.page_snapshot_valid() and self._page_snapshot is not None:
+                self._page_snapshot["dom_summary"] = dom_summary
         text_summary = build_semantic_text_summary(body_text, regions, scope)
         or_note = "是 (满足任一分支即可)" if or_mode else "否"
         intent_text = combined_or_intent(action) if or_mode else (action.intent or "")

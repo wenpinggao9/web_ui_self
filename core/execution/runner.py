@@ -241,6 +241,8 @@ class PlaywrightRunner:
             self._log_result(r)
             results.append(r)
             last_post_ok = post_ok
+            if not action.is_assert():
+                self.dispatcher.refresh_page_snapshot()
 
         self._save_exec_log(results)
         self._render(case_id, results)
@@ -308,6 +310,8 @@ class PlaywrightRunner:
                 error=None if ok else msg, message=msg, selector=rec.selector,
                 locator_repr=rec.selector,
             ))
+            if ok:
+                self.dispatcher.refresh_page_snapshot()
         return seq
 
     def _recover_and_retry(

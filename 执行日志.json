@@ -1,18 +1,18 @@
 [
   {
     "step_no": 1,
-    "raw_text": "在详情页选择'题目内容涉及不良导向/敏感信息'",
+    "raw_text": "在详情页选择'多题'",
     "action": "click",
     "status": "PASS",
-    "duration_ms": 15403,
+    "duration_ms": 15523,
     "error": null,
     "screenshot": null,
-    "message": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>",
-    "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
-    "locator_repr": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
+    "message": "点击 在详情页选择'多题' | 实际目标: <span>多题</span>",
+    "selector": "text:exact:\"多题\"",
+    "locator_repr": "text:exact:\"多题\"",
     "heal_attempts": 0,
     "code": null,
-    "resolved_html": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>",
+    "resolved_html": "点击 在详情页选择'多题' | 实际目标: <span>多题</span>",
     "post_check_ok": true
   },
   {
@@ -20,7 +20,7 @@
     "raw_text": "点击'提交'按钮",
     "action": "click",
     "status": "PASS",
-    "duration_ms": 35663,
+    "duration_ms": 37411,
     "error": null,
     "screenshot": null,
     "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | 提交后等待页面结局超时",
@@ -33,18 +33,18 @@
   },
   {
     "step_no": 3,
-    "raw_text": "验证页面自动加载下一个任务的详情页",
+    "raw_text": "验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情",
     "action": "assert_text",
     "status": "PASS",
-    "duration_ms": 20467,
+    "duration_ms": 10275,
     "error": null,
     "screenshot": null,
-    "message": "否定断言: 页面不包含 '提交失败'",
+    "message": "或断言(分支2): 或断言(启发式): 当前在任务详情页",
     "selector": null,
     "locator_repr": null,
     "heal_attempts": 0,
     "code": null,
-    "resolved_html": "否定断言: 页面不包含 '提交失败'",
+    "resolved_html": "或断言(分支2): 或断言(启发式): 当前在任务详情页",
     "post_check_ok": true
   }
 ]

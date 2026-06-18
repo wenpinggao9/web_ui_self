@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>UI Test Report - vip_前审_003</title>
+<html><head><meta charset="utf-8"><title>UI Test Report - vip_前审_004</title>
 <style>
 body { font-family: system-ui, sans-serif; margin: 2rem; background: #f9fafb; }
 h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
@@ -11,13 +11,13 @@ tr:hover { background: #f9fafb; }
 .action { color: #6366f1; }
 .msg { font-family: monospace; font-size: 0.8rem; max-width: 300px; word-break: break-all; }
 </style></head><body>
-<h1>vip_前审_003</h1>
+<h1>vip_前审_004</h1>
 <div class="summary">
   <span>Total: 3</span>
   <span style="color:#22c55e">Passed: 3</span>
   <span style="color:#ef4444">Failed: 0</span>
-  <span>Duration: 71533ms</span>
+  <span>Duration: 63209ms</span>
 </div>
 <table><tr><th>#</th><th>Intent</th><th>Action</th><th>Status</th><th>Time</th><th>Message</th><th>Error</th></tr>
-<tr><td class="step">1</td><td>在详情页选择'题目内容涉及不良导向/敏感信息'</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>15403ms</td><td class="msg">点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span></td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">2</td><td>点击'提交'按钮</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>35663ms</td><td class="msg">点击 点击'提交'按钮 | 实际目标: <button type="submit" class="ant-btn ant-btn-primary"><span>提 交</span></button> | 提交后等待页面结局超时</td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">3</td><td>验证页面自动加载下一个任务的详情页</td><td class="action">assert_text</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>20467ms</td><td class="msg">否定断言: 页面不包含 '提交失败'</td><td class="msg" style="color:#ef4444"></td></tr>
+<tr><td class="step">1</td><td>在详情页选择'多题'</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>15523ms</td><td class="msg">点击 在详情页选择'多题' | 实际目标: <span>多题</span></td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">2</td><td>点击'提交'按钮</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>37411ms</td><td class="msg">点击 点击'提交'按钮 | 实际目标: <button type="submit" class="ant-btn ant-btn-primary"><span>提 交</span></button> | 提交后等待页面结局超时</td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">3</td><td>验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情</td><td class="action">assert_text</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>10275ms</td><td class="msg">或断言(分支2): 或断言(启发式): 当前在任务详情页</td><td class="msg" style="color:#ef4444"></td></tr>
 </table></body></html>
