@@ -160,6 +160,112 @@ def extract_page_regions(page: Any) -> dict[str, str]:
     return {"body": body, "main": body, "nav": "", "header": "", "form": "", "main_left": body}
 
 
+def items_flat_text(items: list[dict]) -> str:
+    """从 semantic_items 拼接可见文本 (替代 body_text)."""
+    parts: list[str] = []
+    seen: set[str] = set()
+    for it in items:
+        for field in ("text", "value", "placeholder", "name"):
+            v = str(it.get(field) or "").strip()
+            if not v or v in seen:
+                continue
+            seen.add(v)
+            parts.append(v)
+    return "\n".join(parts)
+
+
+def _is_nav_item(it: dict) -> bool:
+    role = str(it.get("role") or "").lower()
+    if role in ("menuitem", "navigation"):
+        return True
+    scope = str(it.get("scope") or "")
+    return "navigation" in scope or role == "menu"
+
+
+def filter_items_for_scope(items: list[dict], scope: AssertScope) -> list[dict]:
+    """按断言范围过滤 semantic_items (替代 regions 切片)."""
+    out = list(items)
+    if scope.exclude_nav:
+        out = [it for it in out if not _is_nav_item(it)]
+    if not scope.explicit_region:
+        return out
+    keys = set(scope.region_keys)
+    if keys & {"form", "main_right"}:
+        form_items = [it for it in out if it.get("in_form")]
+        if form_items:
+            return form_items
+    if keys & {"header", "main_top"}:
+        return [it for it in out if not it.get("in_form") and not _is_nav_item(it)]
+    if keys & {"main_left", "main"}:
+        return [it for it in out if not _is_nav_item(it)]
+    return out
+
+
+def get_scoped_items_text(items: list[dict], scope: AssertScope) -> str:
+    filtered = filter_items_for_scope(items, scope)
+    return items_flat_text(filtered)
+
+
+def try_field_value_assert_items(
+    scope: AssertScope, items: list[dict], field_hint: str, value: str,
+) -> Optional[tuple[bool, str]]:
+    """在 semantic_items 限定范围内匹配「字段 + 值」."""
+    if not field_hint or not value:
+        return None
+    text = get_scoped_items_text(items, scope)
+    if not text:
+        return False, f"字段断言: {scope_label(scope)} 无文本"
+
+    labels = [field_hint]
+    for token in re.findall(r"[\u4e00-\u9fff]{2,}", field_hint):
+        if token not in labels:
+            labels.append(token)
+
+    for label in labels:
+        pat = rf"{re.escape(label)}[^\n]{{0,30}}[：:\s]*[^\n]{{0,60}}{re.escape(value)}"
+        m = re.search(pat, text)
+        if m:
+            excerpt = m.group(0).replace("\n", " ")[:60]
+            return True, f"字段断言: {scope_label(scope)} {label!r}→{value!r} ({excerpt})"
+
+    if scope.explicit_region or scope.exclude_nav:
+        return False, (
+            f"字段断言: {scope_label(scope)} 未找到字段 {field_hint!r} 含 {value!r} "
+            f"(导航区/无关表单选项不算)"
+        )
+    return None
+
+
+def try_scoped_literal_items(
+    scope: AssertScope, items: list[dict], target: str,
+) -> Optional[tuple[bool, str]]:
+    """在 semantic_items 限定区域内做字面包含."""
+    if not target or not scope.explicit_region:
+        return None
+    text = get_scoped_items_text(items, scope)
+    if target in text:
+        return True, f"区域断言: {scope_label(scope)} 含 {target!r}"
+    return False, f"区域断言: {scope_label(scope)} 不含 {target!r}"
+
+
+def build_semantic_text_summary_from_items(
+    items: list[dict], scope: AssertScope,
+) -> str:
+    """语义断言用文本摘要: 从 semantic_items 按范围拼接."""
+    parts: list[str] = []
+    scoped = get_scoped_items_text(items, scope).replace("\n", " ").strip()
+    if scoped:
+        parts.append(f"[断言区域] {scoped[:2000]}")
+    if scope.exclude_nav:
+        nav_text = items_flat_text([it for it in items if _is_nav_item(it)])[:400]
+        if nav_text:
+            parts.append(f"[导航区-仅供参考勿作断言依据] {nav_text}")
+    flat = items_flat_text(items).replace("\n", " ").strip()
+    if flat and flat not in scoped:
+        parts.append(f"[全文节选] {flat[:800]}")
+    return " | ".join(parts)[:4000] if parts else flat[:2000]
+
+
 def get_scoped_text(regions: dict[str, str], scope: AssertScope) -> str:
     parts: list[str] = []
     for key in scope.region_keys:
@@ -210,7 +316,7 @@ def try_scoped_literal(
     text = get_scoped_text(regions, scope)
     if target in text:
         return True, f"区域断言: {scope_label(scope)} 含 {target!r}"
-    return None
+    return False, f"区域断言: {scope_label(scope)} 不含 {target!r}"
 
 
 def build_semantic_text_summary(

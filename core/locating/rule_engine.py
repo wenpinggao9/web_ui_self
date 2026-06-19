@@ -225,7 +225,7 @@ _RULES: list[Rule] = [
 
 def _extract_dom_items(page: Any, selectors: Optional[dict] = None) -> list[dict]:
     """从页面提取语义 DOM 节点列表 (供组件选择器使用)."""
-    from ..dom.semantic_dom import _snapshot_items
+    from ..dom.semantic_dom import extract_items
     try:
         fw = None
         if selectors:
@@ -237,7 +237,7 @@ def _extract_dom_items(page: Any, selectors: Optional[dict] = None) -> list[dict
                 "form_sel": selectors.get("form_sel"),
             }
             fw = {k: v for k, v in mapped.items() if v} or None
-        return _snapshot_items(page, dialog_first=True, stable=False, selectors=fw)
+        return extract_items(page, profile="locate", dialog_first=True, stable=False, selectors=fw)
     except Exception:
         return []
 
@@ -256,11 +256,12 @@ class RuleEngine:
         hint: Optional[str] = None,
         exclude: Optional[set[str]] = None,
         framework_selectors: Optional[dict[str, str]] = None,
+        semantic_items: Optional[list[dict]] = None,
     ) -> Optional[dict]:
         excl = exclude or set()
 
-        # 提取当前页面语义 DOM (供组件选择器动态构建)
-        dom = _extract_dom_items(page, framework_selectors)
+        # 优先复用共用 semantic_items; 否则从页面抽取
+        dom = semantic_items if semantic_items is not None else _extract_dom_items(page, framework_selectors)
 
         for rule in self.rules:
             if not rule.pattern(intent):

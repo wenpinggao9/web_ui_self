@@ -95,28 +95,32 @@ def resolve_locator(page: Any, info: dict):
     spec = normalize_info(info)
     method = spec["method"]
     nth = spec.get("nth", 0) or 0
+    root = page
+    frame_loc = spec.get("_frame_locator") or spec.get("frame_locator")
+    if frame_loc:
+        root = page.frame_locator(frame_loc)
 
     if method == "label":
-        loc = page.get_by_label(spec["name"], exact=bool(spec.get("exact", False)))
+        loc = root.get_by_label(spec["name"], exact=bool(spec.get("exact", False)))
     elif method == "role":
         kwargs: dict = {}
         if spec.get("name"):
             kwargs["name"] = spec["name"]
         if "exact" in spec:
             kwargs["exact"] = bool(spec["exact"])
-        loc = page.get_by_role(spec["role"], **kwargs)
+        loc = root.get_by_role(spec["role"], **kwargs)
     elif method == "text":
-        loc = page.get_by_text(spec["name"], exact=bool(spec.get("exact", False)))
+        loc = root.get_by_text(spec["name"], exact=bool(spec.get("exact", False)))
     elif method == "placeholder":
-        loc = page.get_by_placeholder(spec["name"], exact=bool(spec.get("exact", False)))
+        loc = root.get_by_placeholder(spec["name"], exact=bool(spec.get("exact", False)))
     elif method == "testid":
-        loc = page.get_by_test_id(spec["name"])
+        loc = root.get_by_test_id(spec["name"])
     else:
-        loc = page.locator(spec.get("selector") or "body")
+        loc = root.locator(spec.get("selector") or "body")
 
     scope = spec.get("filter")
     if scope and method != "css":
-        loc = loc.filter(has=page.locator(scope))
+        loc = loc.filter(has=root.locator(scope))
 
     return loc.nth(nth) if nth else loc.first
 

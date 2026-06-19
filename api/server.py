@@ -39,7 +39,7 @@ from core.llm import LLMAdapter, PromptLoader
 from core.parser import parse_case
 from core.planning import ActionPlanner, strip_duplicate_menu_clicks
 from core.preprocess import PreconditionExpander
-from core.preprocess.step_format import prepare_execution_plan
+from core.preprocess.step_format import build_case_origin_snapshot, prepare_execution_plan
 from core.skill_loader import load_skill_text
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -108,7 +108,7 @@ async def plan_actions(
             # 返回全部用例
             results = []
             for case in cases:
-                actions, origin, _ = _plan_one_case(case, llm, prompts, skill_text, biz_path)
+                actions, origin = _plan_one_case(case, llm, prompts, skill_text, biz_path)
                 results.append({
                     "case_id": case.case_id,
                     "origin_case": origin,
@@ -120,7 +120,7 @@ async def plan_actions(
             if case_index < 0 or case_index >= len(cases):
                 raise HTTPException(400, f"case_index={case_index} 超出范围 (0-{len(cases)-1})")
             case = cases[case_index]
-            actions, origin, _ = _plan_one_case(case, llm, prompts, skill_text, biz_path)
+            actions, origin = _plan_one_case(case, llm, prompts, skill_text, biz_path)
             return {
                 "case_id": case.case_id,
                 "case_index": case_index,
@@ -152,14 +152,8 @@ def _plan_one_case(case, llm, prompts, skill_text, case_file_path: str) -> tuple
     from core.business_loader import BusinessLoader
     from core.profile import ProfileManager, SessionConfig
 
-    # 保存原始用例内容 (前置展开会修改 case.steps)
-    origin = {
-        "preconditions": list(case.preconditions) if case.preconditions else None,
-        "steps": list(case.steps),
-        "expectations": list(case.expectations),
-    }
-    if origin["preconditions"] is None:
-        del origin["preconditions"]
+    # 保存原始用例内容 (保留交错/分离编排形态)
+    origin = build_case_origin_snapshot(case)
 
     # 【业务目录】从用例路径向上自动发现业务配置 (与执行路径一致)
     biz = BusinessLoader()

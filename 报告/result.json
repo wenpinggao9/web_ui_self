@@ -1,0 +1,135 @@
+{
+  "case_id": "vip_前审_004",
+  "feature_titles": [
+    "大学增加前审",
+    "前审功能",
+    "Case 4"
+  ],
+  "total_steps": 5,
+  "passed": 5,
+  "failed": 0,
+  "summary": "通过",
+  "execution_time": "44.4秒",
+  "generated_time": "2026-06-20 01:12:41",
+  "details": [
+    {
+      "step": "步骤1: click",
+      "action": {
+        "type": "click",
+        "intent": "在详情页选择'多题'",
+        "selector": "label.ant-radio-wrapper:has-text(\"多题\")"
+      },
+      "success": true,
+      "status": "passed",
+      "message": "点击 在详情页选择'多题' | 实际目标: <label class=\"ant-radio-wrapper ant-radio-wrapper-in-form-item\"><span class=\"ant-radio\"><input class=\"ant-radio-input\" type=\"radio\" value=\"3\"><span class=\"ant-radio-inner\"></span></span><span>多题</span",
+      "error": "",
+      "selector": "label.ant-radio-wrapper:has-text(\"多题\")",
+      "resolved_html": "点击 在详情页选择'多题' | 实际目标: <label class=\"ant-radio-wrapper ant-radio-wrapper-in-form-item\"><span class=\"ant-radio\"><input class=\"ant-radio-input\" type=\"radio\" value=\"3\"><span class=\"ant-radio-inner\"></span"
+    },
+    {
+      "step": "步骤2: api_call",
+      "action": {
+        "type": "api_call",
+        "intent": "根据当前任务ID查询对应工单ID",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "API 调用成功: workId=146395539",
+      "error": "",
+      "selector": null,
+      "resolved_html": "API 调用成功: workId=146395539"
+    },
+    {
+      "step": "步骤3: bind_session",
+      "action": {
+        "type": "bind_session",
+        "intent": "记录orderId和审核老师选择的选择项（多题）",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "会话记录 ops[146395542] = {\"orderId\": \"146395628\", \"reason\": \"多题</span\", \"case_id\": \"vip_前审_004\", \"var\": \"workId\"}",
+      "error": "",
+      "selector": null,
+      "resolved_html": "会话记录 ops[146395542] = {\"orderId\": \"146395628\", \"reason\": \"多题</span\", \"case_id\": \"vip_前审_004\", \"var\": \"workId\"}"
+    },
+    {
+      "step": "步骤4: click",
+      "action": {
+        "type": "click",
+        "intent": "点击'提交'按钮",
+        "selector": "role=button[name=\"提 交\"]"
+      },
+      "success": true,
+      "status": "passed",
+      "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed",
+      "error": "",
+      "selector": "role=button[name=\"提 交\"]",
+      "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed"
+    },
+    {
+      "step": "步骤5: assert_text",
+      "action": {
+        "type": "assert_text",
+        "intent": "验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "或断言(分支2): 或断言(启发式): 当前在任务详情页",
+      "error": "",
+      "selector": null,
+      "resolved_html": "或断言(分支2): 或断言(启发式): 当前在任务详情页"
+    }
+  ],
+  "screenshot_timeline": [],
+  "failure_analysis": {
+    "total_failures": 0,
+    "failures": []
+  },
+  "llm_call_summary": {
+    "total_calls": 5
+  },
+  "llm_call_details": [
+    {
+      "step_idx": 1,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在详情页选择'多题'"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'多题'\n输入值: 多题</span\n分发成功: true\n分发消息: 点击 在详情页选择'多题' | 实际目标: <label class=\"ant-radio-wrapper ant-radio-wrapper-in-form-item\"><span class=\"ant-radio\"><input class=\"ant-radio-input\" type=\"radio\" value=\"3\"><span class=\"ant-radio-inner\"></span></span><span>多题</span\n当前页面 URL: https:/",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击了'多题'单选按钮(value=3)，分发成功且实际目标是包含'多题'文本的radio label。DOM中[28]label对应'多题'选项，点击操作已执行成功，该单选按钮应已被选中。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 4,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "点击'提交'按钮"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: true\n分发消息: 点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146395545\n分发结构化上下文: {\"navigation_outcome\"",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"提交按钮点击成功，navigation_outcome=resource_id_changed，URL从uniqId=146395542变为uniqId=146395545，说明提交成功后自动加载了下一个任务详情页面。页面显示新任务ID:146395545的详情内容，包含题目、答案、日志等信息，确认提交操作已完成并跳转到下一个任务。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    }
+  ],
+  "dom_snapshot_summary": {},
+  "_watermark": {
+    "banner": "高文苹",
+    "footer": "高文苹",
+    "overlay": "高文苹",
+    "generator": "ui-automation"
+  }
+}

@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Optional
 
@@ -213,12 +214,15 @@ def detect_framework(page: Any, path: str | Path) -> str:
     () => {
       const checks = __CHECKS__;
       for (const c of checks) {
-        try { if (document.querySelector(c.sel)) return c.name; }
-        catch {}
+        const parts = String(c.sel || '').split(',').map(s => s.trim()).filter(Boolean);
+        for (const sel of parts) {
+          try { if (document.querySelector(sel)) return c.name; }
+          catch {}
+        }
       }
       return 'default';
     }
-    """.replace('__CHECKS__', str(checks).replace("'", '"'))
+    """.replace("__CHECKS__", json.dumps(checks, ensure_ascii=False))
 
     try:
         result = page.evaluate(js)
@@ -228,21 +232,23 @@ def detect_framework(page: Any, path: str | Path) -> str:
     return result if isinstance(result, str) else 'default'
 
 
-def get_framework_selectors(path: str | Path, page: Any) -> Optional[dict[str, str]]:
-    """探测框架并返回对应选择器. 整合 detect + load 一步完成.
+def get_framework_selectors(
+    path: str | Path, page: Any,
+) -> tuple[Optional[str], Optional[dict[str, str]]]:
+    """探测框架并返回 (框架名, 选择器). 无匹配时返回 (None, None).
 
     Args:
         path: skill.md 路径.
         page: Playwright page 对象.
 
     Returns:
-        匹配到的框架选择器字典, 无匹配时返回 None (调用方使用默认值).
+        (framework_name, selectors); framework_name 为 skill.md 中 framework_detect.name.
     """
     framework = detect_framework(page, path)
     if framework == 'default':
-        return None
+        return None, None
     all_selectors = load_framework_selectors(path)
-    return all_selectors.get(framework)
+    return framework, all_selectors.get(framework)
 
 
 def _split_frontmatter(text: str) -> tuple[str, str]:

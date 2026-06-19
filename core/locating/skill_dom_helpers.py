@@ -105,6 +105,20 @@ def _extract_dropdown_option_text_from_intent(intent: str) -> Optional[str]:
     return None
 
 
+def _append_ant_option_candidates(candidates: List[str], option_text: str) -> None:
+    name_escaped = option_text.replace("\\", "\\\\").replace('"', '\\"')
+    text_escaped = _escape_xpath_literal(option_text)
+    candidates.extend(
+        [
+            f'.ant-select-dropdown:visible .ant-select-item-option-content:has-text("{name_escaped}")',
+            f'.ant-select-dropdown:visible .ant-select-item-option:has-text("{name_escaped}")',
+            f'role=listbox >> .ant-select-item-option-content:has-text("{name_escaped}")',
+            f"(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]"
+            f"//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), {text_escaped})])[1]",
+        ]
+    )
+
+
 def build_dropdown_option_selector(
     semantic_dom: List[SemanticNode],
     intent: str,
@@ -134,16 +148,10 @@ def build_dropdown_option_selector(
     has_ant = any(
         "ant-" in str(node.get("class") or node.get("className") or "").lower()
         for node in semantic_dom
-    )
+    ) or _detect_ant_design_from_dom(semantic_dom)
+
     if has_ant:
-        candidates.extend(
-            [
-                f'.ant-select-dropdown:visible .ant-select-item-option-content:has-text("{name_escaped}")',
-                f'role=listbox >> .ant-select-item-option-content:has-text("{name_escaped}")',
-                f"(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]"
-                f"//*[contains(@class,'ant-select-item-option-content') and contains(normalize-space(.), {text_escaped})])[1]",
-            ]
-        )
+        _append_ant_option_candidates(candidates, option_text)
 
     if "option" in roles:
         candidates.append(f'role=option[name="{name_escaped}"]')

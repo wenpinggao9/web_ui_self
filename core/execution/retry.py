@@ -62,6 +62,10 @@ class RetryController:
         self.max_retries = max_retries
         self.trace = trace
         self.readiness_checker = readiness_checker
+        self._readiness_context_fn: Optional[Any] = None
+
+    def set_readiness_context_fn(self, fn: Any) -> None:
+        self._readiness_context_fn = fn
 
     def run(self, action: PlannedAction, case_id: str, next_action: Optional[Any] = None) -> RetryOutcome:
         """执行动作并循环后校验, 直到成功、放弃或达到重试上限."""
@@ -103,6 +107,7 @@ class RetryController:
                         resolve_hint=None,
                     )
                 self.dispatcher.mark_idempotent_skip(action.intent)
+                self.dispatcher.capture_page_state_if_needed(action)
                 return RetryOutcome(True, True, reason, attempt, reason, last_selector)
 
             # 误插的侧栏导航: 目标页已可操作 → 跳过本步
@@ -110,6 +115,7 @@ class RetryController:
                 reason = "无需侧栏导航, 当前已在目标业务页 (跳过冗余导航)"
                 self.console.print(f"  [green]✓ {reason}[/green]")
                 self.dispatcher.mark_idempotent_skip(action.intent)
+                self.dispatcher.capture_page_state_if_needed(action)
                 if self.trace:
                     self.trace.emit(
                         "post_check",
@@ -122,7 +128,13 @@ class RetryController:
                     )
                 return RetryOutcome(True, True, reason, attempt, reason, last_selector)
 
-            post = self.post_checker.check(self.dispatcher.page, action, ok, msg, next_action)
+            self.dispatcher.capture_page_state_if_needed(action)
+            cached_dom = self.dispatcher.get_cached_dom_summary()
+            post = self.post_checker.check(
+                self.dispatcher.page, action, ok, msg, next_action,
+                dom_summary=cached_dom,
+                dispatch_meta=self.dispatcher.last_dispatch_meta or None,
+            )
             if self.trace:
                 self.trace.emit(
                     "post_check",
@@ -157,6 +169,12 @@ class RetryController:
                     case_id,
                     console=self.console,
                     trace=self.trace,
+                    readiness_context=(
+                        self._readiness_context_fn(action)
+                        if self._readiness_context_fn
+                        else None
+                    ),
+                    post_checker=self.post_checker,
                 ):
                     reset_action_for_popup_retry(action)
                     exclude.clear()

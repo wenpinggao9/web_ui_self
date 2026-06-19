@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from ..parser import ExecutionBlock, ParsedCase
 
@@ -25,6 +26,43 @@ def build_execution_blocks(case: ParsedCase) -> list[ExecutionBlock]:
         blocks.append(ExecutionBlock(operations=[], expectations=list(case.expectations)))
 
     return blocks if blocks else [ExecutionBlock()]
+
+
+def case_steps_and_expectations_for_display(case: ParsedCase) -> tuple[list[str], list[str]]:
+    """展平交错式 execution_blocks 供 API/日志展示 (不修改 case 对象)."""
+    steps = list(case.steps)
+    expectations = list(case.expectations)
+    if case.execution_blocks and not expectations:
+        for block in case.execution_blocks:
+            steps.extend(block.operations)
+            expectations.extend(block.expectations)
+    return steps, expectations
+
+
+def build_case_origin_snapshot(case: ParsedCase) -> dict[str, Any]:
+    """构建 origin_case —— 仅两种形态, 与 Markdown 编排一致.
+
+    分离式: preconditions + steps + expectations
+    交错式: preconditions + blocks[] (每块含 steps + expectations)
+    """
+    snapshot: dict[str, Any] = {
+        "preconditions": list(case.preconditions),
+    }
+
+    if case.execution_blocks and not case.expectations:
+        snapshot["format"] = "interleaved"
+        snapshot["blocks"] = [
+            {
+                "steps": list(block.operations),
+                "expectations": list(block.expectations),
+            }
+            for block in case.execution_blocks
+        ]
+    else:
+        snapshot["steps"] = list(case.steps)
+        snapshot["expectations"] = list(case.expectations)
+
+    return snapshot
 
 
 def flatten_case_for_planning(case: ParsedCase) -> None:

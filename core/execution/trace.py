@@ -7,6 +7,38 @@ from typing import Any, Optional
 
 from rich.console import Console
 
+from ..dom import compact_dom_lines
+
+_print_dom_enabled: bool = False
+
+
+def configure_dom_console_print(enabled: bool) -> None:
+    """全局开关: 是否在控制台打印完整 semantic DOM."""
+    global _print_dom_enabled
+    _print_dom_enabled = bool(enabled)
+
+
+def dom_console_print_enabled() -> bool:
+    return _print_dom_enabled
+
+
+def print_captured_dom(
+    console: Optional[Console],
+    items: list[dict],
+    *,
+    label: str,
+    source: str = "",
+) -> None:
+    """将抓取到的 semantic_items 完整打印到控制台 ([索引] 格式)."""
+    if not _print_dom_enabled or not console or not items:
+        return
+    console.print(f"  [dim]└─ DOM ({label}, {len(items)} items):[/dim]")
+    if source:
+        console.print(f"  [dim]   ↳ {source}[/dim]")
+    for line in compact_dom_lines(items).split("\n"):
+        if line:
+            console.print(f"  [dim]   {line}[/dim]")
+
 
 class ExecutionTrace:
     """收集并打印动作规划、定位、分发、后校验等关键节点信息."""
@@ -119,7 +151,7 @@ class ExecutionTrace:
         elif phase == "page_recover":
             reason = data.get("reason") or ""
             suffix = f" ({reason})" if reason else ""
-            c.print(f"[dim]  ├─ Tab恢复[/dim] → {data.get('url', '')}{suffix}[/dim]")
+            c.print(f"[dim]  ├─ Tab恢复 → {data.get('url', '')}{suffix}[/dim]")
         elif phase == "detail_submit_wait":
             c.print(
                 f"[dim]  ├─ 提交后等待[/dim] outcome={data.get('outcome')} "
@@ -133,6 +165,17 @@ class ExecutionTrace:
                 c.print(f"[dim]  │   {data['note']}[/dim]")
             for i, r in enumerate(data.get("recovery") or [], 1):
                 c.print(f"[dim]  │   recovery {i}. [{r.get('type')}] {r.get('intent')}[/dim]")
+        elif phase == "assert_live_read":
+            c.print(f"[dim]  ├─ 断言实时读页 → {data.get('url', '')}[/dim]")
+        elif phase == "page_state_capture":
+            cnt = data.get("count", "")
+            suffix = f" ({cnt} items)" if cnt else ""
+            c.print(f"[dim]  ├─ 页面 DOM(共用){suffix} → {data.get('url', '')}[/dim]")
+        elif phase == "assert_use_state":
+            shared = "共用DOM" if data.get("shared") else ""
+            c.print(
+                f"[dim]  ├─ 断言复用页面状态 {shared}[/dim] (url={data.get('url', '')})"
+            )
         else:
             c.print(f"[dim]  ├─ {phase}[/dim] {data}")
 

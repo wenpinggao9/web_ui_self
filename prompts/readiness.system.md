@@ -44,6 +44,12 @@ recovery 动作要求:
 - value 仅在 fill 或 wait 需要时填写; wait 的 value 为等待时长或等待文本。
 - 不要输出 upload 类型的 recovery。
 
+审核原因 / 单选 radio / 选项类 recovery 约束:
+- 若用例备注、操作步骤、前序动作或会话变量 (如 reason) 已明确指定应选的审核原因/选项, recovery 必须优先补选该选项, 禁止随意选择其它 radio (如「题目无任何问题」).
+- 若前序动作已包含「选择 xxx 审核原因」但页面尚未选中, recovery 应 click 该指定选项, 不得改选 DOM 中其它选项.
+- 若上下文未指定审核原因且页面状态无法推断应选哪项, 不要猜测; 输出 ready=true 让主动作执行, 或 recovery 只做打开表单/关弹窗等非选项类操作.
+- 禁止用 recovery 替用例改变审核结论.
+
 输出规则:
 - 只输出一个 JSON 对象, 不要输出解释、Markdown、注释或分析过程。
 - 已满足条件时输出: {"ready": true, "recovery": []}

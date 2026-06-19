@@ -1,4 +1,20 @@
 """就绪层: 步骤前就绪检查 (步骤⑩)."""
-from .pre_check import ReadinessChecker, ReadinessResult, is_advancing, is_submit
+from .pre_check import (
+    ReadinessCaseContext,
+    ReadinessChecker,
+    ReadinessContext,
+    ReadinessResult,
+    is_advancing,
+    is_submit,
+    should_run_readiness,
+)
 
-__all__ = ["ReadinessChecker", "ReadinessResult", "is_advancing", "is_submit"]
+__all__ = [
+    "ReadinessCaseContext",
+    "ReadinessChecker",
+    "ReadinessContext",
+    "ReadinessResult",
+    "is_advancing",
+    "is_submit",
+    "should_run_readiness",
+]

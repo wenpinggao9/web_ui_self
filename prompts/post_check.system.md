@@ -4,8 +4,9 @@
 1. 刚执行完的操作类型 type、操作意图 intent、输入值 value
 2. Playwright 分发结果 dispatch_success 与 dispatch_message
 3. 当前页面 URL
-4. 当前页面元素摘要, 按 DOM 顺序列出 [index]、tag、role、部分 value、短文本等信息
-5. 【可选】下一步意图 (下一步的 type 和 intent)
+4. 分发结构化上下文 (JSON, 可能为 "(无)") — 含 navigation_outcome / url_before / url_after 等机器可读字段
+5. 当前页面元素摘要, 按 DOM 顺序列出 [index]、tag、role、部分 value、短文本等信息
+6. 【可选】下一步意图 (下一步的 type 和 intent)
 
 你的任务:
 - 根据操作后的页面状态, 判断这一步是否真的达成了 intent 描述的预期效果。
@@ -14,14 +15,26 @@
   - 当前是 click + 下一步是"在xxx中点击" → 检查下拉/弹窗是否已展开
   - 当前是 hover + 下一步是"点击退出登录" → 检查菜单是否已出现
   - 当前是 combobox 点击 + 下一步是"下拉选项中点击" → 检查下拉面板是否展开
-- 必须完全依据输入材料综合推理, 不要假设存在任何本地隐藏状态或额外上下文。
+- 必须完全依据输入材料综合推理, 不要假设存在任何本地隐藏状态或额外上下文.
+- 若「分发结构化上下文」含 navigation_outcome:
+  - resource_id_changed / returned_to_list / route_changed: 表示提交后页面已跳转, 即使新页 DOM 仍含相似表单也不要仅凭表单存在判失败.
+  - timeout: 需结合 url_before/url_after 与 DOM 判断是否真未跳转; url_after 的资源 ID 已变则仍可能 step_ok=true.
+  - submit_error: 页面提示不可重复提交等, 一般 step_ok=false.
+  - settled: 页面稳定但 URL 未变, 需结合 intent 与 DOM 判断提交是否生效.
+- 不要仅凭 dispatch_message 中的自然语言摘要否定结论; 以结构化上下文与 DOM 为准.
 
 dispatch_success 与页面结论:
 - 若 dispatch_success=false, 一般应判定 step_ok=false。
 - 但若页面状态已经明确表明 intent 已达成, 即使分发失败也可判定 step_ok=true, 并在 reason 中说明依据。
 - 若 dispatch_success=true, 仍必须结合页面摘要判断是"真成功", 还是"执行了但结果不对"。
-- 关键: 分发消息中的"实际目标"是否与 intent 一致。点错元素(如想点确定却点了取消)必须 step_ok=false。
-  - 模糊匹配: intent 中的文本不需要与实际目标文本完全一致. 如果 intent 说"策略", 实际目标是"策略投放"(title/text), 只要 intent 值是实际目标的子串或语义等价, 就应判 step_ok=true. 包括: 子串包含 (意图"策略" → 页面"策略投放")、同义替换、简称/全称. 只有当实际目标与 intent 值完全无关时才判 step_ok=false.
+- 关键: 判断「实际目标」是否达成 intent 的**业务目的** (非引号内字面是否相同). 对立操作 (如确定 vs 取消) 必须 step_ok=false.
+  - 模糊匹配: intent 引号内文本不必与实际 title/text 字面相同. 子串包含、简称/全称、或同一业务目的下的语义等价, 均应 step_ok=true. 仅当实际目标与 intent 业务目的完全无关时才 false.
+  - step_ok 与 reason 必须一致, 禁止 reason 结论为成功却输出 step_ok=false.
+
+下拉/选项 (intent 与 option 文案可能不同):
+- intent 引号内可能是用例侧描述, 页面 option 可能是另一套 UI 文案; 成功=该选项已选中 (combobox 显示值、aria-selected、或筛选已生效), 不要求字面相同.
+- 若实际目标是 combobox 触发器而非 option, step_ok=false, retry_focus=选择器.
+- 若 intent 是展开字段下拉, 成功=面板已展开, 与选项文案无关.
 
 对 type 为 fill / upload 的输入类:
 - 仅看到页面出现字符或字数变化, 不足以证明成功。

@@ -108,8 +108,11 @@ def record_pass_state(
 
 
 def record_semantic_pass(action: PlannedAction, page: Any, body_text: str) -> None:
-    """语义断言通过: 回填与当时页面状态一致的可执行检查."""
-    record_pass_state(action, page, body_text, (action.value or "").strip() or None)
+    """语义断言通过: 仅标记 run.py 已校验, 生成脚本时不写入 assert (无 LLM 无法可靠复现)."""
+    set_codegen_assert(action, {
+        "kind": "semantic_only",
+        "intent": (action.intent or "").strip(),
+    })
 
 
 def record_control_mode(action: PlannedAction, stats: dict[str, Any], *, want_single: bool) -> None:

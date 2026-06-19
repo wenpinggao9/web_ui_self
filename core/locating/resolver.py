@@ -11,12 +11,18 @@ from typing import Any, Optional
 
 from rich.console import Console
 
-from ..dom.semantic_dom import build_locator_info, extract_dom_index, extract_semantic_items
+from ..execution.trace import dom_console_print_enabled
+from ..dom.semantic_dom import (
+    build_locator_info,
+    dom_index_from_items,
+    extract_dom_index,
+    extract_semantic_items,
+)
 from .cache import SelectorCache
 from .llm_decider import LLMElementDecider
 from .memory import SelectorMemory
 from .node_refiner import refine_node_index
-from .normalize import validate_selector
+from .normalize import skip_locator_persistence, validate_selector
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
 from .rule_engine import RuleEngine
@@ -64,6 +70,8 @@ class LocatorResolver:
         exclude: Optional[list[str]] = None,
         hint: Optional[str] = None,
         action_value: str = "",
+        semantic_items: Optional[list[dict]] = None,
+        dom_source: str = "",
     ) -> Optional[dict]:
         url = _url(page)
         excl = set(exclude or [])
@@ -74,6 +82,10 @@ class LocatorResolver:
             exclude=list(exclude or []),
         )
         self.last_chain = chain
+        if skip_locator_persistence(action_type):
+            chain.add("定位链", "跳过(assert_text)")
+            self._emit_chain(chain)
+            return None
 
         # L1 缓存
         if self.cache:
@@ -121,6 +133,7 @@ class LocatorResolver:
             info = self.rule_engine.resolve(
                 page, intent, action_type, hint=hint, exclude=excl,
                 framework_selectors=self._framework_selectors,
+                semantic_items=semantic_items,
             )
             if not info:
                 chain.add("L3规则", "未命中")
@@ -148,20 +161,35 @@ class LocatorResolver:
         else:
             chain.add("L4学习", "未启用")
 
-        # L5 大模型
-        items = extract_semantic_items(
-            page, dialog_first=True, selectors=self._framework_selectors,
-        )[:dom_limit]
-        dom = extract_dom_index(
-            page, limit=dom_limit, dialog_first=True,
-            selectors=self._framework_selectors,
-        )
+        # L5 大模型 — 优先复用已抽取的 semantic_items (V3 共用 DOM)
+        if semantic_items:
+            items = semantic_items[:dom_limit]
+            dom = dom_index_from_items(items, limit=dom_limit)
+            dom_note = f"DOM候选={len(dom)}个(共用)" + (", 有hint" if hint else "")
+        else:
+            items = extract_semantic_items(
+                page, dialog_first=True, stable=True,
+                selectors=self._framework_selectors, profile="locate",
+            )[:dom_limit]
+            dom = extract_dom_index(
+                page, limit=dom_limit, dialog_first=True, stable=False,
+                selectors=self._framework_selectors, items=items,
+            )
+            dom_note = f"DOM候选={len(dom)}个(实时)" + (", 有hint" if hint else "")
         chain.llm_called = True
-        chain.add("L5大模型", "已调用", note=f"DOM候选={len(dom)}个" + (", 有hint" if hint else ""))
-        # 打印 DOM 摘要到控制台, 方便排查定位问题
-        self.console.print(f"  [dim]└─ DOM (L5, {len(dom)} items):[/dim]")
-        for line in dom.numbered_text.split("\n"):
-            self.console.print(f"  [dim]   {line}[/dim]")
+        chain.add("L5大模型", "已调用", note=dom_note)
+        if dom_console_print_enabled():
+            if semantic_items:
+                self.console.print(
+                    f"  [dim]└─ DOM (共用, {len(dom)} items) — 见上方抓取输出[/dim]"
+                )
+                if dom_source:
+                    self.console.print(f"  [dim]   ↳ 来源: {dom_source}[/dim]")
+            else:
+                label = "L5"
+                self.console.print(f"  [dim]└─ DOM ({label}, {len(dom)} items):[/dim]")
+                for line in dom.numbered_text.split("\n"):
+                    self.console.print(f"  [dim]   {line}[/dim]")
         info, llm_index = self.decider.decide(dom, intent, action_type, exclude=list(excl), hint=hint)
         if info and llm_index is not None:
             refined_idx, skill_name = refine_node_index(
@@ -200,6 +228,8 @@ class LocatorResolver:
 
     # ---------- 回填 ----------
     def _backfill(self, url: str, action_type: str, intent: str, info: dict) -> None:
+        if skip_locator_persistence(action_type):
+            return
         # 宽松子串匹配 (text=X 不带引号) 容易误匹配, 不回填到缓存,
         # 避免下次同意图直接复用导致点错元素.
         sel = info.get("selector", "")

@@ -1,0 +1,7 @@
+# 项目级配置 — AI辅助录题
+base_url: https://tiku-ggg-cc.suanshubang.cc/static/jtk
+
+roles:
+  admin:
+    username: "gaowenping"
+    password: "Gwp20150921&"

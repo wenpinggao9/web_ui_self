@@ -8,10 +8,12 @@
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from ..dom import extract_semantic_dom
+from ..dom import extract_items, compact_dom_lines, wait_for_dom_stable
+from .trace import print_captured_dom
 from ..llm import LLMAdapter, PromptLoader
 from ..planning import PlannedAction
 
@@ -27,11 +29,12 @@ _DEFAULT_SYSTEM = """\
 规则:
 1. 分发成功=false → 倾向 step_ok=false.
 2. 分发成功=true → 仍要判断是"真成功"还是"点错地方/输入了错值".
-3. 关键: 分发消息中"实际目标"元素是否与意图一致 —— 点错(如想点确定却点了取消)必须 step_ok=false.
-4. 输入/上传: 值不符合占位符或格式说明 → step_ok=false.
-5. 悬停: 若意图是展开菜单/下拉, 悬停后相关 menuitem 仍全部 hidden → step_ok=false.
-6. 失败时给出原因, 并给重试建议:
-   retry_focus ∈ "值"|"选择器"|"两者"|"无"; suggested_value(改值时的新值); resolve_hint(换元素时的提示).
+3. 以 intent 业务目的是否达成为准, 非引号字面是否相同; 子串/语义等价 → true.
+4. 下拉选项: 成功=已选中; 点到 combobox 触发器而非 option → false.
+5. step_ok 与 reason 必须一致.
+6. 输入/上传: 值不符合占位符或格式说明 → step_ok=false.
+7. 悬停: 菜单/下拉类悬停后 menuitem 仍全部 hidden → step_ok=false.
+8. 失败时给出 retry_focus/suggested_value/resolve_hint.
 只输出 JSON:
 {"step_ok": true/false, "reason": "...", "retry_focus": "无", "suggested_value": null, "resolve_hint": null}"""
 
@@ -41,6 +44,8 @@ _DEFAULT_USER = """\
 输入值: {{value}}
 分发成功: {{ok}}
 分发消息: {{message}}
+当前页面 URL: {{page_url}}
+分发结构化上下文: {{dispatch_meta}}
 
 当前页面DOM摘要:
 {{dom}}
@@ -67,9 +72,15 @@ def should_post_check(action: PlannedAction) -> bool:
 class PostStepChecker:
     """调用 LLM 判断动作执行结果是否符合真实业务意图."""
 
-    def __init__(self, llm: LLMAdapter, prompts: PromptLoader) -> None:
+    def __init__(
+        self,
+        llm: LLMAdapter,
+        prompts: PromptLoader,
+        console: Optional[Any] = None,
+    ) -> None:
         self.llm = llm
         self.prompts = prompts
+        self.console = console
 
     def check(
         self,
@@ -78,9 +89,20 @@ class PostStepChecker:
         dispatch_ok: bool,
         dispatch_msg: str,
         next_action: Optional[Any] = None,
+        dom_summary: Optional[str] = None,
+        dispatch_meta: Optional[dict[str, Any]] = None,
     ) -> PostCheckResult:
-        # 后校验需要基于执行后的最新页面状态判断.
-        dom = extract_semantic_dom(page, dialog_first=True)
+        # 优先复用操作后已抓取的 indexed DOM; 无缓存时再读页 (V3 post_verify profile)
+        if dom_summary:
+            dom = dom_summary
+        else:
+            wait_for_dom_stable(page, quiet_ms=200, timeout_ms=4000)
+            items = extract_items(page, profile="post_verify", dialog_first=True, stable=False)
+            dom = compact_dom_lines(items)
+            print_captured_dom(
+                self.console, items,
+                label="抓取", source="后校验 fallback post_verify",
+            )
 
         # 如果有下一步意图, 注入到 DOM 摘要中, 让 LLM 结合当前结果和下一步预期判断.
         if next_action:
@@ -95,11 +117,22 @@ class PostStepChecker:
             # 输入类动作通常只关心输入框附近 DOM, 截窗降低 prompt 噪声.
             dom = _input_anchor_window(dom, action.value)
 
+        try:
+            page_url = page.url or ""
+        except Exception:
+            page_url = ""
+        meta_text = (
+            json.dumps(dispatch_meta, ensure_ascii=False)
+            if dispatch_meta
+            else "(无)"
+        )
+
         system = self.prompts.system("post_check", _DEFAULT_SYSTEM)
         user = self.prompts.user(
             "post_check", _DEFAULT_USER,
             action_type=action.type, intent=action.intent, value=action.value,
             ok=str(dispatch_ok).lower(), message=dispatch_msg, dom=dom,
+            page_url=page_url, dispatch_meta=meta_text,
         )
         try:
             data = self.llm.complete_json("post_check", system, user).data

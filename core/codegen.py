@@ -78,7 +78,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 from core.execution.popup_recovery import (
     try_dismiss_blocking_dialog as _dismiss_blocking_dialog,
-    wait_and_dismiss_blocking_dialog as _wait_and_dismiss_blocking_dialog,
 )
 from core.execution.script_helpers import (
     compare_count,
@@ -89,7 +88,15 @@ from core.execution.script_helpers import (
     wait_before_assert,
     wait_for_list_count_at_least,
     wait_for_url_fragment,
+    get_scoped_page_text,
 )
+
+_DIALOG_VISIBLE = '[role="dialog"]:visible, .ant-modal-wrap:visible'
+
+def _dismiss_blocking_dialog_if_present(page, timeout=10000):
+    """若页面存在阻断弹窗 (如红线标准), 勾选并确认; 非用例主步骤."""
+    if page.locator(_DIALOG_VISIBLE).count():
+        _dismiss_blocking_dialog(page, timeout)
 '''
 
 _STEP_LOG_HELPER = '''
@@ -178,11 +185,102 @@ def generate_spec(
             actions, api_context or {}, case_id=case_id,
             runtime_api=bool(api_intents) or has_bind,
             popup_dismiss_before=dismiss_before,
+            popup_dismiss_used=popup_dismiss_used,
             idempotent_skip=idempotent_skip,
         ),
     )
     path.write_text(ts, encoding="utf-8")
     return path
+
+
+def generate_suite_script(
+    batch_dir: str | Path,
+    case_ids: list[str],
+    project_root: str | Path | None = None,
+) -> Path | None:
+    """生成批次套件脚本: 同浏览器会话连续执行, 仅登录一次."""
+    batch_dir = Path(batch_dir)
+    root = Path(project_root) if project_root else batch_dir.parent.parent.parent
+    entries: list[tuple[str, Path]] = []
+    for cid in case_ids:
+        script = batch_dir / _safe(cid) / f"playwright_{_safe(cid)}.py"
+        if script.is_file():
+            entries.append((cid, script))
+
+    if len(entries) < 2:
+        return None
+
+    rel_scripts: list[tuple[str, str, Path]] = []
+    for cid, script in entries:
+        try:
+            rel = script.relative_to(root)
+        except ValueError:
+            rel = script
+        rel_scripts.append((cid, _safe(cid), rel))
+
+    load_lines = []
+    run_lines = []
+    for cid, mod_safe, rel in rel_scripts:
+        var = f"_mod_{mod_safe}"
+        load_lines.append(
+            f"    {var} = _load_case_module(PROJECT_ROOT / {_py_str(str(rel))})"
+        )
+        run_lines.append(f"            print('▶ 用例 {cid} 开始', flush=True)")
+        run_lines.append(f"            {var}.run_steps(page)")
+        run_lines.append(f"            print('用例 {cid} 执行完成', flush=True)")
+
+    first_mod = f"_mod_{rel_scripts[0][1]}"
+    try:
+        suite_rel = (batch_dir / "playwright_suite.py").relative_to(root)
+        suite_run = str(suite_rel)
+    except ValueError:
+        suite_run = str(batch_dir / "playwright_suite.py")
+
+    content = f'''\
+"""批次连续执行套件 — 共享浏览器会话, 仅登录一次.
+
+运行: 在项目根目录执行 python {suite_run}
+
+说明: 单独跑 Case 2+ 脚本会因缺少前置数据/页面状态失败; 请用本套件或 run.py.
+"""
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+PROJECT_ROOT = Path({_py_str(str(root))})
+
+
+def _load_case_module(script_path: Path):
+    spec = spec_from_file_location(script_path.stem, script_path)
+    mod = module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def main():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+        try:
+{chr(10).join(load_lines)}
+            print("▶ 套件登录 (仅一次)", flush=True)
+            {first_mod}.login(page)
+{chr(10).join(run_lines)}
+            print("批次套件全部用例执行完成")
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            page.screenshot(path="error_suite.png")
+        finally:
+            browser.close()
+
+
+if __name__ == "__main__":
+    main()
+'''
+    out = batch_dir / "playwright_suite.py"
+    out.write_text(content, encoding="utf-8")
+    return out
 
 
 def _py_str(value: str) -> str:
@@ -417,11 +515,11 @@ def _gen_click_step(
     after_popup_dismiss: bool = False,
     idempotent: bool = False,
 ) -> list[str]:
-    """生成点击步骤: 可选先关弹窗、等可点、幂等跳过."""
+    """生成点击步骤: 可选先条件关弹窗、等可点、幂等跳过."""
     lines: list[str] = []
     if after_popup_dismiss:
-        lines.append(f"{prefix}# 用例未写明: 运行期曾遇阻断弹窗, 先条件关闭")
-        lines.append(f"{prefix}_wait_and_dismiss_blocking_dialog(page)")
+        lines.append(f"{prefix}# 运行期曾遇阻断弹窗, 若存在则先关闭 (非用例主步骤)")
+        lines.append(f"{prefix}_dismiss_blocking_dialog_if_present(page)")
     lines.append(f"{prefix}_btn = {loc_expr}")
     if idempotent:
         lines.append(f"{prefix}if _btn.is_enabled():")
@@ -449,10 +547,19 @@ def _gen_post_wait_lines(spec: dict[str, Any], indent: str = "    ") -> list[str
     return []
 
 
-def _finish_step_lines(lines: list[str], action: PlannedAction, prefix: str = "    ") -> None:
+def _finish_step_lines(
+    lines: list[str],
+    action: PlannedAction,
+    prefix: str = "    ",
+    *,
+    dismiss_after_nav: bool = False,
+) -> None:
     post = (action.extras or {}).get("codegen_post_wait")
     if action.type == "click" and post:
         lines.extend(_gen_post_wait_lines(post, prefix))
+    if dismiss_after_nav:
+        lines.append(f"{prefix}# 导航后若出现阻断弹窗则关闭 (非用例主步骤)")
+        lines.append(f"{prefix}_dismiss_blocking_dialog_if_present(page)")
     lines.append("")
 
 
@@ -504,6 +611,23 @@ def _gen_codegen_assert_lines(
     if kind == "negate_literal":
         text = _value_expr(str(spec.get("text", "")), api_context, runtime_api)
         return [f'{indent}assert {text} not in page.inner_text("body")']
+    if kind == "semantic_only":
+        intent = str(spec.get("intent") or "")
+        return [
+            f"{indent}# [语义断言] run.py 已校验, 脚本不重复断言: {intent!r}",
+        ]
+    if kind == "contains_all":
+        texts = [str(t) for t in spec.get("texts") or []]
+        regions = spec.get("regions") or ["main", "body"]
+        region_expr = ", ".join(_py_str(k) for k in regions)
+        lines = [f"{indent}_scope_text = get_scoped_page_text(page, [{region_expr}])"]
+        for t in texts:
+            te = _value_expr(t, api_context, runtime_api)
+            lines.append(
+                f"{indent}assert {te} in _scope_text, "
+                f"f'区域断言缺少 {_py_str(t)}'"
+            )
+        return lines
     if kind in ("list_count", "table_rows", "body_total"):
         return _gen_list_count_lines(str(spec.get("op", ">")), int(spec.get("threshold", 0)), indent)
     if kind == "url_contains":
@@ -576,12 +700,24 @@ def _gen_ui_steps(
     case_id: str = "",
     runtime_api: bool = False,
     popup_dismiss_before: list[str] | None = None,
+    popup_dismiss_used: bool = False,
     idempotent_skip: set[str] | None = None,
 ) -> str:
     """生成 UI 操作步骤."""
     dismiss_before = set(popup_dismiss_before or [])
     idempotent = idempotent_skip or set()
     lines: list[str] = ["    _last_click_label = None"]
+
+    def _click_needs_dismiss(intent: str) -> bool:
+        """运行期曾关弹窗: 后续各 click 前均做条件检查."""
+        return popup_dismiss_used or intent in dismiss_before
+
+    def _click_needs_dismiss_after_nav(action: PlannedAction) -> bool:
+        """导航类点击后弹窗才出现 (如进待前审页后的红线标准)."""
+        if not (action.extras or {}).get("codegen_post_wait"):
+            return False
+        return popup_dismiss_used or action.intent in dismiss_before
+
     for i, a in enumerate(actions):
         prev = actions[i - 1] if i > 0 else None
         assert_wait = a.is_assert() and _needs_assert_wait(prev)
@@ -629,7 +765,7 @@ def _gen_ui_steps(
                 lines.extend(_gen_codegen_assert_lines(cg, api_context, indent=prefix, runtime_api=runtime_api))
             else:
                 lines.extend(_gen_assert_count_lines(a, prefix=prefix))
-            _finish_step_lines(lines, a, prefix)
+            _finish_step_lines(lines, a, prefix, dismiss_after_nav=_click_needs_dismiss_after_nav(a))
             continue
 
         if not loc_info and not a.selector:
@@ -648,13 +784,13 @@ def _gen_ui_steps(
                 loc_expr = _gen_click_loc_expr(a, None, None)
                 lines.extend(_gen_click_step(
                     prefix, loc_expr,
-                    after_popup_dismiss=a.intent in dismiss_before,
+                    after_popup_dismiss=_click_needs_dismiss(a.intent),
                     idempotent=a.intent in idempotent,
                 ))
                 lines.extend(_gen_click_label_assign(a, prefix))
             else:
                 lines.append(f"{prefix}# TODO: {a.type} - {a.intent}")
-            _finish_step_lines(lines, a, prefix)
+            _finish_step_lines(lines, a, prefix, dismiss_after_nav=_click_needs_dismiss_after_nav(a))
             continue
 
         # 有执行期选择器时优先用定位器; 否则用 value 文本兜底
@@ -663,7 +799,7 @@ def _gen_ui_steps(
                 loc_expr = _gen_click_loc_expr(a, loc_info, a.selector)
                 lines.extend(_gen_click_step(
                     prefix, loc_expr,
-                    after_popup_dismiss=a.intent in dismiss_before,
+                    after_popup_dismiss=_click_needs_dismiss(a.intent),
                     idempotent=a.intent in idempotent,
                 ))
                 lines.extend(_gen_click_label_assign(a, prefix))
@@ -687,14 +823,14 @@ def _gen_ui_steps(
             loc_expr = _gen_click_loc_expr(a, None, None)
             lines.extend(_gen_click_step(
                 prefix, loc_expr,
-                after_popup_dismiss=a.intent in dismiss_before,
+                after_popup_dismiss=_click_needs_dismiss(a.intent),
                 idempotent=a.intent in idempotent,
             ))
             lines.extend(_gen_click_label_assign(a, prefix))
         elif a.type == "fill" and value.strip():
             lines.append(f"{prefix}# TODO: fill 无选择器 - {a.intent}")
 
-        _finish_step_lines(lines, a, prefix)
+        _finish_step_lines(lines, a, prefix, dismiss_after_nav=_click_needs_dismiss_after_nav(a))
     return "\n".join(lines)
 
 
@@ -720,7 +856,8 @@ def _gen_assert_table_lines(
 _TEMPLATE = '''\
 """自动生成的 Playwright Python 脚本 —— 用例 {case_id}
 选择器取自实际执行时由定位链解析出的结果.
-运行: 在项目根目录执行 python <本脚本路径>
+独立运行: python <本脚本路径>
+连续套件: 使用同批次 playwright_suite.py (共享会话, 仅登录一次)
 """
 from pathlib import Path
 import re
@@ -729,19 +866,25 @@ from playwright.sync_api import sync_playwright, expect
 PROJECT_ROOT = Path({project_root})
 CASE_FILE = {case_file_expr}
 {step_log_helper}{api_helper}{bind_helper}{popup_import}{assert_table_helper}
-def run(page):
+def login(page):
 {login_code}
 
+def run_steps(page):
 {api_setup}
 
 {popup_preamble}{ui_steps}
+
+def run(page, fresh_session=True):
+    print("▶ 用例 {case_id} 开始", flush=True)
+    if fresh_session:
+        login(page)
+    run_steps(page)
 
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
         try:
-            print("▶ 用例 {case_id} 开始", flush=True)
             run(page)
             print("用例 {case_id} 执行完成")
         except Exception:

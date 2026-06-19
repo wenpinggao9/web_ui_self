@@ -3,11 +3,61 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
+
+from ..locating.normalize import normalize_url
 
 _EMPTY_ROW_MARKERS = ("暂无数据", "无数据", "No data", "no data")
 _SUBMIT_ERROR_MARKERS = ("任务已处理", "请勿重复提交", "不可重复提交")
+
+
+def bring_page_to_front(page: Any) -> None:
+    """将指定 page 所在浏览器窗口置于最前 (多角色/多 context 切换时用)."""
+    try:
+        if page is not None and _page_usable(page):
+            page.bring_to_front()
+    except Exception:
+        pass
+
+
+def pick_role_handoff_page(
+    context: Any,
+    current_page: Any = None,
+    *,
+    list_anchor: Any = None,
+    primary_page: Any = None,
+) -> Any:
+    """跨用例/跨角色复用时选稳定 tab, 仅依赖运行时 tab 关系, 不假设 URL 形态.
+
+    优先级: list_anchor > primary_page > 多 tab 时非 current 的首个 tab > 首个可用 tab > recover.
+    """
+    for candidate in (list_anchor, primary_page):
+        if candidate is not None and _page_usable(candidate):
+            return candidate
+
+    usable: list[Any] = []
+    try:
+        if context is not None:
+            usable = [p for p in context.pages if _page_usable(p)]
+    except Exception:
+        usable = []
+
+    if usable:
+        # 用例结束时 current_page 常为最后聚焦 tab (如 click 新开的 tab), 优先回到其它仍存活的 tab
+        if current_page is not None and len(usable) > 1:
+            others = [p for p in usable if p is not current_page]
+            if others:
+                return others[0]
+        return usable[0]
+
+    if current_page is not None:
+        recovered, _ = recover_active_page(
+            current_page, prefer=list_anchor or primary_page,
+        )
+        if _page_usable(recovered):
+            return recovered
+    return current_page
 
 
 def count_real_table_rows(page: Any) -> int:
@@ -63,12 +113,12 @@ def _page_alive(page: Any) -> bool:
         return False
 
 
-def _page_usable(page: Any) -> bool:
+def _page_usable(page: Any, *, timeout_ms: int = 1500) -> bool:
     """is_closed 为 False 时 page 仍可能已不可用, 需轻量探测."""
     if not _page_alive(page):
         return False
     try:
-        page.evaluate("() => true", timeout=1500)
+        page.evaluate("() => true", timeout=timeout_ms)
         return True
     except Exception:
         return False
@@ -90,6 +140,40 @@ def _url_query_id(url: str) -> str:
     return ""
 
 
+def _url_safe(page: Any) -> str:
+    """读取 URL 不依赖 evaluate, 导航中 page 可能暂时不可用."""
+    try:
+        return page.url or ""
+    except Exception:
+        return ""
+
+
+def classify_navigation_outcome(
+    url_before: str,
+    url_now: str,
+    *,
+    list_url: str = "",
+) -> Optional[str]:
+    """比较 URL 路径模板 / 资源 ID / 列表锚点, 不依赖业务路径字面量."""
+    now = (url_now or "").strip()
+    before = (url_before or "").strip()
+    if not now:
+        return None
+    norm_now = normalize_url(now)
+    norm_before = normalize_url(before)
+    norm_list = normalize_url(list_url) if list_url else ""
+
+    if norm_list and norm_now == norm_list:
+        return "returned_to_list"
+    if norm_before and norm_now != norm_before:
+        return "route_changed"
+    id_before = _url_query_id(before)
+    id_now = _url_query_id(now)
+    if id_before and id_now and id_before != id_now:
+        return "resource_id_changed"
+    return None
+
+
 def _body_has_submit_error(body: str) -> bool:
     return any(m in body for m in _SUBMIT_ERROR_MARKERS)
 
@@ -104,9 +188,8 @@ def recover_active_page(page: Any, prefer: Any = None) -> tuple[Any, bool]:
         except Exception:
             pass
         return prefer, True
-    try:
-        ctx = page.context
-    except Exception:
+    ctx = _context_from_any(page, prefer)
+    if ctx is None:
         return page, False
     for p in reversed(ctx.pages):
         if _page_usable(p):
@@ -118,17 +201,38 @@ def recover_active_page(page: Any, prefer: Any = None) -> tuple[Any, bool]:
     return page, False
 
 
+def _context_from_any(*pages: Any) -> Any:
+    """从仍存活的 page 对象取得 browser context (已关闭 tab 上 context 可能不可用)."""
+    for p in pages:
+        if p is None:
+            continue
+        try:
+            if not p.is_closed():
+                return p.context
+        except Exception:
+            continue
+    for p in pages:
+        if p is None:
+            continue
+        try:
+            return p.context
+        except Exception:
+            continue
+    return None
+
+
+def _is_list_page_url(url: str) -> bool:
+    u = (url or "").lower()
+    return "/wait-preview" in u or "/all-question" in u
+
+
 def wait_and_recover_active_page(
     page: Any, *, poll_ms: int = 200, max_polls: int = 25, prefer: Any = None,
 ) -> tuple[Any, bool]:
     """提交/跳转后 tab 可能异步关闭, 轮询直到落到仍存活的 page."""
     recovered = False
     cur = page
-    ctx = None
-    try:
-        ctx = page.context
-    except Exception:
-        pass
+    ctx = _context_from_any(page, prefer)
     for _ in range(max_polls):
         cur, changed = recover_active_page(cur, prefer=prefer)
         if changed:
@@ -179,40 +283,46 @@ def wait_after_detail_submit(
     poll_ms: int = 200,
     max_polls: int = 50,
 ) -> tuple[Any, str, bool]:
-    """详情页提交后等待结局: 关 tab 回列表 / 同 tab 下一题 / 提交失败提示."""
-    uniq_before = _url_query_id(url_before)
+    """提交后等待页面结局: 列表锚点 / 路由变化 / 资源 ID 变化 / 失败提示."""
     recovered = False
     cur = page
+    list_url = _url_safe(list_anchor) if list_anchor is not None else ""
+
+    def _finish(outcome: str, target: Any) -> tuple[Any, str, bool]:
+        if outcome == "returned_to_list" and _page_usable(target):
+            _reload_list_page(target)
+        return target, outcome, recovered
+
+    def _poll_outcome(target: Any) -> Optional[str]:
+        return classify_navigation_outcome(
+            url_before, _url_safe(target), list_url=list_url,
+        )
 
     for _ in range(max_polls):
+        url_outcome = _poll_outcome(cur)
+        if url_outcome in ("resource_id_changed", "returned_to_list", "route_changed"):
+            return _finish(url_outcome, cur)
+
         if not _page_usable(cur):
             cur, changed = recover_active_page(cur, prefer=list_anchor)
             if changed:
                 recovered = True
+            url_outcome = _poll_outcome(cur)
+            if url_outcome in ("resource_id_changed", "returned_to_list", "route_changed"):
+                return _finish(url_outcome, cur)
         else:
             body = _read_body_safe(cur)
             if _body_has_submit_error(body):
                 return cur, "submit_error", recovered
 
-            url_now = (cur.url or "").lower()
-            if "/detail" in url_now:
-                uniq_now = _url_query_id(url_now)
-                if uniq_before and uniq_now and uniq_now != uniq_before:
-                    return cur, "next_detail", recovered
-            elif "/wait-preview" in url_now:
-                _reload_list_page(cur)
-                return cur, "returned_to_list", recovered
-
         if list_anchor is not None and _page_usable(list_anchor):
-            detail_gone = not _page_usable(cur) or "/detail" not in ((cur.url or "").lower())
-            was_detail = "/detail" in (url_before or "").lower()
-            if was_detail and detail_gone:
+            if _url_query_id(url_before) and not _page_usable(cur):
                 try:
                     list_anchor.bring_to_front()
                 except Exception:
                     pass
-                _reload_list_page(list_anchor)
-                return list_anchor, "returned_to_list", True
+                recovered = True
+                return _finish("returned_to_list", list_anchor)
 
         if ctx_sleep := (cur.context if _page_alive(cur) else None):
             try:
@@ -233,14 +343,16 @@ def wait_after_detail_submit(
     cur, changed = recover_active_page(cur, prefer=list_anchor)
     if changed:
         recovered = True
+    url_outcome = _poll_outcome(cur)
+    if url_outcome:
+        return _finish(url_outcome, cur)
     if _page_usable(cur):
         body = _read_body_safe(cur)
         if _body_has_submit_error(body):
             return cur, "submit_error", recovered
         return cur, "settled", recovered
     if list_anchor is not None and _page_usable(list_anchor):
-        _reload_list_page(list_anchor)
-        return list_anchor, "returned_to_list", True
+        return _finish("returned_to_list", list_anchor)
     return cur, "timeout", recovered
 
 
@@ -286,6 +398,16 @@ def wait_for_url_fragment(page: Any, fragment: str, *, timeout_ms: int = 15000) 
 def wait_after_nav_click(page: Any, intent: str = "", *, timeout_ms: int = 15000) -> None:
     """已废弃: 保留兼容旧脚本; 新脚本应使用 wait_for_url_fragment + 执行期回填."""
     wait_before_assert(page, timeout_ms=min(timeout_ms, 5000))
+
+
+def get_scoped_page_text(page: Any, region_keys: list[str] | None = None) -> str:
+    """读取断言作用域内文本 (页头/左侧/表单等), 供生成脚本做区域断言."""
+    from .assert_scope import AssertScope, extract_page_regions, get_scoped_text
+
+    regions = extract_page_regions(page)
+    keys = list(region_keys or ["main", "body"])
+    scope = AssertScope(region_keys=keys, explicit_region=True, exclude_nav=True)
+    return get_scoped_text(regions, scope)
 
 
 def wait_for_list_count_at_least(

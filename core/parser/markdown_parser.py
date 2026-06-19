@@ -46,7 +46,9 @@ _SECTION_ALIASES: list[tuple[str, str]] = [
 ]
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
-_LIST_ITEM_RE = re.compile(r"^(\s*)(?:\d+[.)]|[-*])\s+(.*)$")
+_LIST_ITEM_RE = re.compile(
+    r"^(\s*)(?:\d+[.)]\s+|[-*]\s+|[-](?=[「'『\"]))(.*)$"
+)
 _CASE_ID_RE = re.compile(r"用例\s*ID\s*[:：]\s*(.+)$")
 _ARROW_SPLIT_RE = re.compile(r"\s*(?:->|→)\s*")
 _EXPECT_PREFIX_RE = re.compile(r"^预期[:：]\s*")
@@ -97,6 +99,7 @@ def parse_markdown(path: str | Path) -> list[ParsedCase]:
 
     file_session = ""
     file_role = ""
+    file_notes: list[str] = []
 
     def flush_code() -> None:
         nonlocal code_buf, code_lang
@@ -153,6 +156,8 @@ def parse_markdown(path: str | Path) -> list[ParsedCase]:
                     cur.session_name = file_session
                 if file_role and not cur.role:
                     cur.role = file_role
+                if file_notes:
+                    cur.notes = list(file_notes) + list(cur.notes)
                 cases.append(cur)
                 on_new_case(cur)
                 on_section_change(None)
@@ -171,6 +176,11 @@ def parse_markdown(path: str | Path) -> list[ParsedCase]:
                 file_session = line_content
             elif cur is None and cur_section == "role" and line_content and line_content != "---":
                 file_role = line_content
+            elif cur is None and cur_section == "notes":
+                item = _LIST_ITEM_RE.match(raw)
+                content = item.group(2).strip() if item else line_content
+                if content and content not in ("---", "***", "___"):
+                    file_notes.append(content)
             continue
 
         if cur_section == "interleaved":

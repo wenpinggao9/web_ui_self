@@ -47,15 +47,6 @@
     "score": 1,
     "ts": 1781512051.245965
   },
-  "/video/detail\u0001click\u0001在详情页选择多题": {
-    "method": "text",
-    "name": "多题",
-    "exact": true,
-    "nth": 0,
-    "selector": "text:exact:\"多题\"",
-    "score": 1,
-    "ts": 1781512250.185639
-  },
   "/video/welcome\u0001click\u0001点击侧栏菜单全部题目进入全部题目页面": {
     "method": "role",
     "role": "link",
@@ -358,5 +349,94 @@
     "selector": "role=button[name=\"提 交\"]",
     "score": 1,
     "ts": 1781786738.742523
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单ID为146377628的记录": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781857252.587619
+  },
+  "/video/all-question\u0001click\u0001点击查询按钮提交筛选条件": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781860917.484957
+  },
+  "/video/all-question\u0001click\u0001点击提交按钮搜索工单": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781861313.312194
+  },
+  "/video/all-question\u0001fill\u0001将搜索框中的工单ID更改为146378802": {
+    "method": "css",
+    "selector": "#searchText",
+    "nth": 0,
+    "in_dialog": false,
+    "score": 1,
+    "ts": 1781865128.780256
+  },
+  "/video/detail\u0001click\u0001在详情页选择多题": {
+    "method": "css",
+    "selector": "label.ant-radio-wrapper:has-text(\"多题\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781869640.391246
+  },
+  "/video/wait-preview\u0001click\u0001点击领取题目按钮再次领取更多任务": {
+    "method": "role",
+    "role": "button",
+    "name": "领取题目",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取题目\"]",
+    "score": 1,
+    "ts": 1781876525.05966
+  },
+  "/video/wait-preview\u0001click\u0001点击领取题目按钮再次领取任务以增加待完成任务数量": {
+    "method": "role",
+    "role": "button",
+    "name": "领取题目",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=button[name=\"领取题目\"]",
+    "score": 1,
+    "ts": 1781887069.522936
+  },
+  "/video/detail\u0001click\u0001点击提交按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1781887228.884606
+  },
+  "/video/welcome\u0001click\u0001点击全部题目": {
+    "method": "role",
+    "role": "link",
+    "name": "全部题目",
+    "exact": false,
+    "nth": 0,
+    "selector": "role=link[name=\"全部题目\"]",
+    "score": 1,
+    "ts": 1781888678.3441339
   }
 }

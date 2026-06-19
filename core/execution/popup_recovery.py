@@ -98,8 +98,14 @@ def execute_readiness_recovery(
     *,
     console: Any = None,
     trace: Optional[ExecutionTrace] = None,
+    readiness_context: Any = None,
+    post_checker: Any = None,
 ) -> bool:
     """先规则关弹窗, 再 LLM 恢复; 记录供 codegen 生成条件式脚本."""
+    from ..readiness import should_run_readiness
+    from .deterministic_recovery import run_deterministic_pre_readiness
+    from .post_check import should_post_check
+
     page = dispatcher.page
     timeout = getattr(dispatcher, "default_timeout", 10000)
     if try_dismiss_blocking_dialog(page, timeout):
@@ -115,7 +121,20 @@ def execute_readiness_recovery(
         dispatcher.mark_popup_dismiss_used(before_intent=action.intent)
         return True
 
-    rdy = readiness_checker.check(page, action)
+    if not should_run_readiness(action):
+        return False
+
+    if readiness_context is not None:
+        case = getattr(readiness_context, "case", None)
+        run_deterministic_pre_readiness(
+            dispatcher,
+            action,
+            prior_actions=list(getattr(readiness_context, "prior_actions", []) or []),
+            case_steps=list(getattr(case, "steps", []) or []) if case else [],
+            case_notes=list(getattr(case, "notes", []) or []) if case else [],
+        )
+
+    rdy = readiness_checker.check(page, action, context=readiness_context)
     if trace:
         trace.emit(
             "popup_recovery",
@@ -137,7 +156,25 @@ def execute_readiness_recovery(
         rec.is_recovery = True
         if console:
             console.print(f"  [magenta]↺ 弹窗恢复[/magenta] [{rec.type}] {rec.intent}")
-        dispatcher.dispatch(rec, case_id=case_id)
+        ok, msg = dispatcher.dispatch(rec, case_id=case_id)
+        dispatcher.capture_page_state_if_needed(rec)
+        if post_checker and should_post_check(rec):
+            post = post_checker.check(
+                page, rec, ok, msg,
+                next_action=action,
+                dom_summary=dispatcher.get_cached_dom_summary(),
+                dispatch_meta=dispatcher.last_dispatch_meta or None,
+            )
+            if trace:
+                trace.emit(
+                    "popup_recovery_post_check",
+                    intent=rec.intent,
+                    dispatch_ok=ok,
+                    post_ok=post.step_ok,
+                    reason=post.reason,
+                )
+            if ok and not post.step_ok and console:
+                console.print(f"  [yellow]弹窗恢复后校验未过: {post.reason}[/yellow]")
         executed.append(rec)
     if executed:
         dispatcher.record_popup_recovery(executed)

@@ -819,21 +819,6 @@
   {
     "route": "/video/detail",
     "action_type": "click",
-    "intent": "点击'提交'按钮",
-    "tokens": [
-      "按",
-      "钮",
-      "交",
-      "击",
-      "提",
-      "点"
-    ],
-    "selector": "role=button[name=\"提 交\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/detail",
-    "action_type": "click",
     "intent": "在下拉选项中点击'题目内容涉及不良导向/敏感信息'",
     "tokens": [
       "导",
@@ -969,23 +954,6 @@
       "钮"
     ],
     "selector": "role=button[name=\"领取\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/detail",
-    "action_type": "click",
-    "intent": "在详情页选择'多题'",
-    "tokens": [
-      "在",
-      "详",
-      "题",
-      "页",
-      "多",
-      "情",
-      "择",
-      "选"
-    ],
-    "selector": "text:exact:\"多题\"",
     "nth": 0
   },
   {
@@ -1449,18 +1417,165 @@
     "nth": 0
   },
   {
+    "route": "/video/detail",
+    "action_type": "click",
+    "intent": "点击侧栏菜单'待前审'进入待前审页面",
+    "tokens": [
+      "待",
+      "击",
+      "点",
+      "菜",
+      "前",
+      "入",
+      "面",
+      "进",
+      "页",
+      "单",
+      "侧",
+      "审",
+      "栏"
+    ],
+    "selector": "role=link[name=\"待前审\"]",
+    "nth": 0
+  },
+  {
     "route": "/video/all-question",
     "action_type": "click",
-    "intent": "点击'提交'按钮",
+    "intent": "点击提交按钮搜索工单",
     "tokens": [
-      "钮",
-      "点",
       "交",
+      "单",
+      "索",
       "击",
+      "点",
+      "钮",
+      "搜",
       "提",
+      "工",
       "按"
     ],
     "selector": "role=button[name=\"提 交\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "fill",
+    "intent": "将搜索框中的工单ID更改为146378802",
+    "tokens": [
+      "更",
+      "改",
+      "146378802",
+      "单",
+      "的",
+      "框",
+      "id",
+      "将",
+      "工",
+      "为",
+      "搜",
+      "索",
+      "中"
+    ],
+    "selector": "#searchText",
+    "nth": 0
+  },
+  {
+    "route": "/video/detail",
+    "action_type": "click",
+    "intent": "在详情页选择'多题'",
+    "tokens": [
+      "详",
+      "选",
+      "题",
+      "多",
+      "情",
+      "页",
+      "在",
+      "择"
+    ],
+    "selector": "label.ant-radio-wrapper:has-text(\"多题\")",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击'领取题目'按钮再次领取更多任务",
+    "tokens": [
+      "取",
+      "任",
+      "题",
+      "击",
+      "务",
+      "点",
+      "次",
+      "钮",
+      "按",
+      "再",
+      "目",
+      "更",
+      "多",
+      "领"
+    ],
+    "selector": "role=button[name=\"领取题目\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击领取题目按钮再次领取任务以增加待完成任务数量",
+    "tokens": [
+      "题",
+      "以",
+      "务",
+      "成",
+      "目",
+      "点",
+      "加",
+      "数",
+      "钮",
+      "待",
+      "再",
+      "取",
+      "任",
+      "量",
+      "完",
+      "次",
+      "击",
+      "增",
+      "领",
+      "按"
+    ],
+    "selector": "role=button[name=\"领取题目\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/detail",
+    "action_type": "click",
+    "intent": "点击'提交'按钮",
+    "tokens": [
+      "按",
+      "钮",
+      "交",
+      "击",
+      "点",
+      "提"
+    ],
+    "selector": "role=button[name=\"提 交\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/welcome",
+    "action_type": "click",
+    "intent": "点击'全部题目'",
+    "tokens": [
+      "目",
+      "部",
+      "全",
+      "题",
+      "点",
+      "击"
+    ],
+    "selector": "role=link[name=\"全部题目\"]",
     "nth": 0
   }
 ]

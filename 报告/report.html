@@ -1,23 +1,256 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>UI Test Report - vip_前审_004</title>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vip_前审_004</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <style>
+    .tab-btn { cursor:pointer; padding:0.5rem 1.25rem; border-radius:0.5rem 0.5rem 0 0; font-weight:600; font-size:0.875rem; transition:all .2s; }
+    .tab-btn.active { background:#fff; color:#1d4ed8; box-shadow:0 -1px 3px rgba(0,0,0,.08); }
+    .tab-btn:not(.active) { background:#f3f4f6; color:#6b7280; }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2 text-center text-sm font-medium text-indigo-700">高文苹</div>
+<div class="ui-watermark-overlay" aria-hidden="true">高文苹</div>
 <style>
-body { font-family: system-ui, sans-serif; margin: 2rem; background: #f9fafb; }
-h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
-.summary { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: 0.95rem; }
-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-th, td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-th { background: #f3f4f6; font-weight: 600; }
-tr:hover { background: #f9fafb; }
-.action { color: #6366f1; }
-.msg { font-family: monospace; font-size: 0.8rem; max-width: 300px; word-break: break-all; }
-</style></head><body>
-<h1>vip_前审_004</h1>
-<div class="summary">
-  <span>Total: 3</span>
-  <span style="color:#22c55e">Passed: 3</span>
-  <span style="color:#ef4444">Failed: 0</span>
-  <span>Duration: 63209ms</span>
-</div>
-<table><tr><th>#</th><th>Intent</th><th>Action</th><th>Status</th><th>Time</th><th>Message</th><th>Error</th></tr>
-<tr><td class="step">1</td><td>在详情页选择'多题'</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>15523ms</td><td class="msg">点击 在详情页选择'多题' | 实际目标: <span>多题</span></td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">2</td><td>点击'提交'按钮</td><td class="action">click</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>37411ms</td><td class="msg">点击 点击'提交'按钮 | 实际目标: <button type="submit" class="ant-btn ant-btn-primary"><span>提 交</span></button> | 提交后等待页面结局超时</td><td class="msg" style="color:#ef4444"></td></tr><tr><td class="step">3</td><td>验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情</td><td class="action">assert_text</td><td style="color:#22c55e;font-weight:bold">PASS</td><td>10275ms</td><td class="msg">或断言(分支2): 或断言(启发式): 当前在任务详情页</td><td class="msg" style="color:#ef4444"></td></tr>
-</table></body></html>
+.ui-watermark-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(2rem, 8vw, 4.5rem); font-weight: 700;
+  color: rgba(15, 23, 42, 0.05); transform: rotate(-24deg); user-select: none;
+}
+</style>
+
+  <div class="max-w-5xl mx-auto py-8 px-4">
+    <header class="bg-white rounded-xl shadow-lg p-6 mb-6">
+      <h1 class="text-2xl font-bold text-gray-800 mb-2">测试报告</h1>
+      <p class="text-gray-600">用例ID: vip_前审_004</p>
+      <p class="text-gray-500 text-sm">模块: 大学增加前审 / 前审功能 / Case 4</p>
+      <span class="inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+        <i class="fa fa-check-circle mr-1"></i>通过
+      </span>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <div class="bg-gray-50 rounded-lg p-4 text-center"><p class="text-gray-500 text-sm">总步骤数</p><p class="text-2xl font-bold">5</p></div>
+        <div class="bg-green-50 rounded-lg p-4 text-center"><p class="text-gray-500 text-sm">通过</p><p class="text-2xl font-bold text-green-600">5</p></div>
+        <div class="bg-red-50 rounded-lg p-4 text-center"><p class="text-gray-500 text-sm">失败</p><p class="text-2xl font-bold text-red-600">0</p></div>
+        <div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-gray-500 text-sm">成功率</p><p class="text-2xl font-bold text-blue-600">100%</p></div>
+      </div>
+      <div class="mt-4 text-sm text-gray-600">
+        <p>执行时长: 44.4秒</p>
+        <p>生成时间: 2026-06-20 01:12:41</p>
+      </div>
+    </header>
+
+    <div class="flex gap-1 mb-0">
+      <button class="tab-btn active" onclick="switchTab('steps')">步骤详情</button>
+      <button class="tab-btn" onclick="switchTab('observability')">可观测性</button>
+    </div>
+
+    <div class="bg-white rounded-b-xl rounded-tr-xl shadow-lg p-6">
+      <div id="tab-steps" class="tab-panel active">
+        <section class="space-y-4">
+            <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="font-semibold">步骤 1</span>
+                  <span class="text-sm text-gray-600">click</span>
+                  <span class="text-sm text-gray-500">在详情页选择&#x27;多题&#x27;</span>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mt-1">点击 在详情页选择&#x27;多题&#x27; | 实际目标: &lt;label class=&quot;ant-radio-wrapper ant-radio-wrapper-in-form-item&quot;&gt;&lt;span class=&quot;ant-radio&quot;&gt;&lt;input class=&quot;ant-radio-input&quot; type=&quot;radio&quot; value=&quot;3&quot;&gt;&lt;span class=&quot;ant-radio-inner&quot;&gt;&lt;/span&gt;&lt;/span&gt;&lt;span&gt;多题&lt;/span</p>
+              <p class="text-xs text-gray-500 mt-1 font-mono">selector: label.ant-radio-wrapper:has-text(&quot;多题&quot;)</p>
+            </div>
+            
+            <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="font-semibold">步骤 2</span>
+                  <span class="text-sm text-gray-600">api_call</span>
+                  <span class="text-sm text-gray-500">根据当前任务ID查询对应工单ID</span>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mt-1">API 调用成功: workId=146395539</p>
+              
+            </div>
+            
+            <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="font-semibold">步骤 3</span>
+                  <span class="text-sm text-gray-600">bind_session</span>
+                  <span class="text-sm text-gray-500">记录orderId和审核老师选择的选择项（多题）</span>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mt-1">会话记录 ops[146395542] = {&quot;orderId&quot;: &quot;146395628&quot;, &quot;reason&quot;: &quot;多题&lt;/span&quot;, &quot;case_id&quot;: &quot;vip_前审_004&quot;, &quot;var&quot;: &quot;workId&quot;}</p>
+              
+            </div>
+            
+            <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="font-semibold">步骤 4</span>
+                  <span class="text-sm text-gray-600">click</span>
+                  <span class="text-sm text-gray-500">点击&#x27;提交&#x27;按钮</span>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mt-1">点击 点击&#x27;提交&#x27;按钮 | 实际目标: &lt;button type=&quot;submit&quot; class=&quot;ant-btn ant-btn-primary&quot;&gt;&lt;span&gt;提 交&lt;/span&gt;&lt;/button&gt; | navigation_outcome=resource_id_changed</p>
+              <p class="text-xs text-gray-500 mt-1 font-mono">selector: role=button[name=&quot;提 交&quot;]</p>
+            </div>
+            
+            <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-wrap gap-2">
+                  <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="font-semibold">步骤 5</span>
+                  <span class="text-sm text-gray-600">assert_text</span>
+                  <span class="text-sm text-gray-500">验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情</span>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mt-1">或断言(分支2): 或断言(启发式): 当前在任务详情页</p>
+              
+            </div>
+            </section>
+      </div>
+      <div id="tab-observability" class="tab-panel">
+        <div class="space-y-6">
+          <div class="text-gray-400 text-center py-4">无回放数据</div>
+          <div class="text-gray-400 text-center py-4">无命中率数据</div>
+          <div class="bg-green-50 rounded-lg p-4 text-green-700 text-center"><i class="fa fa-check-circle mr-1"></i>无失败步骤</div>
+          <div><h3 class="text-lg font-semibold text-gray-800 mb-3"><i class="fa fa-cloud mr-2 text-indigo-500"></i>LLM 决策追踪（共 5 次调用）</h3><div class="space-y-1">
+            <div class="border rounded-lg mb-2">
+              <div class="px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="toggleSection('llm-section-1')">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <i id="llm-section-1-arrow" class="fa fa-caret-right text-gray-400"></i>
+                  <span class="font-medium text-sm">步骤 1</span>
+                  <span class="text-xs text-gray-500">click</span>
+                  <span class="text-xs text-gray-500">在详情页选择&#x27;多题&#x27;</span>
+                  <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="text-xs text-gray-400">1 次调用</span>
+                </div>
+              </div>
+              <div id="llm-section-1" class="px-4 py-3 border-t" style="display:none;">
+            
+                <div class="mb-3 bg-white rounded border p-3">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-gray-600">调用 #1 · post_check</span>
+                  </div>
+                  <p class="text-xs text-gray-500 font-medium">Prompt 预览:</p>
+                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">动作类型: click
+操作意图: 在详情页选择&#x27;多题&#x27;
+输入值: 多题&lt;/span
+分发成功: true
+分发消息: 点击 在详情页选择&#x27;多题&#x27; | 实际目标: &lt;label class=&quot;ant-radio-wrapper ant-radio-wrapper-in-form-item&quot;&gt;&lt;span class=&quot;ant-radio&quot;&gt;&lt;input class=&quot;ant-radio-input&quot; type=&quot;radio&quot; value=&quot;3&quot;&gt;&lt;span class=&quot;ant-radio-inner&quot;&gt;&lt;/span&gt;&lt;/span&gt;&lt;span&gt;多题&lt;/span
+当前页面 URL: https:/</p>
+                  <p class="text-xs text-gray-500 font-medium mt-2">Response 预览:</p>
+                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">{&quot;step_ok&quot;: true, &quot;reason&quot;: &quot;点击了&#x27;多题&#x27;单选按钮(value=3)，分发成功且实际目标是包含&#x27;多题&#x27;文本的radio label。DOM中[28]label对应&#x27;多题&#x27;选项，点击操作已执行成功，该单选按钮应已被选中。&quot;, &quot;retry_focus&quot;: &quot;无&quot;, &quot;suggested_value&quot;: null, &quot;resolve_hint&quot;: null}</p>
+                </div>
+                </div></div>
+            <div class="border rounded-lg mb-2">
+              <div class="px-4 py-3 bg-gray-50 cursor-pointer flex items-center justify-between" onclick="toggleSection('llm-section-4')">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <i id="llm-section-4-arrow" class="fa fa-caret-right text-gray-400"></i>
+                  <span class="font-medium text-sm">步骤 4</span>
+                  <span class="text-xs text-gray-500">click</span>
+                  <span class="text-xs text-gray-500">点击&#x27;提交&#x27;按钮</span>
+                  <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">通过</span>
+                  <span class="text-xs text-gray-400">1 次调用</span>
+                </div>
+              </div>
+              <div id="llm-section-4" class="px-4 py-3 border-t" style="display:none;">
+            
+                <div class="mb-3 bg-white rounded border p-3">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-gray-600">调用 #1 · post_check</span>
+                  </div>
+                  <p class="text-xs text-gray-500 font-medium">Prompt 预览:</p>
+                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">动作类型: click
+操作意图: 点击&#x27;提交&#x27;按钮
+输入值: 
+分发成功: true
+分发消息: 点击 点击&#x27;提交&#x27;按钮 | 实际目标: &lt;button type=&quot;submit&quot; class=&quot;ant-btn ant-btn-primary&quot;&gt;&lt;span&gt;提 交&lt;/span&gt;&lt;/button&gt; | navigation_outcome=resource_id_changed
+当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146395545
+分发结构化上下文: {&quot;navigation_outcome&quot;</p>
+                  <p class="text-xs text-gray-500 font-medium mt-2">Response 预览:</p>
+                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">{&quot;step_ok&quot;: true, &quot;reason&quot;: &quot;提交按钮点击成功，navigation_outcome=resource_id_changed，URL从uniqId=146395542变为uniqId=146395545，说明提交成功后自动加载了下一个任务详情页面。页面显示新任务ID:146395545的详情内容，包含题目、答案、日志等信息，确认提交操作已完成并跳转到下一个任务。&quot;, &quot;retry_focus&quot;: &quot;无&quot;, &quot;suggested_value&quot;: null, &quot;resolve_hint&quot;: null}</p>
+                </div>
+                </div></div></div></div>
+          
+        </div>
+      </div>
+    </div>
+    <footer class="text-center text-gray-500 text-xs mt-10">高文苹</footer>
+  </div>
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById('tab-'+name).classList.add('active');
+      event.target.classList.add('active');
+    }
+    var replayData = [];
+    var replayIdx = 0;
+    function replayShow(i) {
+      replayIdx = i;
+      var item = replayData[i];
+      if (!item) return;
+      var img = document.getElementById('replay-screenshot');
+      if (img && item.screenshot) {
+        img.src = item.screenshot;
+        img.style.display = 'block';
+      } else if (img) { img.style.display = 'none'; }
+      var badge = document.getElementById('replay-badge');
+      if (badge) {
+        badge.textContent = item.success ? '通过' : '失败';
+        badge.className = 'px-3 py-1 rounded-full text-xs font-medium ' + (item.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700');
+      }
+      var info = document.getElementById('replay-info');
+      if (info) { info.textContent = '步骤 ' + item.step_idx + ' · ' + (item.action_type || '') + ' · ' + (item.intent || '').substring(0, 60); }
+      var msg = document.getElementById('replay-message');
+      if (msg) { msg.textContent = item.message || ''; }
+      var counter = document.getElementById('replay-counter');
+      if (counter) { counter.textContent = (i+1) + ' / ' + replayData.length; }
+    }
+    function replayPrev() { if (replayIdx > 0) replayShow(replayIdx - 1); }
+    function replayNext() { if (replayIdx < replayData.length - 1) replayShow(replayIdx + 1); }
+    function toggleSection(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var arrow = document.getElementById(id + '-arrow');
+      if (el.style.display === 'none' || el.style.display === '') {
+        el.style.display = 'block';
+        if (arrow) arrow.style.transform = 'rotate(90deg)';
+      } else {
+        el.style.display = 'none';
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+    var repairActions = [];
+    function addRepairAction(btn) {
+      try {
+        var data = JSON.parse(btn.getAttribute('data-failure'));
+        data.action_type = btn.getAttribute('data-action');
+        repairActions.push(data);
+        btn.textContent = '已添加'; btn.disabled = true;
+        btn.className = 'px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700 cursor-default';
+      } catch(e) { console.error(e); }
+    }
+    function downloadRepairActions() {
+      if (!repairActions.length) { alert('暂无修复动作'); return; }
+      var blob = new Blob([JSON.stringify(repairActions, null, 2)], {type: 'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'repair_actions.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

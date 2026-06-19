@@ -16,6 +16,12 @@ from playwright.sync_api import sync_playwright
 from . import codegen
 from .business_loader import BusinessLoader
 from .execution import ActionDispatcher, PlaywrightRunner
+from .execution.script_helpers import (
+    bring_page_to_front,
+    pick_role_handoff_page,
+    recover_active_page,
+    _page_usable,
+)
 from .execution.trace import ExecutionTrace
 from .execution.post_check import PostStepChecker
 from .execution.retry import RetryController
@@ -37,11 +43,13 @@ from .preprocess.step_format import (
     prepare_execution_plan,
 )
 from .profile import ProfileManager
-from .readiness import ReadinessChecker
+from .readiness import ReadinessCaseContext, ReadinessChecker
 from .resources import ResourceManager
 from .session import Navigator, login
 from .skill_loader import load_skill_text
 from .variable_substitution import substitute_in_list
+from .watermark import load_watermark_config
+from .report import build_report_data, save_batch_overview
 
 
 class UITestAgent:
@@ -70,6 +78,9 @@ class UITestAgent:
         self.target = config.get("target", {})
         self.pw_cfg = config.get("playwright", {})
         self.runner_cfg = config.get("runner", {})
+        self.watermark_cfg = load_watermark_config(self.runner_cfg)
+        from .execution.trace import configure_dom_console_print
+        configure_dom_console_print(self.runner_cfg.get("print_dom_to_console", False))
 
         # 【多系统扩展】Profile 管理器
         self.profile_mgr = ProfileManager(config)
@@ -90,7 +101,7 @@ class UITestAgent:
         )
         # 步骤⑩⑫ 可靠性组件
         self.readiness = ReadinessChecker(self.llm, self.prompts)
-        self.post_checker = PostStepChecker(self.llm, self.prompts)
+        self.post_checker = PostStepChecker(self.llm, self.prompts, console=self.console)
 
     def _route_llm(self, stage: str, system: str, user: str, raw: str) -> None:
         """步骤⑲: 把 LLM 调用归集到当前用例的可观测性收集器."""
@@ -133,6 +144,8 @@ class UITestAgent:
                 if not case.target_system:
                     case.target_system = biz.system_dir.name
 
+        import time as _time
+        batch_start = _time.time()
         fm = FileManager(self.root)
         self.console.print(f"[cyan]批次目录: {fm.batch_dir}[/cyan]")
 
@@ -154,7 +167,7 @@ class UITestAgent:
             finally:
                 if cross_session:
                     # 跨用例会话: 最终关闭残留上下文
-                    for ctx, pg in role_contexts.values():
+                    for ctx, pg, *_ in role_contexts.values():
                         try:
                             pg.close()
                         except Exception:
@@ -171,6 +184,25 @@ class UITestAgent:
 
         passed = sum(1 for r in case_results if r["passed"])
         failed = len(case_results) - passed
+        batch_ms = int((_time.time() - batch_start) * 1000)
+        batch_duration = f"{batch_ms / 1000:.1f}秒" if batch_ms >= 1000 else f"{batch_ms}ms"
+        try:
+            ov_json, ov_html = save_batch_overview(
+                fm.batch_dir,
+                source_file=str(test_file),
+                case_results=case_results,
+                watermark_cfg=self.watermark_cfg,
+                execution_time=batch_duration,
+                batch_timestamp=fm.batch_dir.name,
+            )
+            self.console.print(f"[cyan]批次报告: {ov_html}[/cyan]")
+        except Exception as e:  # noqa: BLE001
+            self.console.print(f"[yellow]批次报告生成失败: {e}[/yellow]")
+        suite_path = codegen.generate_suite_script(
+            fm.batch_dir, [r["case_id"] for r in case_results], self.root,
+        )
+        if suite_path:
+            self.console.print(f"[cyan]批次套件: {suite_path}[/cyan]")
         summary = {
             "总数": len(case_results),
             "通过数": passed,
@@ -248,12 +280,18 @@ class UITestAgent:
         default_timeout = self.pw_cfg.get("default_timeout_ms", 10000)
 
         if role_contexts is None:
-            role_contexts: dict[str, Any] = {}  # role → (context, page)
+            role_contexts: dict[str, Any] = {}  # role → (context, page, primary_page)
 
         def _get_page_for_role(role: str) -> Any:
             """获取或创建角色对应的浏览器页面并登录."""
             if role in role_contexts:
-                return role_contexts[role][1]
+                ctx, pg, primary = role_contexts[role]
+                pg = pick_role_handoff_page(ctx, pg, primary_page=primary)
+                if not _page_usable(pg):
+                    pg, _ = recover_active_page(pg, prefer=primary)
+                role_contexts[role] = (ctx, pg, primary)
+                bring_page_to_front(pg)
+                return pg
             ctx = browser.new_context(viewport=self.pw_cfg.get("viewport"))
             pg = ctx.new_page()
             pg.set_default_timeout(default_timeout)
@@ -268,7 +306,8 @@ class UITestAgent:
                 login_kwargs["password"] = credential
                 login(pg, login_kwargs, force=True)
             self.console.print(f"[dim]登录完成 role={role} url={pg.url}[/dim]")
-            role_contexts[role] = (ctx, pg)
+            role_contexts[role] = (ctx, pg, pg)
+            bring_page_to_front(pg)
             return pg
 
         # 第一个角色作为主页面
@@ -284,6 +323,12 @@ class UITestAgent:
 
         passed = False
         actions: list = []
+        dispatcher = None
+        runner = None
+        primary_role: Optional[str] = None
+        import time as _time
+        case_start = _time.time()
+        results: list = []
         try:
             # 【多系统扩展】步骤④ 登录 (带角色)
             # 有 session.roles 时已在 _get_page_for_role(first_role) 用业务 base_url 登录;
@@ -305,15 +350,20 @@ class UITestAgent:
             # 跨用例会话复用: 列表页刷新清筛选; 前置/步骤表明已在子页上下文时不 reload
             if self.runner_cfg.get("cross_case_session", False) and role_contexts:
                 if not should_preserve_page_on_case_start(case.preconditions, case.steps):
-                    page.reload(timeout=self.pw_cfg.get("default_timeout_ms", 10000))
+                    try:
+                        page.reload(
+                            timeout=self.pw_cfg.get("default_timeout_ms", 10000),
+                            wait_until="domcontentloaded",
+                        )
+                    except Exception as reload_err:  # noqa: BLE001
+                        self.console.print(
+                            f"  [yellow]跨用例列表页刷新失败(继续): {reload_err}[/yellow]"
+                        )
 
             # 步骤⑦ 动作规划 + 意图拆分; 交错式按块, 分离式一次性
             roles = list(session.roles.keys()) if session.roles else None
             cross_session = self.runner_cfg.get("cross_case_session", False)
             exec_blocks, by_blocks = prepare_execution_plan(case)
-            primary_role: Optional[str] = None
-            dispatcher = None
-            runner = None
 
             # 模式 2: 预规划动作注入, 跳过 LLM 规划
             preplanned = getattr(self, "_preplanned_actions", None)
@@ -337,7 +387,7 @@ class UITestAgent:
 
                 if not actions:
                     self.console.print("[yellow]预规划动作为空, 跳过执行[/yellow]")
-                    return {"case_id": case.case_id, "passed": False, "reason": "无动作"}
+                    return self._case_result_summary(case, [], False, case_start)
 
                 self.resolver.set_trace(trace)
                 dispatcher, runner = self._build_runner(
@@ -348,6 +398,7 @@ class UITestAgent:
                     profile=profile,
                     session_vars=session_vars,
                     _get_page_for_role=_get_page_for_role if session.roles else None,
+                    case=case,
                 )
                 results = runner.run_actions(actions, case.case_id)
                 passed = bool(results) and all(r.status == "PASS" for r in results)
@@ -404,7 +455,7 @@ class UITestAgent:
 
                 if not actions:
                     self.console.print("[yellow]规划结果为空, 跳过执行[/yellow]")
-                    return {"case_id": case.case_id, "passed": False, "reason": "无动作"}
+                    return self._case_result_summary(case, [], False, case_start)
 
                 self.resolver.set_trace(trace)
                 dispatcher, runner = self._build_runner(
@@ -415,6 +466,7 @@ class UITestAgent:
                     profile=profile,
                     session_vars=session_vars,
                     _get_page_for_role=_get_page_for_role if session.roles else None,
+                    case=case,
                 )
                 results = runner.run_actions(actions, case.case_id)
                 passed = bool(results) and all(r.status == "PASS" for r in results)
@@ -429,16 +481,32 @@ class UITestAgent:
             ):
                 sync_role = case.role or primary_role or first_role
                 if sync_role and sync_role in role_contexts:
-                    ctx, _ = role_contexts[sync_role]
-                    role_contexts[sync_role] = (ctx, dispatcher.page)
-                    self.console.print(f"  [dim]↳ 会话页同步 → {dispatcher.page.url}[/dim]")
+                    ctx, _, primary = role_contexts[sync_role]
+                    list_anchor = getattr(dispatcher, "_list_tab_anchor", None)
+                    handoff = pick_role_handoff_page(
+                        ctx,
+                        dispatcher.page,
+                        list_anchor=list_anchor,
+                        primary_page=primary,
+                    )
+                    if not _page_usable(handoff):
+                        handoff, _ = recover_active_page(
+                            handoff, prefer=list_anchor or primary,
+                        )
+                    role_contexts[sync_role] = (ctx, handoff, primary)
+                    try:
+                        sync_url = handoff.url or ""
+                    except Exception:
+                        sync_url = ""
+                    self.console.print(f"  [dim]↳ 会话页同步 → {sync_url}[/dim]")
         except Exception as e:  # noqa: BLE001
-            self.console.print(f"[red]用例执行异常: {e}[/red]")
+            self.console.print("[red]用例执行异常:[/red]", str(e))
+            passed = False
         finally:
             # 跨用例会话模式: 不关闭上下文, 留给下一个 case 复用
             # 独立模式: 关闭所有角色的浏览器上下文
             if role_contexts is not None and not self.runner_cfg.get("cross_case_session", False):
-                for ctx, pg in role_contexts.values():
+                for ctx, pg, *_ in role_contexts.values():
                     try:
                         pg.close()
                     except Exception:
@@ -465,22 +533,18 @@ class UITestAgent:
             else:
                 codegen_login["password"] = cred
         api_ctx: dict = {}
-        try:
+        if dispatcher is not None:
             api_ctx = dict(dispatcher.api_context)
-        except NameError:
-            pass
         if actions:
             popup_used = False
             popup_steps: list = []
             dismiss_before: list[str] = []
             idempotent_skip: list[str] = []
-            try:
+            if dispatcher is not None:
                 popup_used = dispatcher.popup_dismiss_was_used()
                 popup_steps = list(dispatcher.popup_recovery_steps)
                 dismiss_before = list(dispatcher.popup_dismiss_before_intents)
                 idempotent_skip = list(dispatcher.idempotent_skip_intents)
-            except NameError:
-                pass
             codegen.generate_spec(
                 case.case_id, actions,
                 profile.base_url,
@@ -495,7 +559,35 @@ class UITestAgent:
                 idempotent_skip_intents=idempotent_skip,
             )
 
-        return {"case_id": case.case_id, "passed": passed}
+        return self._case_result_summary(
+            case, results, passed, case_start,
+        )
+
+    def _case_result_summary(
+        self, case, results: list, passed: bool, case_start: float,
+    ) -> dict[str, Any]:
+        import time as _time
+        total_ms = int((_time.time() - case_start) * 1000)
+        passed_steps = sum(1 for r in results if getattr(r, "status", None) == "PASS")
+        failed_steps = sum(1 for r in results if getattr(r, "status", None) == "FAIL")
+        total_steps = len(results)
+        step_rate = f"{(passed_steps / total_steps * 100):.1f}%" if total_steps else "0%"
+        exec_time = f"{total_ms / 1000:.1f}秒" if total_ms >= 1000 else f"{total_ms}ms"
+        report_data = build_report_data(
+            case.case_id, results, total_ms,
+            feature_titles=list(case.module_path or []),
+        ) if results else {"details": [], "total_steps": 0, "passed": 0, "failed": 0}
+        return {
+            "case_id": case.case_id,
+            "passed": passed,
+            "success": passed,
+            "total_steps": total_steps,
+            "passed_steps": passed_steps,
+            "failed_steps": failed_steps,
+            "step_success_rate": step_rate,
+            "execution_time": exec_time,
+            "details": report_data.get("details", []),
+        }
 
     def _print_plan_raw(self, raw: Any) -> None:
         if raw:
@@ -509,6 +601,26 @@ class UITestAgent:
                 f"    [dim]{i:2d}. {a.type:12s} {a.intent[:50]}{'...' if len(a.intent) > 50 else ''}[/dim]"
             )
 
+    def _make_readiness_case_context(
+        self,
+        case,
+        biz: BusinessLoader | None,
+    ) -> ReadinessCaseContext:
+        hints: list[str] = []
+        if biz:
+            kb = biz.get_knowledge()
+            session_ops = kb.get("session_ops") or {}
+            if session_ops.get("index_by"):
+                hints.append(f"bind_session 索引字段: {session_ops.get('index_by')}")
+            if session_ops.get("fields", {}).get("reason", {}).get("from") == "prev_click":
+                hints.append("审核原因 reason 来自前序 click; recovery 不得改选其它 radio")
+        return ReadinessCaseContext(
+            notes=list(case.notes),
+            steps=list(case.steps),
+            preconditions=list(case.preconditions),
+            business_hints=hints,
+        )
+
     def _build_runner(
         self,
         *,
@@ -521,9 +633,11 @@ class UITestAgent:
         _get_page_for_role,
         fm: FileManager | None = None,
         case_id: str = "",
+        case: Any = None,
     ) -> tuple[ActionDispatcher, PlaywrightRunner]:
         self.resolver.set_trace(trace)
         knowledge = biz.get_knowledge() if biz else {}
+        rctx = self._make_readiness_case_context(case, biz) if case else None
         dispatcher = ActionDispatcher(
             page, self.resolver,
             self.pw_cfg.get("default_timeout_ms", 10000),
@@ -557,6 +671,9 @@ class UITestAgent:
             trace=trace,
             page_switcher=_get_page_for_role,
             skill_path=self.root / "prompts" / "skill.md",
+            readiness_case_context=rctx,
+            watermark_cfg=self.watermark_cfg,
+            feature_titles=list(case.module_path or []) if case else [],
         )
         return dispatcher, runner
 
@@ -602,14 +719,19 @@ class UITestAgent:
                 f"[dim]{ops_preview or '(仅断言)'}{exp_flag}[/dim]"
             )
 
-            block_actions, raws = self.planner.generate_block_actions(
-                case, block, roles,
-                block_no=block_no,
-                total_blocks=total,
-                current_url=page.url,
-                preconditions=case.preconditions,
-                cross_case_session=cross_session,
-            )
+            try:
+                block_actions, raws = self.planner.generate_block_actions(
+                    case, block, roles,
+                    block_no=block_no,
+                    total_blocks=total,
+                    current_url=page.url,
+                    preconditions=case.preconditions,
+                    cross_case_session=cross_session,
+                )
+            except Exception as e:  # noqa: BLE001
+                self.console.print(f"  [red]块 {block_no} 规划失败: {e}[/red]")
+                passed = False
+                break
             all_raws.extend(raws)
             for raw in raws:
                 self._print_plan_raw(raw)
@@ -637,6 +759,7 @@ class UITestAgent:
                     _get_page_for_role=_get_page_for_role if session.roles else None,
                     fm=fm,
                     case_id=case.case_id,
+                    case=case,
                 )
 
             all_actions.extend(block_actions)

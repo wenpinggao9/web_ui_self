@@ -8,25 +8,26 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from ..dom import extract_semantic_dom
+from ..dom import extract_items, compact_dom_lines, wait_for_dom_stable
 from ..locating import LocatorResolver
 from ..locating.playwright_api import info_key, infer_from_selector, normalize_info, resolve_locator
 from ..planning import PlannedAction
 from ..variable_substitution import substitute_variables
-from .trace import ExecutionTrace
+from .trace import ExecutionTrace, print_captured_dom
 from .assert_or import combined_or_intent, is_or_assert, try_or_branches, try_or_heuristic
 from .assert_scope import (
-    build_semantic_text_summary,
-    extract_page_regions,
+    build_semantic_text_summary_from_items,
     format_scope_note_for_semantic,
+    items_flat_text,
     parse_assert_scope,
     should_disable_semantic_fallback,
-    try_field_value_assert,
-    try_scoped_literal,
+    try_field_value_assert_items,
+    try_scoped_literal_items,
 )
 from .script_helpers import (
     assert_all_table_rows_contain,
     assert_no_table_row_contains,
+    bring_page_to_front,
     count_real_table_rows,
     extract_url_query,
     recover_active_page,
@@ -34,7 +35,10 @@ from .script_helpers import (
     wait_and_recover_active_page,
     wait_before_assert,
     wait_for_list_count_at_least,
+    _context_from_any,
+    _page_alive,
     _page_usable,
+    _url_query_id,
 )
 from .assert_codegen import (
     record_assert_count,
@@ -47,7 +51,8 @@ from .assert_codegen import (
     set_codegen_assert,
 )
 from .target_text import backfill_click_from_html, extract_target_text
-from .session_ops import execute_bind_session
+from .deterministic_recovery import record_fill_history, remember_option_click
+from .session_ops import execute_bind_session, resolve_table_row_key
 
 
 class ActionDispatcher:
@@ -85,49 +90,163 @@ class ActionDispatcher:
         self._popup_dismiss_used = False
         self.popup_dismiss_before_intents: list[str] = []
         self.idempotent_skip_intents: list[str] = []
-        self._page_snapshot: Optional[dict[str, Any]] = None
+        self._page_state: Optional[dict[str, Any]] = None
+        self._fill_history: list[dict[str, Any]] = []
+        self._expected_radio_label: Optional[str] = None
+        self.last_dispatch_meta: dict[str, Any] = {}
 
-    def _snapshot_key(self) -> str:
+    _SKIP_PAGE_STATE_CAPTURE = frozenset({
+        "api_call",
+        "assert_text", "asset", "assert_table", "assert_count",
+    })
+
+    @classmethod
+    def should_capture_page_state(cls, action: PlannedAction) -> bool:
+        """UI 类动作执行后抓 DOM (不论成败); 仅 api_call / 断言跳过."""
+        return action.type not in cls._SKIP_PAGE_STATE_CAPTURE and not action.is_assert()
+
+    def invalidate_page_state(self) -> None:
+        self._page_state = None
+
+    def _page_state_key(self) -> str:
         try:
             return (self.page.url or "").lower()
         except Exception:
             return ""
 
-    def invalidate_page_snapshot(self) -> None:
-        self._page_snapshot = None
-
-    def page_snapshot_valid(self) -> bool:
-        key = self._snapshot_key()
-        return bool(key and self._page_snapshot and self._page_snapshot.get("key") == key)
-
-    def refresh_page_snapshot(self, *, dom_summary: Optional[str] = None) -> dict[str, Any]:
-        """操作改页后抓取页面快照, 供后续断言复用 (不再逐步重读 DOM)."""
-        self._ensure_list_anchor()
+    def capture_page_state_after_operation(self) -> None:
+        """UI 动作执行后抓取 semantic_items (V3 post_verify profile), 供后校验/断言/下一步定位共用."""
+        self._ensure_live_page()
+        bring_page_to_front(self.page)
         self.page, _ = recover_active_page(self.page, prefer=self._list_tab_anchor)
-        body_text = self._read_body_text()
-        regions = extract_page_regions(self.page)
-        key = self._snapshot_key()
-        self._page_snapshot = {
+        if not _page_alive(self.page):
+            self._page_state = None
+            return
+        wait_for_dom_stable(self.page, quiet_ms=200, timeout_ms=4000)
+        fw = self.resolver._framework_selectors if self.resolver else None
+        items = extract_items(
+            self.page, profile="post_verify", dialog_first=True,
+            stable=False, selectors=fw,
+        )
+        dom_summary = compact_dom_lines(items)
+        key = self._page_state_key()
+        self._page_state = {
             "key": key,
-            "body_text": body_text,
-            "regions": regions,
+            "semantic_items": items,
             "dom_summary": dom_summary,
         }
+        print_captured_dom(
+            self.console, items,
+            label="抓取", source="操作后 post_verify",
+        )
         if self.trace:
-            self.trace.emit("page_snapshot", url=key, cached=False, reason="after_operation")
-        return self._page_snapshot
+            self.trace.emit(
+                "page_state_capture",
+                url=key,
+                count=len(items),
+            )
 
-    def get_page_snapshot(self, *, allow_capture: bool = False) -> Optional[dict[str, Any]]:
-        """断言读取上一操作后的页面快照; 默认不触发新的 DOM 读取."""
-        if self.page_snapshot_valid():
-            snap = self._page_snapshot
-            if self.trace:
-                self.trace.emit("page_snapshot", url=snap.get("key", ""), cached=True, reason="assert_reuse")
-            return snap
-        if not allow_capture:
+    def get_semantic_items_for_resolve(self) -> tuple[list[dict], str]:
+        """定位时优先复用操作后 DOM; 无缓存则实时抽取 locate profile."""
+        self._ensure_live_page()
+        bring_page_to_front(self.page)
+        key = self._page_state_key()
+        if self._page_state and self._page_state.get("key") == key:
+            items = self._page_state.get("semantic_items") or []
+            if items:
+                return items, "操作后共用"
+        fw = self.resolver._framework_selectors if self.resolver else None
+        items = extract_items(
+            self.page, profile="locate", dialog_first=True,
+            stable=True, selectors=fw,
+        )
+        print_captured_dom(
+            self.console, items,
+            label="抓取", source="定位实时 locate",
+        )
+        return items, "定位实时"
+
+    def get_cached_semantic_items(self) -> Optional[list[dict]]:
+        if not self._page_state:
             return None
-        self._prepare_page_for_assert()
-        return self.refresh_page_snapshot()
+        if self._page_state.get("key") != self._page_state_key():
+            return None
+        return self._page_state.get("semantic_items") or None
+
+    def get_cached_dom_summary(self) -> Optional[str]:
+        if not self._page_state:
+            return None
+        return str(self._page_state.get("dom_summary") or "") or None
+
+    def capture_page_state_if_needed(self, action: PlannedAction) -> None:
+        if self.should_capture_page_state(action):
+            self.capture_page_state_after_operation()
+
+    def _has_cached_page_state(self) -> bool:
+        return bool(
+            self._page_state
+            and (self._page_state.get("semantic_items") or [])
+        )
+
+    def _ensure_assert_tab(self, *, quick: bool = False) -> bool:
+        """断言前切到仍存活的 tab; quick 模式缩短探测超时."""
+        self._ensure_list_anchor()
+        polls = 8 if quick else 30
+        tout = 400 if quick else 1500
+        self.page, _ = wait_and_recover_active_page(
+            self.page, max_polls=polls, prefer=self._list_tab_anchor,
+        )
+        if not _page_usable(self.page, timeout_ms=tout):
+            ctx = _context_from_any(self.page, self._list_tab_anchor)
+            if ctx is not None:
+                for p in reversed(ctx.pages):
+                    if _page_usable(p, timeout_ms=tout):
+                        self.page = p
+                        break
+        if _page_usable(self.page, timeout_ms=tout):
+            bring_page_to_front(self.page)
+            return True
+        return _page_alive(self.page)
+
+    def _get_page_state_for_assert(
+        self,
+    ) -> tuple[bool, list[dict], str, str]:
+        """复用上一 UI 操作后的 semantic_items; 有缓存时优先用缓存, 避免页面繁忙误判 tab 失效."""
+        tab_ok = self._ensure_assert_tab(quick=True)
+        cached = self._has_cached_page_state()
+
+        if not tab_ok and not cached:
+            return False, [], "", "断言失败: 当前浏览器 tab 不可用或已关闭"
+
+        if tab_ok:
+            key = self._page_state_key()
+            stale = not self._page_state or self._page_state.get("key") != key
+            if stale and _page_usable(self.page, timeout_ms=800):
+                self.capture_page_state_after_operation()
+                key = self._page_state_key()
+        else:
+            key = str(self._page_state.get("key") or "")
+
+        if not self._page_state:
+            return (
+                False, [], "",
+                "断言失败: 缺少操作后的页面状态, 请先执行会改变页面的操作步骤",
+            )
+        if tab_ok and self._page_state.get("key") != key:
+            return (
+                False, [], "",
+                "断言失败: 页面 URL 已变化, 请先执行操作步骤刷新页面状态",
+            )
+        if self.trace:
+            self.trace.emit(
+                "assert_use_state",
+                url=key,
+                shared=True,
+                cached_only=not tab_ok,
+            )
+        st = self._page_state
+        items = list(st.get("semantic_items") or [])
+        return True, items, st.get("dom_summary") or "", ""
 
     def record_popup_recovery(self, steps: list[PlannedAction]) -> None:
         """记录运行期弹窗恢复动作, 供 codegen 生成条件式脚本."""
@@ -148,12 +267,14 @@ class ActionDispatcher:
         return self._popup_dismiss_used
 
     def set_page(self, page: Any) -> None:
-        """新标签页切换后更新页面对象."""
+        """新标签页/角色切换后更新页面对象, 并将窗口置于最前."""
         self.page = page
-        self.invalidate_page_snapshot()
+        self.invalidate_page_state()
+        bring_page_to_front(page)
 
     def _ensure_live_page(self, *, poll: bool = False) -> bool:
         """当前 page 已关闭时切到仍打开的 tab (多 tab / 提交关详情页)."""
+        self._ensure_list_anchor()
         before = self.page
         if poll:
             self.page, recovered = wait_and_recover_active_page(
@@ -171,62 +292,16 @@ class ActionDispatcher:
             self.trace.emit("page_recover", url=url)
         return recovered or self.page is not before
 
-    def _prepare_page_for_assert(self) -> None:
-        """断言前: 轮询恢复存活 tab 并等待 DOM 稳定."""
-        self._ensure_list_anchor()
-        before = self.page
-        try:
-            before_url = before.url or ""
-        except Exception:
-            before_url = ""
-        self.page = wait_before_assert(
-            self.page, timeout_ms=5000, list_anchor=self._list_tab_anchor,
-        )
-        if not _page_usable(self.page) and self._list_tab_anchor is not None:
-            if _page_usable(self._list_tab_anchor):
-                self.page = self._list_tab_anchor
-        if not self.trace:
-            return
-        try:
-            after_url = self.page.url or ""
-        except Exception:
-            after_url = ""
-        if self.page is not before or after_url != before_url:
-            self.trace.emit("page_recover", url=after_url, reason="before_assert")
-
-    def _read_body_text(self) -> str:
-        """读取页面正文; 遇 TargetClosedError 时先恢复 tab 再重试."""
-        self.page, _ = wait_and_recover_active_page(
-            self.page, max_polls=20, prefer=self._list_tab_anchor,
-        )
-        if not _page_usable(self.page):
-            if self._list_tab_anchor is not None and _page_usable(self._list_tab_anchor):
-                self.page = self._list_tab_anchor
-            else:
-                return ""
-        try:
-            return self.page.inner_text("body")
-        except Exception:
-            self.page = wait_before_assert(
-                self.page, timeout_ms=5000, list_anchor=self._list_tab_anchor,
-            )
-            if not _page_usable(self.page):
-                return ""
-            try:
-                return self.page.inner_text("body")
-            except Exception:
-                return ""
-
     def dispatch(self, action: PlannedAction, case_id: str = "") -> tuple[bool, str]:
         """执行单个动作, 返回是否成功以及供日志/后校验使用的说明."""
+        self.last_dispatch_meta = {}
         # 执行前变量替换: 把 action.value 和 action.intent 中的 ${var} 替换为 api_context 中的值
         self._substitute_action(action)
         t = action.type
         if action.is_assert():
-            # 断言不操作页面, 复用上一操作后的 page_snapshot, 此处不 prepare、不重读 DOM.
-            self._ensure_live_page()
+            self._ensure_list_anchor()
+            self._ensure_live_page(poll=False)
         else:
-            self.invalidate_page_snapshot()
             self._ensure_live_page()
         try:
             # 不需要元素定位的动作先直接处理.
@@ -288,7 +363,38 @@ class ActionDispatcher:
                     action.extras[k] = substitute_variables(v, self.api_context)
 
     # ---------- 定位 ----------
+    def _ensure_select_dropdown_open(self, intent: str) -> None:
+        """选下拉选项前若面板未展开, 重新点开上一步操作过的筛选框."""
+        from ..locating.intent_route import is_dropdown_option
+
+        if not is_dropdown_option(intent):
+            return
+        page = self.page
+        try:
+            if page.locator(".ant-select-dropdown:visible, .el-select-dropdown:visible").count():
+                return
+        except Exception:
+            pass
+        label = (self._last_click_label or "").strip()
+        if not label:
+            return
+        try:
+            field = page.locator(".ant-form-item").filter(
+                has=page.get_by_text(label, exact=True)
+            ).first
+            trigger = field.locator(
+                ".ant-select-selector, .ant-select .ant-select-selection-search-input, "
+                ".el-select .el-select__wrapper"
+            ).first
+            if trigger.count():
+                trigger.click(timeout=5000)
+                page.wait_for_timeout(400)
+        except Exception:
+            pass
+
     def _resolve(self, action: PlannedAction):
+        if action.type == "click":
+            self._ensure_select_dropdown_open(action.intent or "")
         if action.force_selector:
             info = normalize_info(infer_from_selector(action.force_selector))
             info["_source"] = "强制复用"
@@ -305,11 +411,14 @@ class ActionDispatcher:
                     hit_selector=action.force_selector,
                 )
         else:
-            # 正常路径交给五级定位链; exclude/hint 来自后校验重试.
+            # 正常路径交给五级定位链; 优先复用操作后 semantic_items (V3 共用 DOM).
+            semantic_items, dom_source = self.get_semantic_items_for_resolve()
             info = self.resolver.resolve(
                 self.page, action.intent, action.type,
                 exclude=action.exclude_selectors, hint=action.resolve_hint,
                 action_value=action.value or "",
+                semantic_items=semantic_items,
+                dom_source=dom_source,
             )
         if not info:
             return None, None
@@ -390,7 +499,7 @@ class ActionDispatcher:
             backfill_click_from_html(action, target_html)
             self._remember_click_label(action, target_html)
             record_post_click_wait(action, url_before, url_after)
-            if self._is_detail_submit_click(action, url_before):
+            if self._should_wait_post_submit_navigation(url_before, loc):
                 ok_submit, submit_msg = self._wait_after_detail_submit(url_before)
                 if not ok_submit:
                     if self.trace:
@@ -405,6 +514,16 @@ class ActionDispatcher:
             return True, f"悬停 {action.intent}{suffix}"
         if t == "fill":
             loc.fill(action.value or "", timeout=timeout)
+            try:
+                meta = loc.evaluate("""el => ({
+                    placeholder: el.getAttribute('placeholder') || '',
+                    name: el.getAttribute('name') || '',
+                    id: el.id || '',
+                    ariaLabel: el.getAttribute('aria-label') || ''
+                })""")
+                record_fill_history(self, meta or {}, action.value or "")
+            except Exception:
+                pass
             return True, f"输入 {action.value!r}{suffix}"
         if t == "press":
             loc.press(action.value or "Enter", timeout=timeout)
@@ -415,25 +534,39 @@ class ActionDispatcher:
         return False, f"未支持的已定位动作: {t}"
 
     _NEW_TAB_INTENT_RE = re.compile(r"查看|新标签|新窗口|新开")
-    _SUBMIT_CLICK_RE = re.compile(r"提交")
 
-    def _is_detail_submit_click(self, action: PlannedAction, url_before: str) -> bool:
-        if action.type != "click" or not self._SUBMIT_CLICK_RE.search(action.intent or ""):
+    def _should_wait_post_submit_navigation(self, url_before: str, loc: Any) -> bool:
+        """type=submit 且 URL 带资源 ID 时, 等待提交后的页面结局."""
+        if not _url_query_id(url_before):
             return False
-        if "/detail" in (url_before or "").lower():
-            return True
         try:
-            return "/detail" in (self.page.url or "").lower()
+            el_type = loc.evaluate(
+                "el => (el.getAttribute('type') || el.type || '').toLowerCase()"
+            )
+            return el_type == "submit"
         except Exception:
             return False
 
     def _ensure_list_anchor(self) -> None:
-        """从 context 中查找仍存活的列表 Tab 作为锚点 (未经过「查看」开 Tab 时兜底)."""
+        """从 context 中查找仍存活的列表 Tab (待领取 / 全部题目等)."""
         if self._list_tab_anchor is not None and _page_usable(self._list_tab_anchor):
             return
+        ctx = None
         try:
-            for p in self.page.context.pages:
-                if _page_usable(p) and count_real_table_rows(p) > 0:
+            ctx = self.page.context
+        except Exception:
+            pass
+        if ctx is None:
+            return
+        try:
+            for p in ctx.pages:
+                if not _page_usable(p):
+                    continue
+                url = (p.url or "").lower()
+                if "/wait-preview" in url or "/all-question" in url:
+                    self._list_tab_anchor = p
+                    return
+                if count_real_table_rows(p) > 0:
                     self._list_tab_anchor = p
                     return
         except Exception:
@@ -448,6 +581,20 @@ class ActionDispatcher:
             url_before=url_before,
             max_polls=max_polls,
         )
+        if outcome in ("returned_to_list", "resource_id_changed", "route_changed") and _page_usable(self.page):
+            if outcome == "returned_to_list":
+                self._list_tab_anchor = self.page
+            self.invalidate_page_state()
+        try:
+            url_after = self.page.url or ""
+        except Exception:
+            url_after = ""
+        self.last_dispatch_meta = {
+            "navigation_outcome": outcome,
+            "url_before": url_before,
+            "url_after": url_after,
+            "recovered": recovered,
+        }
         if self.trace:
             try:
                 url = self.page.url or ""
@@ -460,14 +607,8 @@ class ActionDispatcher:
                 recovered=recovered,
             )
         if outcome == "submit_error":
-            return False, "提交失败: 页面提示任务已处理或不可重复提交"
-        labels = {
-            "returned_to_list": "提交后已回到列表页",
-            "next_detail": "提交后已加载下一任务详情",
-            "settled": "提交后页面已稳定",
-            "timeout": "提交后等待页面结局超时",
-        }
-        return True, labels.get(outcome, f"提交后页面: {outcome}")
+            return False, f"navigation_outcome={outcome}"
+        return True, f"navigation_outcome={outcome}"
 
     def _should_follow_new_tab(self, action: PlannedAction, loc: Any) -> bool:
         """仅「查看」等会新开标签页的点击才跟随 popup, 避免普通按钮误切 tab."""
@@ -601,6 +742,15 @@ class ActionDispatcher:
     # ---------- 数量断言 ----------
     def _assert_count(self, action: PlannedAction) -> tuple[bool, str]:
         """统计页面列表/表格数量并与 value、extras.operator 比较."""
+        if not self._ensure_assert_tab(quick=True) and not self._has_cached_page_state():
+            return False, "计数断言: 当前浏览器 tab 不可用或已关闭"
+        if not self._page_state or self._page_state.get("key") != self._page_state_key():
+            return (
+                False,
+                "计数断言: 缺少操作后的页面状态, 请先执行会改变页面的操作步骤",
+            )
+        if self.trace:
+            self.trace.emit("assert_use_state", url=self._page_state_key())
         op, threshold = _parse_count_spec(action)
         actual, source = self._measure_list_count()
         ok = _compare_count(actual, threshold, op)
@@ -611,15 +761,21 @@ class ActionDispatcher:
         return ok, f"计数断言({source}): 实际{actual} {sym} {threshold} → {status}"
 
     def _measure_list_count(self) -> tuple[int, str]:
-        """优先读「当前总数为:N」, 否则统计表格数据行 (排除「暂无数据」占位行)."""
+        """优先读「当前总数为:N」, 否则统计表格数据行."""
+        key = self._page_state_key()
+        if self._page_state and self._page_state.get("key") == key:
+            flat = items_flat_text(self._page_state.get("semantic_items") or [])
+            m = re.search(r"当前总数为[:：]\s*(\d+)", flat)
+            if m:
+                return int(m.group(1)), "当前总数"
+        self._ensure_live_page()
         try:
-            body = self._read_body_text()
+            body = self.page.inner_text("body")
+            m = re.search(r"当前总数为[:：]\s*(\d+)", body)
+            if m:
+                return int(m.group(1)), "当前总数"
         except Exception:
-            self._prepare_page_for_assert()
-            body = self.page.content()
-        m = re.search(r"当前总数为[:：]\s*(\d+)", body)
-        if m:
-            return int(m.group(1)), "当前总数"
+            pass
         n = count_real_table_rows(self.page)
         if n > 0:
             return n, "表格行数"
@@ -662,26 +818,25 @@ class ActionDispatcher:
         ok, msg, _ = assert_all_table_rows_contain(self.page, target)
         return ok, msg
 
-    # ---------- 文本断言 (含否定断言 + LLM 语义兜底) ----------
+    # ---------- 文本断言 (字面量/scoped → semantic_assert, 不走五级定位链) ----------
     def _assert_text(self, action: PlannedAction) -> tuple[bool, str]:
         target = (action.value or action.intent or "").strip()
         if not target and not is_or_assert(action):
             return False, "断言缺少目标文本"
         intent = action.intent or ""
         scope = parse_assert_scope(intent, value=target, negate=action.negate)
-        snap = self.get_page_snapshot(allow_capture=True)
-        if snap is None:
-            return False, "断言缺少页面快照: 请先执行会改变页面的操作步骤"
-        body_text = snap["body_text"]
-        regions = snap["regions"]
+        ok_st, items, dom_summary, err = self._get_page_state_for_assert()
+        if not ok_st:
+            return False, err
+        flat_text = items_flat_text(items)
 
         if is_or_assert(action) and not action.negate:
             branches = (action.extras or {}).get("branches") or []
             if branches:
-                hit = try_or_branches(self.page, branches, body_text)
+                hit = try_or_branches(self.page, branches, flat_text)
                 if hit is not None:
                     if hit[0]:
-                        record_or_branch(action, self.page, branches, body_text)
+                        record_or_branch(action, self.page, branches, flat_text)
                     return hit
             else:
                 hit = try_or_heuristic(self.page, combined_or_intent(action))
@@ -690,36 +845,43 @@ class ActionDispatcher:
                         record_or_heuristic(action, self.page, combined_or_intent(action))
                     return hit
             ok, msg = self._semantic_assert(
-                action, body_text, scope=scope, regions=regions, any_of=True,
-                dom_summary=snap.get("dom_summary"),
+                action, items, scope=scope, any_of=True, dom_summary=dom_summary,
             )
             if ok:
-                record_semantic_pass(action, self.page, body_text)
+                record_semantic_pass(action, self.page, flat_text)
             return ok, msg
 
         if scope.field_hint and not action.negate:
-            field_hit = try_field_value_assert(scope, regions, scope.field_hint, target)
+            field_hit = try_field_value_assert_items(
+                scope, items, scope.field_hint, target,
+            )
             if field_hit is not None:
                 if field_hit[0]:
                     record_literal(action, target)
                 return field_hit
 
         if not action.negate:
-            scoped_hit = try_scoped_literal(scope, regions, target)
+            scoped_hit = try_scoped_literal_items(scope, items, target)
             if scoped_hit is not None:
                 if scoped_hit[0]:
                     record_literal(action, target)
-                return scoped_hit
+                    return scoped_hit
+                if not scope.explicit_region:
+                    return scoped_hit
 
-        present = target in body_text
-        # negate=true 表示"页面不应包含该文本".
+        skip_flat_literal = (
+            scope.explicit_region or scope.field_hint or scope.exclude_nav
+        )
         if action.negate:
+            present = target in flat_text
             if not present:
                 record_literal(action, target, negate=True)
             return (not present), (f"否定断言: 页面{'仍包含' if present else '不包含'} {target!r}")
-        if present:
-            record_literal(action, target)
-            return True, (f"断言: 页面{'包含' if present else '不包含'} {target!r}")
+        if not skip_flat_literal:
+            present = target in flat_text
+            if present:
+                record_literal(action, target)
+                return True, f"断言: 页面含 {target!r}"
         row_hit = self._try_assert_list_rows(action, target, scope)
         if row_hit is not None:
             if row_hit[0]:
@@ -736,11 +898,10 @@ class ActionDispatcher:
         if not self._should_semantic_fallback(scope):
             return False, f"断言未通过: {action.intent!r} (目标文本 {target!r})"
         ok, msg = self._semantic_assert(
-            action, body_text, scope=scope, regions=regions,
-            dom_summary=snap.get("dom_summary"),
+            action, items, scope=scope, dom_summary=dom_summary,
         )
         if ok:
-            record_semantic_pass(action, self.page, body_text)
+            record_semantic_pass(action, self.page, flat_text)
         return ok, msg
 
     def _read_control_stats(self) -> dict[str, Any] | None:
@@ -783,23 +944,17 @@ class ActionDispatcher:
     def _semantic_assert(
         self,
         action: PlannedAction,
-        body_text: str,
+        items: list[dict],
         *,
         scope=None,
-        regions: Optional[dict[str, str]] = None,
         dom_summary: Optional[str] = None,
         any_of: bool = False,
     ) -> tuple[bool, str]:
-        """精确匹配失败时, 让 LLM 根据页面状态判断断言意图是否满足."""
+        """精确/locator 匹配失败时, 用共用 indexed DOM + LLM 判断."""
         or_mode = any_of or is_or_assert(action)
         if scope is None:
             target = (action.value or action.intent or "").strip()
             scope = parse_assert_scope(action.intent or "", value=target, negate=action.negate)
-        if regions is None:
-            snap = self.get_page_snapshot(allow_capture=True) or {}
-            regions = snap.get("regions") or {}
-            body_text = snap.get("body_text") or body_text
-            dom_summary = dom_summary if dom_summary is not None else snap.get("dom_summary")
 
         default_system = """你是 UI 自动化断言校验助手. 根据页面状态判断一个断言是否满足.
 只输出 JSON: {"ok": true/false, "reason": "简短说明"}."""
@@ -812,18 +967,15 @@ class ActionDispatcher:
 - 禁止因仅不符合其中一支就判 false; value 若只写了其中一支的文案, 仍以 intent 全部分支为准."""
 
         if not dom_summary:
-            dom_summary = extract_semantic_dom(self.page, dialog_first=False, stable=False)
-            if self.page_snapshot_valid() and self._page_snapshot is not None:
-                self._page_snapshot["dom_summary"] = dom_summary
-        text_summary = build_semantic_text_summary(body_text, regions, scope)
+            return False, "语义断言: 缺少操作后的 DOM 摘要, 请先执行 UI 操作步骤"
+        text_summary = build_semantic_text_summary_from_items(items, scope)
         or_note = "是 (满足任一分支即可)" if or_mode else "否"
         intent_text = combined_or_intent(action) if or_mode else (action.intent or "")
         scope_note = format_scope_note_for_semantic(scope)
 
         if self.console:
-            self.console.print(f"  [dim]① 提取页面 DOM 摘要 (含标签/class/控件type)[/dim]")
-            self.console.print(f"  [dim]② 提取页面文本摘要[/dim]")
-            self.console.print(f"  [dim]③ 拼装 prompt 调用 LLM 语义分析[/dim]")
+            self.console.print(f"  [dim]① 复用 indexed DOM 摘要[/dim]")
+            self.console.print(f"  [dim]② 拼装 prompt 调用 LLM 语义分析[/dim]")
             self.console.print(f"  [dim]   断言意图: {intent_text}[/dim]")
 
         default_user = f"""断言意图: {intent_text}
@@ -833,7 +985,7 @@ class ActionDispatcher:
 
 {scope_note}
 
-页面 DOM 摘要 (含控件 type):
+页面 DOM 摘要 (每行 [索引] 与 semantic_items 下标一致):
 {dom_summary}
 
 页面文本摘要:
@@ -877,6 +1029,15 @@ class ActionDispatcher:
 
     def _assert_table(self, action: PlannedAction) -> tuple[bool, str]:
         """断言表格中某行某列的值 (行由 value / extras.row_key 标识)."""
+        if not self._ensure_assert_tab(quick=True):
+            return False, "表格断言: 当前浏览器 tab 不可用或已关闭"
+        if not self._page_state or self._page_state.get("key") != self._page_state_key():
+            return (
+                False,
+                "表格断言: 缺少操作后的页面状态, 请先执行会改变页面的操作步骤",
+            )
+        if self.trace:
+            self.trace.emit("assert_use_state", url=self._page_state_key())
         extras = action.extras or {}
         row_key = (action.value or extras.get("row_key") or "").strip()
         key_col = str(extras.get("row_key_column") or "工单ID").strip()
@@ -886,6 +1047,12 @@ class ActionDispatcher:
             return False, "assert_table 缺少行标识 (value 或 extras.row_key)"
         if not target_col or not expected:
             return False, "assert_table 缺少 extras.column 或 extras.expected"
+
+        resolved_key, ops_hint = resolve_table_row_key(
+            row_key, self.api_context, self._session_ops_cfg,
+        )
+        if ops_hint and resolved_key != row_key:
+            row_key = resolved_key
 
         tables = self.page.locator("table")
         n_tables = tables.count()
@@ -907,10 +1074,13 @@ class ActionDispatcher:
                     continue
                 actual = cells[col_idx] if col_idx < len(cells) else ""
                 if expected in actual or actual == expected:
-                    return True, (
+                    msg = (
                         f"表格断言: 行标识 {row_key!r} 列 {target_col!r} "
                         f"期望 {expected!r} 实际 {actual!r}"
                     )
+                    if ops_hint:
+                        msg = f"{msg} ({ops_hint})"
+                    return True, msg
                 return False, (
                     f"表格断言: 行标识 {row_key!r} 列 {target_col!r} "
                     f"期望 {expected!r} 实际 {actual!r}"
@@ -947,6 +1117,7 @@ class ActionDispatcher:
                 label = m.group(1).strip()
         if label:
             self._last_click_label = label
+            remember_option_click(self, action, label)
 
     # ---------- API 调用 ----------
     def _bind_session(self, action: PlannedAction, case_id: str) -> tuple[bool, str]:

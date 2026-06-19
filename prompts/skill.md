@@ -43,7 +43,7 @@ components:
     category: card
 framework_detect:
   - name: ant-design
-    check: '.ant-modal, .ant-select-dropdown, [class*="ant-pro-"]'
+    check: '.ant-select, .ant-btn, .ant-table, .ant-layout, .ant-form, .ant-modal-wrap, .ant-modal, .ant-select-dropdown, [class*="ant-pro-"]'
   - name: element-plus
     check: '.el-dialog, .el-select-dropdown, .el-message-box'
   - name: element-ui
