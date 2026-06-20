@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -22,6 +23,19 @@ _POST_CHECK_TYPES = {"click", "fill", "press", "upload", "hover"}
 
 # 悬停类 intent 若含这些词, 认为目标是展开菜单/下拉, 需做可见性判断
 _MENU_HOVER_MARKERS = ("菜单", "下拉", "用户", "悬浮", "悬停", "hover")
+
+_NAV_SUCCESS_URL_MARKERS = ("/detail", "/details", "/view")
+
+_RETRY_FOCUS_MAP = {
+    "value": "值",
+    "selector": "选择器",
+    "both": "两者",
+    "none": "无",
+    "无": "无",
+    "值": "值",
+    "选择器": "选择器",
+    "两者": "两者",
+}
 
 _DEFAULT_SYSTEM = """\
 你是"步骤后校验器", 判断一个 UI 操作是否真的达成了意图 (而非"执行了但结果不对").
@@ -69,6 +83,101 @@ def should_post_check(action: PlannedAction) -> bool:
     return action.type in _POST_CHECK_TYPES
 
 
+def check_navigation_click_success(
+    intent: str,
+    url: str,
+    dispatch_ok: bool,
+    action_type: str,
+    dispatch_meta: Optional[dict[str, Any]] = None,
+) -> Optional[bool]:
+    """click 已成功且 URL/导航结局表明进入详情页时本地判成功 (对齐 V3, 省 LLM)."""
+    if not dispatch_ok or (action_type or "").strip().lower() != "click":
+        return None
+    if _is_detail_page_form_intent(intent):
+        return None
+    meta = dispatch_meta or {}
+    nav = str(meta.get("navigation_outcome") or "")
+    if nav in ("resource_id_changed", "route_changed", "returned_to_list"):
+        if _is_nav_to_detail_intent(intent):
+            return True
+    url_l = (url or "").lower()
+    if not any(marker in url_l for marker in _NAV_SUCCESS_URL_MARKERS):
+        return None
+    if _is_nav_to_detail_intent(intent):
+        return True
+    return None
+
+
+def _is_detail_page_form_intent(intent: str) -> bool:
+    text = intent or ""
+    if re.search(r"详情页.*选择|在详情页选择|选择.*审核|审核原因", text):
+        return True
+    return "详情页" in text and "选择" in text
+
+
+def _is_nav_to_detail_intent(intent: str) -> bool:
+    text = intent or ""
+    if _is_detail_page_form_intent(text):
+        return False
+    if "查看" in text and "选择" not in text:
+        return True
+    if re.search(r"(进入|打开|加载).*(详情|任务)", text):
+        return True
+    return False
+
+
+def _check_submit_navigation_failure(
+    intent: str,
+    dispatch_meta: Optional[dict[str, Any]],
+) -> Optional[PostCheckResult]:
+    """提交后页面未跳转 → 强制 retry_focus=选择器."""
+    if "提交" not in (intent or ""):
+        return None
+    meta = dispatch_meta or {}
+    outcome = str(meta.get("navigation_outcome") or "")
+    if outcome not in ("timeout", "settled", "submit_error"):
+        return None
+    return PostCheckResult(
+        step_ok=False,
+        reason=f"提交后 navigation_outcome={outcome}, 页面未跳转",
+        retry_focus="选择器",
+        resolve_hint=(
+            "先点击 label.ant-radio-wrapper 选中审核原因并确认 checked, "
+            "再点 type=submit 提交按钮"
+        ),
+    )
+
+
+def upgrade_submit_post_result(
+    post: PostCheckResult,
+    intent: str,
+    dispatch_meta: Optional[dict[str, Any]],
+) -> PostCheckResult:
+    """LLM 返回 retry_focus=无 时, 提交类失败仍升级为可重试."""
+    if "提交" not in (intent or "") or post.step_ok:
+        return post
+    meta = dispatch_meta or {}
+    outcome = str(meta.get("navigation_outcome") or "")
+    reason = post.reason or ""
+    failed = (
+        outcome in ("timeout", "settled", "submit_error")
+        or "timeout" in reason.lower()
+        or any(k in reason for k in ("未选择", "审核原因", "未跳转", "未生效", "表单"))
+    )
+    if not failed:
+        return post
+    hint = post.resolve_hint or (
+        "先点击 label.ant-radio-wrapper 选中审核原因, 再点提交"
+    )
+    focus = post.retry_focus if post.retry_focus != "无" else "选择器"
+    return PostCheckResult(
+        step_ok=False,
+        reason=reason or f"提交未生效 (outcome={outcome})",
+        retry_focus=focus,
+        resolve_hint=hint,
+    )
+
+
 class PostStepChecker:
     """调用 LLM 判断动作执行结果是否符合真实业务意图."""
 
@@ -113,14 +222,31 @@ class PostStepChecker:
             if code_result is not None:
                 return code_result
 
-        if action.type == "fill" and action.value:
-            # 输入类动作通常只关心输入框附近 DOM, 截窗降低 prompt 噪声.
-            dom = _input_anchor_window(dom, action.value)
-
         try:
             page_url = page.url or ""
         except Exception:
             page_url = ""
+
+        nav_ok = check_navigation_click_success(
+            action.intent or "", page_url, dispatch_ok, action.type, dispatch_meta,
+        )
+        if nav_ok is True:
+            return PostCheckResult(
+                step_ok=True,
+                reason=f"导航点击已成功: URL={page_url}",
+                retry_focus="无",
+            )
+
+        submit_fail = _check_submit_navigation_failure(
+            action.intent or "", dispatch_meta,
+        )
+        if submit_fail is not None:
+            return submit_fail
+
+        if action.type == "fill" and action.value:
+            # 输入类动作通常只关心输入框附近 DOM, 截窗降低 prompt 噪声.
+            dom = _input_anchor_window(dom, action.value)
+
         meta_text = (
             json.dumps(dispatch_meta, ensure_ascii=False)
             if dispatch_meta
@@ -147,6 +273,60 @@ class PostStepChecker:
             step_ok=bool(data.get("step_ok", dispatch_ok)),
             reason=str(data.get("reason") or ""),
             retry_focus=str(data.get("retry_focus") or "无"),
+            suggested_value=_opt_str(data.get("suggested_value")),
+            resolve_hint=_opt_str(data.get("resolve_hint")),
+        )
+
+    def plan_retry(
+        self,
+        page: Any,
+        action: PlannedAction,
+        dispatch_ok: bool,
+        dispatch_msg: str,
+        failure_reason: str,
+        dom_summary: Optional[str] = None,
+    ) -> Optional[PostCheckResult]:
+        """V3 风格: 后校验失败后专用重试策略 LLM, 输出更可落地的 resolve_hint."""
+        if action.type not in ("click", "fill", "upload", "hover", "press"):
+            return None
+        dom = dom_summary or ""
+        if not dom:
+            try:
+                wait_for_dom_stable(page, quiet_ms=200, timeout_ms=4000)
+                items = extract_items(page, profile="post_verify", dialog_first=True, stable=False)
+                dom = compact_dom_lines(items)
+            except Exception:
+                dom = ""
+        cap = 120_000
+        if len(dom) > cap:
+            dom = dom[:cap] + "\n...(摘要过长已截断)"
+        try:
+            page_url = page.url or ""
+        except Exception:
+            page_url = ""
+        system = self.prompts.system("retry_plan", "")
+        user = self.prompts.user(
+            "retry_plan", "",
+            dispatch_ok=str(dispatch_ok).lower(),
+            message=dispatch_msg,
+            action_type=action.type,
+            intent=action.intent,
+            value=action.value or "",
+            failure_reason=failure_reason or "(无)",
+            page_url=page_url,
+            dom=dom or "(空)",
+        )
+        try:
+            data = self.llm.complete_json("retry_plan", system, user).data
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        focus = _normalize_retry_focus(data.get("retry_focus"))
+        return PostCheckResult(
+            step_ok=False,
+            reason=str(data.get("rationale") or failure_reason or ""),
+            retry_focus=focus,
             suggested_value=_opt_str(data.get("suggested_value")),
             resolve_hint=_opt_str(data.get("resolve_hint")),
         )
@@ -239,3 +419,8 @@ def _opt_str(v) -> Optional[str]:
         return None
     s = str(v).strip()
     return s or None
+
+
+def _normalize_retry_focus(raw: Any) -> str:
+    key = str(raw or "无").strip().lower()
+    return _RETRY_FOCUS_MAP.get(key, "无")

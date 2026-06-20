@@ -46,5 +46,5 @@ def validate_selector(page: Any, info: dict, timeout_ms: int = 1500) -> bool:
 
 
 def skip_locator_persistence(action_type: str) -> bool:
-    """assert_text 走 DOM/语义断言, 不读写 L1/L2/L4 选择器经验."""
+    """assert_text 走 DOM/语义断言, 不读写 L1/L2 选择器经验."""
     return (action_type or "").strip() == "assert_text"

@@ -20,6 +20,8 @@ _POSITIONAL_WORDS_RE = re.compile(
     r"^(?:详情页|页面|最上方|顶部|标题区|标题|头部|左侧|右侧|列表|区域|"
     r"展示|包含|显示|验证)+",
 )
+# 「学段学科信息」等摘要性描述, 不是页面上的字段标签
+_META_FIELD_HINT_RE = re.compile(r"(信息|内容|文案|说明|情况|描述)$")
 
 
 @dataclass
@@ -70,6 +72,17 @@ def parse_assert_scope(intent: str, *, value: str = "", negate: bool = False) ->
     return scope
 
 
+def _is_meta_field_hint(hint: str) -> bool:
+    """类别/摘要描述 (如学段学科信息), 非页面可见字段名."""
+    if not hint:
+        return True
+    if _META_FIELD_HINT_RE.search(hint):
+        return True
+    if hint in ("标题", "标题区", "页头", "顶部"):
+        return True
+    return False
+
+
 def extract_field_hint(intent: str, value: str) -> Optional[str]:
     """从 intent 提取被校验的字段/属性名 (区别于 value 本身)."""
     tail = re.sub(r"^验证", "", intent or "").strip()
@@ -78,13 +91,21 @@ def extract_field_hint(intent: str, value: str) -> Optional[str]:
 
     m = re.search(rf"(.+?)(?:是|为)\s*{re.escape(value)}\s*$", tail)
     if m:
-        return _clean_field_subject(m.group(1))
+        hint = _clean_field_subject(m.group(1))
+        return None if _is_meta_field_hint(hint) else hint
+
+    # 「字段:值」如 学段学科:大学数学 — value 已单独传入, 字段名取冒号前
+    m_colon = re.search(rf"(.+?)[：:]\s*{re.escape(value)}\s*$", tail)
+    if m_colon:
+        hint = _clean_field_subject(m_colon.group(1))
+        return None if _is_meta_field_hint(hint) else hint
 
     m2 = re.search(r"(?:展示|包含|显示)(.+)$", tail)
     if m2:
         subj = m2.group(1).strip("'\"「」")
         if subj and subj != value and value not in subj:
-            return _clean_field_subject(subj)
+            hint = _clean_field_subject(subj)
+            return None if _is_meta_field_hint(hint) else hint
     return None
 
 
@@ -228,12 +249,19 @@ def try_field_value_assert_items(
             excerpt = m.group(0).replace("\n", " ")[:60]
             return True, f"字段断言: {scope_label(scope)} {label!r}→{value!r} ({excerpt})"
 
-    if scope.explicit_region or scope.exclude_nav:
-        return False, (
-            f"字段断言: {scope_label(scope)} 未找到字段 {field_hint!r} 含 {value!r} "
-            f"(导航区/无关表单选项不算)"
-        )
     return None
+
+
+def _normalize_match_text(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def _text_contains(target: str, haystack: str) -> bool:
+    if not target or not haystack:
+        return False
+    if target in haystack:
+        return True
+    return _normalize_match_text(target) in _normalize_match_text(haystack)
 
 
 def try_scoped_literal_items(
@@ -243,7 +271,7 @@ def try_scoped_literal_items(
     if not target or not scope.explicit_region:
         return None
     text = get_scoped_items_text(items, scope)
-    if target in text:
+    if _text_contains(target, text):
         return True, f"区域断言: {scope_label(scope)} 含 {target!r}"
     return False, f"区域断言: {scope_label(scope)} 不含 {target!r}"
 
@@ -299,11 +327,6 @@ def try_field_value_assert(
             excerpt = m.group(0).replace("\n", " ")[:60]
             return True, f"字段断言: {scope_label(scope)} {label!r}→{value!r} ({excerpt})"
 
-    if scope.explicit_region or scope.exclude_nav:
-        return False, (
-            f"字段断言: {scope_label(scope)} 未找到字段 {field_hint!r} 含 {value!r} "
-            f"(导航区/无关表单选项不算)"
-        )
     return None
 
 

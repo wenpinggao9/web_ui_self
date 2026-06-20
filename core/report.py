@@ -407,7 +407,7 @@ def _generate_hit_rate_html(hit_rate_summary: dict[str, Any]) -> str:
         color = "text-green-600" if hit_rate >= 50 else "text-yellow-600" if hit_rate >= 10 else "text-red-600"
         label = {
             "selector_cache": "元素缓存", "selector_memory": "记忆库",
-            "intent_rule_engine": "规则引擎", "page_structure_learner": "结构学习",
+            "page_structure_learner": "结构学习",
         }.get(name, name)
         cards += (
             f'<div class="bg-gray-50 rounded-lg p-4"><p class="text-sm text-gray-500 mb-1">{escape(label)}</p>'

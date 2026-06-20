@@ -1,6 +1,6 @@
-"""L5 节点纠偏 (2A) —— LLM 选出 index 后, 用组件选择器二次精炼.
+"""L3 节点纠偏 (2A) —— LLM 选出 index 后, 用组件选择器二次精炼.
 
-本框架在 L5 之后自动触发纠偏, 无需规划层显式返回 skill 指令.
+本框架在 L3 大模型之后自动触发纠偏, 无需规划层显式返回 skill 指令.
 """
 from __future__ import annotations
 

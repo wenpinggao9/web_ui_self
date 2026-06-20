@@ -1,6 +1,6 @@
 """步骤⑪ 动作分发器 —— 统一执行入口.
 
-dispatch(action) → (成功, 消息). 对需定位的动作先走五级链解析选择器, 再用 Playwright 执行.
+dispatch(action) → (成功, 消息). 对需定位的动作先走三级链解析选择器, 再用 Playwright 执行.
 消息里带"实际操作目标"(解析到的元素 HTML 片段), 供步骤⑫ 后校验判断是否点对.
 """
 from __future__ import annotations
@@ -13,9 +13,15 @@ from ..locating import LocatorResolver
 from ..locating.playwright_api import info_key, infer_from_selector, normalize_info, resolve_locator
 from ..planning import PlannedAction
 from ..variable_substitution import substitute_variables
+from .session_ops import (
+    explicit_row_keys_from_action,
+    resolve_assert_table_row_key,
+)
 from .trace import ExecutionTrace, print_captured_dom
 from .assert_or import combined_or_intent, is_or_assert, try_or_branches, try_or_heuristic
+from .post_submit_eval import SubmitSnapshot, build_submit_snapshot, try_post_submit_eval
 from .assert_scope import (
+    _text_contains,
     build_semantic_text_summary_from_items,
     format_scope_note_for_semantic,
     items_flat_text,
@@ -30,6 +36,9 @@ from .script_helpers import (
     bring_page_to_front,
     count_real_table_rows,
     extract_url_query,
+    locate_button_in_table_row,
+    parse_table_row_click,
+    FIRST_TABLE_ROW_KEY,
     recover_active_page,
     wait_after_detail_submit,
     wait_and_recover_active_page,
@@ -52,7 +61,18 @@ from .assert_codegen import (
 )
 from .target_text import backfill_click_from_html, extract_target_text
 from .deterministic_recovery import record_fill_history, remember_option_click
-from .session_ops import execute_bind_session, resolve_table_row_key
+from .session_ops import (
+    execute_bind_session,
+    get_table_columns_cfg,
+    resolve_click_row_candidates,
+    resolve_table_row_key,
+    table_row_key_matches,
+    _ops_resolve_hint,
+)
+
+_DROPDOWN_VISIBLE_SEL = (
+    ".ant-select-dropdown:visible, .el-select-dropdown:visible, [role='listbox']:visible"
+)
 
 
 class ActionDispatcher:
@@ -94,6 +114,7 @@ class ActionDispatcher:
         self._fill_history: list[dict[str, Any]] = []
         self._expected_radio_label: Optional[str] = None
         self.last_dispatch_meta: dict[str, Any] = {}
+        self.last_submit_snapshot: Optional[SubmitSnapshot] = None
 
     _SKIP_PAGE_STATE_CAPTURE = frozenset({
         "api_call",
@@ -116,13 +137,20 @@ class ActionDispatcher:
 
     def capture_page_state_after_operation(self) -> None:
         """UI 动作执行后抓取 semantic_items (V3 post_verify profile), 供后校验/断言/下一步定位共用."""
-        self._ensure_live_page()
+        nav = (self.last_dispatch_meta or {}).get("navigation_outcome")
+        self._ensure_live_page(poll=bool(nav))
         bring_page_to_front(self.page)
         self.page, _ = recover_active_page(self.page, prefer=self._list_tab_anchor)
         if not _page_alive(self.page):
             self._page_state = None
             return
-        wait_for_dom_stable(self.page, quiet_ms=200, timeout_ms=4000)
+        if nav in ("returned_to_list", "resource_id_changed", "route_changed"):
+            self.page = wait_before_assert(
+                self.page, quiet_ms=300, timeout_ms=6000,
+                list_anchor=self._list_tab_anchor,
+            )
+        else:
+            wait_for_dom_stable(self.page, quiet_ms=200, timeout_ms=4000)
         fw = self.resolver._framework_selectors if self.resolver else None
         items = extract_items(
             self.page, profile="post_verify", dialog_first=True,
@@ -188,11 +216,37 @@ class ActionDispatcher:
             and (self._page_state.get("semantic_items") or [])
         )
 
+    def _can_fast_assert(self) -> bool:
+        """同一 URL 下连续断言可复用操作后缓存, 不必重复等 DOM."""
+        if not self._has_cached_page_state():
+            return False
+        key = self._page_state_key()
+        if not key or self._page_state.get("key") != key:
+            return False
+        return _page_alive(self.page)
+
+    def _prepare_page_for_assert(self) -> None:
+        """断言前切 tab; 有有效缓存时只做轻量校验, 避免连续断言重复等待."""
+        if self._can_fast_assert():
+            bring_page_to_front(self.page)
+            return
+        self._ensure_list_anchor()
+        self.page, _ = wait_and_recover_active_page(
+            self.page, max_polls=30, prefer=self._list_tab_anchor,
+        )
+        if _page_usable(self.page):
+            self.page = wait_before_assert(
+                self.page, list_anchor=self._list_tab_anchor,
+            )
+
     def _ensure_assert_tab(self, *, quick: bool = False) -> bool:
         """断言前切到仍存活的 tab; quick 模式缩短探测超时."""
+        if quick and self._can_fast_assert():
+            bring_page_to_front(self.page)
+            return True
         self._ensure_list_anchor()
-        polls = 8 if quick else 30
-        tout = 400 if quick else 1500
+        polls = 15 if quick else 30
+        tout = 800 if quick else 1500
         self.page, _ = wait_and_recover_active_page(
             self.page, max_polls=polls, prefer=self._list_tab_anchor,
         )
@@ -204,6 +258,12 @@ class ActionDispatcher:
                         self.page = p
                         break
         if _page_usable(self.page, timeout_ms=tout):
+            self.page = wait_before_assert(
+                self.page,
+                quiet_ms=200 if quick else 300,
+                timeout_ms=3000 if quick else 5000,
+                list_anchor=self._list_tab_anchor,
+            )
             bring_page_to_front(self.page)
             return True
         return _page_alive(self.page)
@@ -212,11 +272,37 @@ class ActionDispatcher:
         self,
     ) -> tuple[bool, list[dict], str, str]:
         """复用上一 UI 操作后的 semantic_items; 有缓存时优先用缓存, 避免页面繁忙误判 tab 失效."""
+        if self._can_fast_assert():
+            st = self._page_state or {}
+            items = list(st.get("semantic_items") or [])
+            key = str(st.get("key") or "")
+            if self.trace:
+                self.trace.emit(
+                    "assert_use_state",
+                    url=key,
+                    shared=True,
+                    cached_only=False,
+                    fast=True,
+                )
+            return True, items, st.get("dom_summary") or "", ""
+
         tab_ok = self._ensure_assert_tab(quick=True)
         cached = self._has_cached_page_state()
 
         if not tab_ok and not cached:
-            return False, [], "", "断言失败: 当前浏览器 tab 不可用或已关闭"
+            # 提交关 tab 后可能无缓存: 再轮询一次并尝试现场抓 DOM
+            self._ensure_list_anchor()
+            self.page, _ = wait_and_recover_active_page(
+                self.page, max_polls=30, prefer=self._list_tab_anchor,
+            )
+            if _page_usable(self.page):
+                self.page = wait_before_assert(
+                    self.page, list_anchor=self._list_tab_anchor,
+                )
+                self.capture_page_state_after_operation()
+                tab_ok = True
+            else:
+                return False, [], "", "断言失败: 当前浏览器 tab 不可用或已关闭"
 
         if tab_ok:
             key = self._page_state_key()
@@ -299,8 +385,7 @@ class ActionDispatcher:
         self._substitute_action(action)
         t = action.type
         if action.is_assert():
-            self._ensure_list_anchor()
-            self._ensure_live_page(poll=False)
+            self._prepare_page_for_assert()
         else:
             self._ensure_live_page()
         try:
@@ -361,8 +446,24 @@ class ActionDispatcher:
             for k, v in action.extras.items():
                 if isinstance(v, str):
                     action.extras[k] = substitute_variables(v, self.api_context)
+        # assert_table: 残留 ${} 或未解析索引语义 → 从 intent + ops 解析行主键
+        if action.type == "assert_table":
+            row_key = (action.value or (action.extras or {}).get("row_key") or "").strip()
+            if not row_key.isdigit() or "${" in row_key:
+                resolve_assert_table_row_key(
+                    action, self.api_context, self._session_ops_cfg,
+                )
 
     # ---------- 定位 ----------
+    def _wait_for_dropdown_visible(self, timeout: Optional[int] = None) -> bool:
+        """等待下拉面板可见 (V3/Playwright 语义等待, 替代固定 sleep)."""
+        ms = timeout if timeout is not None else self.default_timeout
+        try:
+            self.page.wait_for_selector(_DROPDOWN_VISIBLE_SEL, timeout=ms)
+            return True
+        except Exception:
+            return False
+
     def _ensure_select_dropdown_open(self, intent: str) -> None:
         """选下拉选项前若面板未展开, 重新点开上一步操作过的筛选框."""
         from ..locating.intent_route import is_dropdown_option
@@ -371,7 +472,7 @@ class ActionDispatcher:
             return
         page = self.page
         try:
-            if page.locator(".ant-select-dropdown:visible, .el-select-dropdown:visible").count():
+            if page.locator(_DROPDOWN_VISIBLE_SEL).count():
                 return
         except Exception:
             pass
@@ -388,13 +489,73 @@ class ActionDispatcher:
             ).first
             if trigger.count():
                 trigger.click(timeout=5000)
-                page.wait_for_timeout(400)
+                self._wait_for_dropdown_visible(timeout=2000)
         except Exception:
             pass
+
+    def _try_resolve_table_row_click(
+        self, action: PlannedAction,
+    ) -> tuple[Any, Optional[str], Optional[str]]:
+        ex = action.extras or {}
+        parsed = parse_table_row_click(action.intent or "", ex)
+        if not parsed:
+            return None, None, None
+        button, row_hint, status_hint = parsed
+        _, key_col, status_col = get_table_columns_cfg(self._session_ops_cfg)
+        key_col = str(ex.get("row_key_column") or key_col).strip()
+        status_col = str(ex.get("status_column") or status_col).strip()
+
+        candidates = explicit_row_keys_from_action(
+            ex, self.api_context, self._session_ops_cfg,
+        )
+        if not candidates:
+            candidates = resolve_click_row_candidates(
+                row_hint, self.api_context, self._session_ops_cfg,
+                status_hint=status_hint or "",
+            )
+        use_first_row = any(c[0] == FIRST_TABLE_ROW_KEY for c in candidates)
+
+        loc, detail = locate_button_in_table_row(
+            self.page,
+            button_label=button,
+            row_keys=[c[0] for c in candidates],
+            key_col=key_col,
+            status_column=status_col,
+            status_filter=status_hint,
+        )
+        if loc is None:
+            return None, None, detail
+        note = detail
+        hints = [c[1] for c in candidates if c[1]]
+        if hints:
+            note = f"{detail} ({hints[0]})"
+        target_html = None
+        try:
+            target_html = loc.evaluate("el => el.outerHTML.slice(0, 200)")
+        except Exception:
+            pass
+        if self.trace:
+            self.trace.emit(
+                "locate", source="行内表格", selector=note,
+                method="table_row", nth=0, target_html=target_html,
+                hint=action.resolve_hint,
+            )
+        return loc, target_html, note
 
     def _resolve(self, action: PlannedAction):
         if action.type == "click":
             self._ensure_select_dropdown_open(action.intent or "")
+            loc, target_html, row_note = self._try_resolve_table_row_click(action)
+            if loc is not None:
+                action.locator_info = {"method": "table_row", "selector": row_note or ""}
+                action.selector = row_note
+                return loc, target_html
+            # 已识别为行内表格点击 (含 extras.row_key) 时不再走三级链用 reason 猜 DOM
+            ex = action.extras or {}
+            if ex.get("row_key") or parse_table_row_click(action.intent or "", ex):
+                if row_note:
+                    action.resolve_hint = row_note
+                return None, None
         if action.force_selector:
             info = normalize_info(infer_from_selector(action.force_selector))
             info["_source"] = "强制复用"
@@ -411,7 +572,7 @@ class ActionDispatcher:
                     hit_selector=action.force_selector,
                 )
         else:
-            # 正常路径交给五级定位链; 优先复用操作后 semantic_items (V3 共用 DOM).
+            # 正常路径交给三级定位链; 优先复用操作后 semantic_items (V3 共用 DOM).
             semantic_items, dom_source = self.get_semantic_items_for_resolve()
             info = self.resolver.resolve(
                 self.page, action.intent, action.type,
@@ -419,6 +580,7 @@ class ActionDispatcher:
                 action_value=action.value or "",
                 semantic_items=semantic_items,
                 dom_source=dom_source,
+                skip_acceleration=bool(getattr(action, "skip_acceleration", False)),
             )
         if not info:
             return None, None
@@ -456,10 +618,7 @@ class ActionDispatcher:
         try:
             loc.locator(self._SELECT_ANCESTOR_XPATH).click(timeout=timeout)
             try:
-                self.page.wait_for_selector(
-                    '[role="listbox"], .ant-select-dropdown, .el-select-dropdown',
-                    timeout=2000,
-                )
+                self.page.wait_for_selector(_DROPDOWN_VISIBLE_SEL, timeout=2000)
             except Exception:
                 pass
         except Exception:
@@ -474,6 +633,9 @@ class ActionDispatcher:
                 url_before = self.page.url or ""
             except Exception:
                 url_before = ""
+            need_submit_wait = self._should_wait_post_submit_navigation(
+                url_before, loc, action.intent or "",
+            )
             try:
                 role = loc.evaluate("el => el.getAttribute('role')")
             except Exception:
@@ -499,12 +661,16 @@ class ActionDispatcher:
             backfill_click_from_html(action, target_html)
             self._remember_click_label(action, target_html)
             record_post_click_wait(action, url_before, url_after)
-            if self._should_wait_post_submit_navigation(url_before, loc):
+            if need_submit_wait:
                 ok_submit, submit_msg = self._wait_after_detail_submit(url_before)
                 if not ok_submit:
                     if self.trace:
                         self.trace.emit("page_switch", url=url_after, intent=action.intent)
                     return ok_submit, submit_msg
+                self.page = wait_before_assert(
+                    self.page, quiet_ms=300, timeout_ms=6000,
+                    list_anchor=self._list_tab_anchor,
+                )
                 suffix = f"{suffix} | {submit_msg}"
             if self.trace:
                 self.trace.emit("page_switch", url=url_after, intent=action.intent)
@@ -535,10 +701,15 @@ class ActionDispatcher:
 
     _NEW_TAB_INTENT_RE = re.compile(r"查看|新标签|新窗口|新开")
 
-    def _should_wait_post_submit_navigation(self, url_before: str, loc: Any) -> bool:
+    def _should_wait_post_submit_navigation(
+        self, url_before: str, loc: Any, intent: str = "",
+    ) -> bool:
         """type=submit 且 URL 带资源 ID 时, 等待提交后的页面结局."""
         if not _url_query_id(url_before):
             return False
+        # intent 含「提交」时直接等待; 点击后 tab 可能已关闭导致 loc.evaluate 失败
+        if "提交" in (intent or ""):
+            return True
         try:
             el_type = loc.evaluate(
                 "el => (el.getAttribute('type') || el.type || '').toLowerCase()"
@@ -585,15 +756,36 @@ class ActionDispatcher:
             if outcome == "returned_to_list":
                 self._list_tab_anchor = self.page
             self.invalidate_page_state()
+        if _page_usable(self.page):
+            self.capture_page_state_after_operation()
         try:
             url_after = self.page.url or ""
         except Exception:
             url_after = ""
+        items_after = None
+        flat_after = ""
+        if self._page_state and self._page_state.get("semantic_items"):
+            items_after = self._page_state.get("semantic_items")
+        self.last_submit_snapshot = build_submit_snapshot(
+            page=self.page,
+            url_before=url_before,
+            url_after=url_after,
+            outcome=outcome,
+            api_context=self.api_context,
+            session_ops_cfg=self._session_ops_cfg,
+            page_capture=self._page_capture,
+            items_after=items_after,
+            flat_after=flat_after,
+            recovered=recovered,
+        )
         self.last_dispatch_meta = {
             "navigation_outcome": outcome,
             "url_before": url_before,
             "url_after": url_after,
             "recovered": recovered,
+            "entity_id_before": self.last_submit_snapshot.entity_id_before,
+            "entity_id_after": self.last_submit_snapshot.entity_id_after,
+            "entity_field": self.last_submit_snapshot.entity_field,
         }
         if self.trace:
             try:
@@ -605,8 +797,10 @@ class ActionDispatcher:
                 outcome=outcome,
                 url=url,
                 recovered=recovered,
+                entity_id_before=self.last_submit_snapshot.entity_id_before,
+                entity_id_after=self.last_submit_snapshot.entity_id_after,
             )
-        if outcome == "submit_error":
+        if outcome in ("submit_error", "timeout", "settled"):
             return False, f"navigation_outcome={outcome}"
         return True, f"navigation_outcome={outcome}"
 
@@ -653,6 +847,7 @@ class ActionDispatcher:
             self._close_stale_secondary_tabs(ctx, {list_page, new_page}, list_page.url or "")
             self.page = new_page
             self._list_tab_anchor = list_page
+            self.invalidate_page_state()
             try:
                 new_page.bring_to_front()
             except Exception:
@@ -676,6 +871,7 @@ class ActionDispatcher:
                         self._close_stale_secondary_tabs(ctx, {list_page, p}, list_page.url or "")
                         self.page = p
                         self._list_tab_anchor = list_page
+                        self.invalidate_page_state()
                         try:
                             p.bring_to_front()
                         except Exception:
@@ -722,6 +918,11 @@ class ActionDispatcher:
 
     # ---------- 等待 ----------
     def _wait(self, action: PlannedAction) -> tuple[bool, str]:
+        intent = (action.intent or "").strip()
+        if "下拉" in intent and "展开" in intent:
+            if self._wait_for_dropdown_visible():
+                return True, "等待下拉面板展开"
+            return False, "等待下拉面板超时"
         val = (action.value or "").strip()
         num = _as_duration_ms(val)
         if num is not None:
@@ -818,7 +1019,7 @@ class ActionDispatcher:
         ok, msg, _ = assert_all_table_rows_contain(self.page, target)
         return ok, msg
 
-    # ---------- 文本断言 (字面量/scoped → semantic_assert, 不走五级定位链) ----------
+    # ---------- 文本断言 (字面量/scoped → semantic_assert, 不走三级定位链) ----------
     def _assert_text(self, action: PlannedAction) -> tuple[bool, str]:
         target = (action.value or action.intent or "").strip()
         if not target and not is_or_assert(action):
@@ -830,16 +1031,47 @@ class ActionDispatcher:
             return False, err
         flat_text = items_flat_text(items)
 
+        snap = self.last_submit_snapshot
+        post_hit = try_post_submit_eval(
+            intent=intent,
+            extras=action.extras,
+            snap=snap,
+            page_url=self.page.url or "",
+            branches=(action.extras or {}).get("branches"),
+        )
+        if post_hit is not None:
+            if snap:
+                snap.awaiting_assert = False
+            return post_hit
+        if snap and snap.awaiting_assert:
+            snap.awaiting_assert = False
+
+        submit_ctx = None
+        if snap:
+            submit_ctx = {
+                "navigation_outcome": snap.navigation_outcome,
+                "url_before": snap.url_before,
+                "url_after": snap.url_after,
+                "entity_id_before": snap.entity_id_before,
+                "entity_id_after": snap.entity_id_after,
+            }
+        elif self.last_dispatch_meta:
+            submit_ctx = self.last_dispatch_meta
+
         if is_or_assert(action) and not action.negate:
             branches = (action.extras or {}).get("branches") or []
             if branches:
-                hit = try_or_branches(self.page, branches, flat_text)
+                hit = try_or_branches(
+                    self.page, branches, flat_text, dispatch_meta=submit_ctx,
+                )
                 if hit is not None:
                     if hit[0]:
                         record_or_branch(action, self.page, branches, flat_text)
                     return hit
             else:
-                hit = try_or_heuristic(self.page, combined_or_intent(action))
+                hit = try_or_heuristic(
+                    self.page, combined_or_intent(action), dispatch_meta=submit_ctx,
+                )
                 if hit is not None:
                     if hit[0]:
                         record_or_heuristic(action, self.page, combined_or_intent(action))
@@ -868,6 +1100,10 @@ class ActionDispatcher:
                     return scoped_hit
                 if not scope.explicit_region:
                     return scoped_hit
+                # 区域字面未命中但全文有目标 (DOM 节点拆分/无 in_form 标记) → 仍走程序匹配, 不调 LLM
+                if _text_contains(target, flat_text):
+                    record_literal(action, target)
+                    return True, f"断言: 页面含 {target!r}"
 
         skip_flat_literal = (
             scope.explicit_region or scope.field_hint or scope.exclude_nav
@@ -972,6 +1208,9 @@ class ActionDispatcher:
         or_note = "是 (满足任一分支即可)" if or_mode else "否"
         intent_text = combined_or_intent(action) if or_mode else (action.intent or "")
         scope_note = format_scope_note_for_semantic(scope)
+        submit_facts = ""
+        if self.last_submit_snapshot:
+            submit_facts = self.last_submit_snapshot.format_facts()
 
         if self.console:
             self.console.print(f"  [dim]① 复用 indexed DOM 摘要[/dim]")
@@ -984,6 +1223,7 @@ class ActionDispatcher:
 当前页面 URL: {self.page.url}
 
 {scope_note}
+{submit_facts}
 
 页面 DOM 摘要 (每行 [索引] 与 semantic_items 下标一致):
 {dom_summary}
@@ -1066,12 +1306,23 @@ class ActionDispatcher:
             key_idx = headers.index(key_col)
             col_idx = headers.index(target_col)
             body_rows = table.locator("tbody tr")
+            exact_row: Optional[tuple[list[str], str]] = None
+            token_row: Optional[tuple[list[str], str]] = None
             for ri in range(body_rows.count()):
                 cells = [c.strip() for c in body_rows.nth(ri).locator("td").all_inner_texts()]
                 if key_idx >= len(cells):
                     continue
-                if row_key not in cells[key_idx]:
+                cell_val = cells[key_idx]
+                if not table_row_key_matches(cell_val, row_key):
                     continue
+                if cell_val.strip() == row_key.strip():
+                    exact_row = (cells, cell_val)
+                    break
+                if token_row is None:
+                    token_row = (cells, cell_val)
+            hit = exact_row or token_row
+            if hit:
+                cells, _ = hit
                 actual = cells[col_idx] if col_idx < len(cells) else ""
                 if expected in actual or actual == expected:
                     msg = (
@@ -1085,9 +1336,12 @@ class ActionDispatcher:
                     f"表格断言: 行标识 {row_key!r} 列 {target_col!r} "
                     f"期望 {expected!r} 实际 {actual!r}"
                 )
+        hint = _ops_resolve_hint(
+            (action.value or "").strip(), self.api_context, self._session_ops_cfg,
+        )
         return False, (
             f"表格断言: 未找到行标识 {row_key!r} (列 {key_col!r}) "
-            f"或列 {target_col!r}"
+            f"或列 {target_col!r}; {hint}"
         )
 
     def _ensure_api_runner(self) -> bool:

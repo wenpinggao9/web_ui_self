@@ -52,7 +52,7 @@ api_call 动作:
 - **顺序**: 严格按用例原文顺序规划 —— 前置里的 api_call 在前、操作步骤里的 api_call 留在该步原位 (如「先选选项 → 再查工单 → 再提交」, 查工单不得提前到选选项之前).
 - intent 保留用例原文的业务描述; 执行阶段由 API runner 按业务知识 apis.keywords 匹配.
 - **一步一义**: 一条用例步骤只对应一种 API 语义; **不要**把「查询/解析 ID」与「记录到会话」合并成一条 api_call 或 bind_session.
-- **拆分规则**: 如果一条步骤涉及多个独立的同类型 API 操作 (如"执行A获取id1、执行B获取id2" 或 "执行A获取id1、执行A获取id2"), 必须拆成多条独立的 api_call, 每条只描述一个操作和一个返回值，以调用api次数为拆分步骤参考，禁止同一接口多次调用合并为一条 step.bu'y
+- **拆分规则**: 如果一条步骤涉及多个独立的同类型 API 操作 (如"执行A获取id1、执行B获取id2" 或 "执行A获取id1、执行A获取id2"), 必须拆成多条独立的 api_call, 每条只描述一个操作和一个返回值，以调用api次数为拆分步骤参考，禁止同一接口多次调用合并为一条 step.
 
 bind_session 动作:
 - **触发条件 (硬门槛)**: **仅当用例「操作步骤」原文存在独立一句, 且含「记录」「登记」「写入会话」等记入账本语义时**, 才规划 type=bind_session.
@@ -128,32 +128,48 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
 - 若当前 URL 与步骤描述的业务上下文一致 (同模块子路径、查询参数表明在同一记录页), 可省略重复的侧栏进入动作.
 - 前置仅写「XX列表不为空」等页面状态型条件时, **不等于**要求先点侧栏进入 XX; 直接按操作步骤规划, 页面恢复交给执行层.
 
+**会话记录引用** (步骤依据前序 case 的会话数据指代某条记录时):
+- **识别**: 步骤、前置或预期出现「那条」「对应」「前序选择 xxx 的那条」「case N 记录的」「${变量名}」等, 指向前序 api_call / bind_session 写入的会话数据, 而非当前步骤现场新建的数据.
+- **依据**: 必须结合用户提示中的「跨用例会话上下文」(标量变量、ops 记录、索引字段反向映射) 理解用户真正要操作/校验的是哪条记录.
+- **落实为具体操作**: 从「跨用例会话上下文」查出目标记录的 **表格行 ID 数值** (如 orderId=146420011), 写入 **extras.row_key** 或 **extras[该字段名]** (如 extras.orderId); 执行层**直接按此 ID 在表格任意列匹配行**, 不再依赖业务配置列名.
+  - 同时写 **extras.button** (按钮文案); 有状态条件写 **extras.status_filter**; intent 保留业务描述.
+  - **禁止**把 workId/任务ID 等 ops 实体键填进行定位字段; 应填 orderId 等列表页出现的行 ID.
+  - 若只有索引语义 (如 reason 全文) 无数值 ID, 可只写索引字段, 执行层从 ops 反查.
+- 示例: 会话含 orderId=146420011 →
+  {"type":"click","extras":{"orderId":"146420011","status_filter":"已退场","button":"日志"}}
+
 - 按钮/菜单名须用用例或页面真实文案, 不要擅自缩写或改写.
 - 不要使用任何组件库类名或技术细节来描述动作, 例如不要写 "点击 el-select 下拉箭头", 应写 "点击下拉框" 或 "点击角色选择下拉框".
-- extras 只用于确有必要的扩展信息, 例如 assert_count 的范围说明、upload 的资源说明等; 没有必要时不要输出 extras.
+- extras 用于确有必要的扩展参数; **表格行内点击**、**assert_table** 等场景下 extras.row_key / column / status_filter / button 等为必填或推荐字段, 不算冗余.
 
 筛选与选项选择场景 (必须拆成原子动作):
 - 步骤中出现「从 XX 中筛选/选择」时, 必须直接拆成多条原子动作:
   1. click — 点击区域/标签, intent 写 "点击'XX'".
   2. click — 点击筛选器触发器, intent 写 "在筛选区点击'YY'下拉框".
-  3. wait — 等待下拉面板展开, intent 写 "等待下拉面板展开", value 写 "500毫秒".
-  4. click — 在展开的下拉中选择选项, intent 写 "在下拉选项中点击'ZZ'".
-- **字段名 vs 筛选值**: 第2步 YY 用字段/筛选项名称 (如「来源」「状态」), 不要用业务筛选值充当字段名. 第4步 ZZ **保留用例原文的业务概念** (如用例写「策略来源」则仍写「策略来源」), 不要臆造或改写为猜测的页面选项文案; 执行层会做语义匹配.
-- 用例「筛选策略来源」→ 第2步点「来源」类字段下拉, 第4步点「策略来源」; 不要把「策略来源」写成第2步的下拉框名.
-- 示例: "从'商品列表'中筛选'状态'为'已上架'" → 拆成 4 条:
+  3. click — 在展开的下拉中选择选项, intent 写 "在下拉选项中点击'ZZ'".
+- **字段名 vs 筛选值**: 第2步 YY 用字段/筛选项名称 (如「来源」「状态」), 不要用业务筛选值充当字段名. 第3步 ZZ **保留用例原文的业务概念** (如用例写「策略来源」则仍写「策略来源」), 不要臆造或改写为猜测的页面选项文案; 执行层会做语义匹配.
+- 用例「筛选策略来源」→ 第2步点「来源」类字段下拉, 第3步点「策略来源」; 不要把「策略来源」写成第2步的下拉框名.
+- 示例: "从'商品列表'中筛选'状态'为'已上架'" → 拆成 3 条:
   {"type":"click","intent":"点击'商品列表'"}
   {"type":"click","intent":"在筛选区点击'状态'下拉框"}
-  {"type":"wait","intent":"等待下拉面板展开","value":"500毫秒"}
   {"type":"click","intent":"在下拉选项中点击'已上架'"}
-- 不带区域的选择操作 "选择XX为YY" 拆成 3 条:
+- 不带区域的选择操作 "选择XX为YY" / "筛选XX是YY" 拆成 2 条:
   {"type":"click","intent":"在筛选区点击'XX'下拉框"}
-  {"type":"wait","intent":"等待下拉面板展开","value":"500毫秒"}
   {"type":"click","intent":"在下拉选项中点击'YY'"}
+- **禁止把字段名与筛选值拼成一个词**: 用例写「筛选性别是女」→ 点字段「性别」、再点值「女」; **不要**写成「性别女」、也不要在下拉选项一步里写「性别女」. 同理「来源：策略」→ 点「来源」+ 点「策略」, **不要**写成「策略来源」(除非用例原文整句就是「策略来源」).
+- 示例: 「筛选性别是女」→
+  {"type":"click","intent":"在筛选区点击'性别'下拉框"}
+  {"type":"click","intent":"在下拉选项中点击'女'"}
+- 示例: 「筛选来源：策略」→
+  {"type":"click","intent":"在筛选区点击'来源'下拉框"}
+  {"type":"click","intent":"在下拉选项中点击'策略'"}
+
 
 表格/列表行断言:
 - 列表/表格中各字段分列展示, 单元格之间常有其他列文本, 禁止把"行标识符+字段值"拼接到 value 里用 assert_text 校验.
 - "列表中存在某条记录/出现某标识符" → assert_text, value 只写行标识符, 不要附带其他列.
 - "某条记录的某列/某字段为某值" → assert_table, 用 value 写行标识符, extras 写列名与期望值.
+- **会话记录引用下的 assert_table**: 从「跨用例会话上下文」查表格行主键值写入 value; 或用索引字段原文 (如「多题」) 作 value, 由执行层解析. **禁止**臆造 ${multi_question_id} 等未出现在会话标量变量中的占位符; 仅步骤/前置已定义的 ${orderId1} 等才可使用.
 - **多标识符断言必须拆分**: 如果 intent 或 value 中同时出现两个及以上的标识符 (如 ${id1} 和 ${id2}), 必须拆成多条独立断言, 每条只校验一条记录.
   - "A为X和Y的..." → 拆成 "A为X的..." + "A为Y的..."
   - 示例: "验证列表中存在记录ID为${id1}和${id2}的记录" → 拆成两条:
@@ -168,6 +184,14 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
     {"type":"assert_text","intent":"验证原因选项","value":"'选项B'"}
     {"type":"assert_text","intent":"验证原因选项","value":"'选项C'"}
 - 行标识列默认按唯一标识符匹配; 若用例写的是其他标识, 在 extras 中补充 row_key_column.
+
+表格行内按钮 (查看/编辑/删除等):
+- 属于上方「会话记录引用」的常见场景; **必须**在 extras 写入 **row_key** (会话中的表格行主键值), 以及 **button**; 用例有状态条件时写 **status_filter**.
+- intent 保留用例业务描述; 定位以 extras.row_key 为准, 执行层在业务知识配置的表格主键列匹配该行后点 button.
+- 跨用例会话上下文中的索引字段→行主键映射用于填写 row_key; 禁止只输出索引语义而不写 row_key.
+- 列名由业务知识 session_ops 配置; 单步可用 extras 覆盖: row_key_column, status_column.
+- 示例: {"type":"click","intent":"对状态为「已关闭」的记录点击「查看」（前序选择「选项A」的那条）","extras":{"row_key":"10001","status_filter":"已关闭","button":"查看"}}
+
 - 不要假设页面一定使用某个特定组件库, 例如 Element UI、Element Plus、Ant Design、Naive UI 等.
 - 不要在 intent 中出现组件库类名、内部 DOM 名称或实现细节, 例如 el-select、ant-select、el-tree、el-dialog、下拉箭头、内部 input、某个 class.
 - 当步骤描述到"下拉框"、"下拉选项"、"弹窗"、"表格"、"树节点"、"日期选择"等组件时, 只需要在 intent 中表达语义和相对位置.
@@ -203,6 +227,9 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
   - "页面不包含/无 X" → {"type":"assert_text","intent":"验证页面不包含X","value":"X","negate":true}
   - "X 不可见/隐藏" → {"type":"assert_text","intent":"验证页面不存在X","value":"X","negate":true}
   - "X 不包含 Y" → {"type":"assert_text","intent":"在X区域内验证不包含Y","value":"Y","negate":true}
+  - **区域 + 具体文案**: 用例写「最上方/标题区包含某文案」时, **value 写该文案本身**, intent 写区域 + 文案, **不要**把类别描述 (如学段学科信息) 拆成与 value 分离的抽象字段名.
+    - 用例「最上方标题包含学段学科:大学数学」→ {"type":"assert_text","intent":"验证最上方标题包含大学数学","value":"大学数学"}
+    - 错误: intent 写「验证最上方标题包含学段学科信息」、value 写「大学数学」—— 执行层会误当成字段标签断言.
 - assert_count: 用于验证列表、表格、搜索结果、数据行等数量.
   - 示例: {"type":"assert_count","intent":"验证列表中有10条数据","value":"10"}
 - assert_table: 用于验证表格某行某列的值、排序、筛选结果等; 行+列值校验必须带 extras.column 与 extras.expected.
@@ -249,7 +276,7 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
 - 如果原始步骤中含有 selector、XPath、class、id 等技术定位内容, 必须将其改写为业务语义 intent, 不要原样输出.
 
 动作必须有效:
-- actions 中每个动作的 type 必须属于允许的动作类型: click、hover、fill、press、goto、wait、upload、assert_text、assert_count、assert_table、asset.
+- actions 中每个动作的 type 必须属于允许的动作类型: click、hover、fill、press、goto、wait、upload、assert_text、assert_count、assert_table、asset、api_call、bind_session、scroll.
 - 不要输出未定义动作类型, 例如 analyze、check、verify、assert、assert_visible、navigate、input、select 等; 必须归一为允许的 type.
 - intent 必须存在且不能为空, 必须清晰描述动作意图.
 - value 和 extras 只在动作类型确实需要时提供; 不需要时可以省略.

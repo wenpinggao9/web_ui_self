@@ -20,12 +20,17 @@ from rich.console import Console
 from ..planning import PlannedAction
 from ..planning.page_nav import is_sidebar_nav_intent
 from .dispatcher import ActionDispatcher
+from .deterministic_recovery import (
+    _is_submit_action,
+    attempt_submit_prerecovery,
+)
 from .popup_recovery import (
     execute_readiness_recovery,
     needs_popup_recovery,
     reset_action_for_popup_retry,
 )
-from .post_check import PostStepChecker
+from .post_check import PostStepChecker, upgrade_submit_post_result
+from .retry_hint import resolve_force_selector_from_hint
 from .target_text import backfill_click_from_dispatch
 from .trace import ExecutionTrace
 
@@ -155,6 +160,34 @@ class RetryController:
             last_reason = post.reason
             self.console.print(f"  [yellow]后校验未过(第{attempt}次): {post.reason} → 焦点={post.retry_focus}[/yellow]")
 
+            post = upgrade_submit_post_result(
+                post, action.intent or "", self.dispatcher.last_dispatch_meta,
+            )
+            if post.retry_focus != "无" and post.reason != last_reason:
+                self.console.print(
+                    f"  [cyan]↺ 提交失败升级重试焦点 → {post.retry_focus}[/cyan]"
+                )
+
+            # 提交未生效: 先补选审核原因再重试提交 (不依赖 LLM readiness)
+            if (
+                _is_submit_action(action)
+                and not post.step_ok
+                and attempt < self.max_retries
+            ):
+                ctx_fn = self._readiness_context_fn
+                rctx = ctx_fn(action) if ctx_fn else None
+                prior = list(getattr(rctx, "prior_actions", None) or [])
+                if attempt_submit_prerecovery(
+                    self.dispatcher, action, self.console, prior_actions=prior,
+                ):
+                    action.force_selector = None
+                    action.selector = None
+                    action.resolve_hint = post.resolve_hint
+                    action.skip_acceleration = True
+                    exclude.clear()
+                    self.console.print("  [cyan]↺ 已补选审核原因, 重试提交[/cyan]")
+                    continue
+
             # 分发已成功但被弹窗挡住: 先关弹窗再重试, 不换选择器、不降权
             if (
                 not popup_recovery_tried
@@ -183,8 +216,7 @@ class RetryController:
                     )
                     continue
 
-            # 失败连锁清理
-            # 后校验认为不对时, 当前 selector 不再可信, 需要通知定位层降权/清理.
+            # 失败连锁清理 (对齐 V3: post_verify 未过即清缓存/记忆降权)
             page = self.dispatcher.page
             self.resolver.evict(page, action.intent, action.type, last_selector)
             self.resolver.penalize(page, action.intent, action.type, last_selector)
@@ -192,10 +224,34 @@ class RetryController:
             if post.retry_focus == "无" or attempt == self.max_retries:
                 break
 
+            # V3 双 LLM: 专用重试策略规划, 产出更可落地的 resolve_hint
+            if post.retry_focus in ("选择器", "两者", "值"):
+                plan = self.post_checker.plan_retry(
+                    page, action, ok, msg, post.reason,
+                    dom_summary=cached_dom,
+                )
+                if plan and (plan.resolve_hint or plan.suggested_value or plan.retry_focus != "无"):
+                    post = _merge_retry_plan(post, plan)
+                    if self.trace:
+                        self.trace.emit(
+                            "retry_plan",
+                            retry_focus=post.retry_focus,
+                            resolve_hint=post.resolve_hint,
+                            suggested_value=post.suggested_value,
+                            rationale=plan.reason,
+                        )
+                    if post.resolve_hint:
+                        self.console.print(
+                            f"  [dim]  ↳ 重试策略: {post.resolve_hint[:100]}[/dim]"
+                        )
+
             if post.retry_focus != "值" and last_selector:
                 # 换元素类重试要排除刚失败的 selector, 防止下一轮又选回来.
                 exclude.append(last_selector)
-            _apply_retry(action, post.retry_focus, post.suggested_value, post.resolve_hint, last_selector, exclude)
+            _apply_retry(
+                action, post.retry_focus, post.suggested_value, post.resolve_hint,
+                last_selector, exclude, dispatcher=self.dispatcher,
+            )
 
         return RetryOutcome(last_ok, False, last_msg, self.max_retries, last_reason, last_selector)
 
@@ -223,6 +279,8 @@ def _apply_retry(
     resolve_hint: Optional[str],
     last_selector: Optional[str],
     exclude: list[str],
+    *,
+    dispatcher: Optional[ActionDispatcher] = None,
 ) -> None:
     """根据后校验焦点就地改写 action, 供下一轮 retry 使用."""
     # 改值
@@ -236,10 +294,29 @@ def _apply_retry(
         action.exclude_selectors = []
         action.resolve_hint = None
     else:  # 选择器 / 两者 → 换元素
-        action.force_selector = None
+        items = dispatcher.get_cached_semantic_items() if dispatcher else None
+        forced = resolve_force_selector_from_hint(resolve_hint, semantic_items=items)
+        action.force_selector = forced
         action.selector = None
-        action.resolve_hint = resolve_hint
+        action.resolve_hint = resolve_hint if not forced else None
         action.exclude_selectors = list(exclude)
+    action.skip_acceleration = True
+
+
+def _merge_retry_plan(primary: "PostCheckResult", plan: "PostCheckResult") -> "PostCheckResult":
+    """合并后校验与专用重试规划结果, 优先采用规划器的 hint/value."""
+    from .post_check import PostCheckResult
+
+    focus = plan.retry_focus if plan.retry_focus != "无" else primary.retry_focus
+    hint = plan.resolve_hint or primary.resolve_hint
+    value = plan.suggested_value if plan.suggested_value is not None else primary.suggested_value
+    return PostCheckResult(
+        step_ok=False,
+        reason=primary.reason or plan.reason,
+        retry_focus=focus,
+        suggested_value=value,
+        resolve_hint=hint,
+    )
 
 
 def _rewrite_intent_value(intent: str, new_value: str) -> str:

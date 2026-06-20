@@ -1,7 +1,7 @@
 """步骤⑮ 核心编排器 UITestAgent —— 系统总指挥.
 
 run_tests(测试文件):
-  解析 → 排序 → (每条用例) 前置展开 → 登录 → 导航 → 动作规划 → 意图拆分
+  解析 → 排序 → (每条用例) 前置展开 → 登录 → 导航 → 动作规划
   → 执行编排器 → 判定 → 关闭浏览器 → 汇总.
 """
 from __future__ import annotations
@@ -27,8 +27,7 @@ from .execution.post_check import PostStepChecker
 from .execution.retry import RetryController
 from .llm import LLMAdapter, PromptLoader
 from .locating import (
-    LLMElementDecider, LocatorResolver, RuleEngine, SelectorCache,
-    SelectorMemory, StructureLearner,
+    LLMElementDecider, LocatorResolver, SelectorCache, SelectorMemory,
 )
 from .observability import ObservabilityCollector
 from .output import FileManager
@@ -47,7 +46,8 @@ from .readiness import ReadinessCaseContext, ReadinessChecker
 from .resources import ResourceManager
 from .session import Navigator, login
 from .skill_loader import load_skill_text
-from .variable_substitution import substitute_in_list
+from .variable_substitution import substitute_in_list, format_session_context
+from .execution.session_ops import enrich_session_actions
 from .watermark import load_watermark_config
 from .report import build_report_data, save_batch_overview
 
@@ -92,12 +92,9 @@ class UITestAgent:
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
         self.cache = SelectorCache(ttl_s=l1_ttl)
         self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
-        self.learner = StructureLearner(accel / "页面结构学习.json")
-        self.rule_engine = RuleEngine()
         self.decider = LLMElementDecider(self.llm, self.prompts)
         self.resolver = LocatorResolver(
-            self.decider, cache=self.cache, memory=self.memory,
-            rule_engine=self.rule_engine, learner=self.learner, console=self.console,
+            self.decider, cache=self.cache, memory=self.memory, console=self.console,
         )
         # 步骤⑩⑫ 可靠性组件
         self.readiness = ReadinessChecker(self.llm, self.prompts)
@@ -163,7 +160,6 @@ class UITestAgent:
                         session_vars=session_vars, role_contexts=role_contexts,
                     ))
                     self.memory.save()
-                    self.learner.save()
             finally:
                 if cross_session:
                     # 跨用例会话: 最终关闭残留上下文
@@ -178,9 +174,8 @@ class UITestAgent:
                             pass
                 browser.close()
 
-        # 持久化智能加速层 (L1 纯内存, 仅 L2/L4 落盘)
+        # 持久化智能加速层 (L1 纯内存, 仅 L2 记忆落盘)
         self.memory.save()
-        self.learner.save()
 
         passed = sum(1 for r in case_results if r["passed"])
         failed = len(case_results) - passed
@@ -360,7 +355,7 @@ class UITestAgent:
                             f"  [yellow]跨用例列表页刷新失败(继续): {reload_err}[/yellow]"
                         )
 
-            # 步骤⑦ 动作规划 + 意图拆分; 交错式按块, 分离式一次性
+            # 动作规划 (单次 LLM, 含拆分); 交错式按块, 分离式一次性
             roles = list(session.roles.keys()) if session.roles else None
             cross_session = self.runner_cfg.get("cross_case_session", False)
             exec_blocks, by_blocks = prepare_execution_plan(case)
@@ -430,15 +425,19 @@ class UITestAgent:
                     page = dispatcher.page
             else:
                 flatten_case_for_planning(case)
+                session_ops_cfg = (biz.get_knowledge() if biz else {}).get("session_ops")
+                ctx_summary = format_session_context(session_vars, session_ops_cfg)
                 actions, raw = self.planner.generate_actions(
                     case, roles,
                     current_url=page.url,
                     cross_case_session=cross_session,
+                    session_context=ctx_summary,
                 )
                 self._print_plan_raw(raw)
                 self._print_action_list(actions, "规划完成")
 
                 actions = strip_duplicate_menu_clicks(actions, case.module_path)
+                actions = enrich_session_actions(actions, session_vars, session_ops_cfg)
 
                 fm.save_raw_response(case.case_id, raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False))
                 fm.save_prompt(case.case_id, self._dump_prompt(case, exec_blocks))
@@ -597,8 +596,11 @@ class UITestAgent:
     def _print_action_list(self, actions: list, title: str) -> None:
         self.console.print(f"  [dim]{title} {len(actions)} 个动作[/dim]")
         for i, a in enumerate(actions, 1):
+            ex = getattr(a, "extras", None) or {}
+            rk = f" row_key={ex['row_key']}" if ex.get("row_key") else ""
+            intent = a.intent[:50] + ("..." if len(a.intent) > 50 else "")
             self.console.print(
-                f"    [dim]{i:2d}. {a.type:12s} {a.intent[:50]}{'...' if len(a.intent) > 50 else ''}[/dim]"
+                f"    [dim]{i:2d}. {a.type:12s} {intent}{rk}[/dim]"
             )
 
     def _make_readiness_case_context(
@@ -720,6 +722,8 @@ class UITestAgent:
             )
 
             try:
+                session_ops_cfg = (biz.get_knowledge() if biz else {}).get("session_ops")
+                ctx_summary = format_session_context(session_vars, session_ops_cfg)
                 block_actions, raws = self.planner.generate_block_actions(
                     case, block, roles,
                     block_no=block_no,
@@ -727,6 +731,7 @@ class UITestAgent:
                     current_url=page.url,
                     preconditions=case.preconditions,
                     cross_case_session=cross_session,
+                    session_context=ctx_summary,
                 )
             except Exception as e:  # noqa: BLE001
                 self.console.print(f"  [red]块 {block_no} 规划失败: {e}[/red]")
@@ -737,6 +742,7 @@ class UITestAgent:
                 self._print_plan_raw(raw)
 
             block_actions = strip_duplicate_menu_clicks(block_actions, case.module_path)
+            block_actions = enrich_session_actions(block_actions, session_vars, session_ops_cfg)
             self._print_action_list(block_actions, f"块 {block_no} 规划")
 
             if primary_role is None and block_actions:

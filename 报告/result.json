@@ -1,16 +1,16 @@
 {
-  "case_id": "vip_前审_004",
+  "case_id": "vip_前审_006",
   "feature_titles": [
     "大学增加前审",
     "前审功能",
-    "Case 4"
+    "Case 6"
   ],
   "total_steps": 5,
-  "passed": 5,
-  "failed": 0,
-  "summary": "通过",
-  "execution_time": "44.4秒",
-  "generated_time": "2026-06-20 01:12:41",
+  "passed": 3,
+  "failed": 2,
+  "summary": "失败",
+  "execution_time": "1分15秒",
+  "generated_time": "2026-06-20 20:08:09",
   "details": [
     {
       "step": "步骤1: click",
@@ -35,10 +35,10 @@
       },
       "success": true,
       "status": "passed",
-      "message": "API 调用成功: workId=146395539",
+      "message": "API 调用成功: workId=146436805",
       "error": "",
       "selector": null,
-      "resolved_html": "API 调用成功: workId=146395539"
+      "resolved_html": "API 调用成功: workId=146436805"
     },
     {
       "step": "步骤3: bind_session",
@@ -49,24 +49,24 @@
       },
       "success": true,
       "status": "passed",
-      "message": "会话记录 ops[146395542] = {\"orderId\": \"146395628\", \"reason\": \"多题</span\", \"case_id\": \"vip_前审_004\", \"var\": \"workId\"}",
+      "message": "会话记录 ops[146436808] = {\"orderId\": \"146436751\", \"reason\": \"多题\", \"case_id\": \"vip_前审_006\", \"var\": \"workId\"}",
       "error": "",
       "selector": null,
-      "resolved_html": "会话记录 ops[146395542] = {\"orderId\": \"146395628\", \"reason\": \"多题</span\", \"case_id\": \"vip_前审_004\", \"var\": \"workId\"}"
+      "resolved_html": "会话记录 ops[146436808] = {\"orderId\": \"146436751\", \"reason\": \"多题\", \"case_id\": \"vip_前审_006\", \"var\": \"workId\"}"
     },
     {
       "step": "步骤4: click",
       "action": {
         "type": "click",
         "intent": "点击'提交'按钮",
-        "selector": "role=button[name=\"提 交\"]"
+        "selector": null
       },
-      "success": true,
-      "status": "passed",
-      "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed",
-      "error": "",
-      "selector": "role=button[name=\"提 交\"]",
-      "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed"
+      "success": false,
+      "status": "failed",
+      "message": "找不到元素: 点击'提交'按钮",
+      "error": "找不到元素: 点击'提交'按钮",
+      "selector": null,
+      "resolved_html": ""
     },
     {
       "step": "步骤5: assert_text",
@@ -75,21 +75,43 @@
         "intent": "验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情",
         "selector": null
       },
-      "success": true,
-      "status": "passed",
-      "message": "或断言(分支2): 或断言(启发式): 当前在任务详情页",
-      "error": "",
+      "success": false,
+      "status": "failed",
+      "message": "前置步骤后校验未通过, 预期结果断言不成立",
+      "error": "前置步骤后校验未通过, 预期结果断言不成立",
       "selector": null,
-      "resolved_html": "或断言(分支2): 或断言(启发式): 当前在任务详情页"
+      "resolved_html": ""
     }
   ],
-  "screenshot_timeline": [],
+  "screenshot_timeline": [
+    {
+      "step_idx": 4,
+      "success": false,
+      "screenshot": "截图/step_004_fail.png",
+      "message": "找不到元素: 点击'提交'按钮",
+      "action_type": "click",
+      "intent": "点击'提交'按钮"
+    }
+  ],
   "failure_analysis": {
-    "total_failures": 0,
-    "failures": []
+    "total_failures": 2,
+    "failures": [
+      {
+        "step": "步骤4",
+        "intent": "点击'提交'按钮",
+        "classification": "selector_stale",
+        "suggestion": "检查意图描述是否准确, 或页面是否就绪(弹窗/表单未打开)"
+      },
+      {
+        "step": "步骤5",
+        "intent": "验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情",
+        "classification": "unknown",
+        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
+      }
+    ]
   },
   "llm_call_summary": {
-    "total_calls": 5
+    "total_calls": 12
   },
   "llm_call_details": [
     {
@@ -104,23 +126,65 @@
           "model": "post_check",
           "latency_ms": 0,
           "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'多题'\n输入值: 多题</span\n分发成功: true\n分发消息: 点击 在详情页选择'多题' | 实际目标: <label class=\"ant-radio-wrapper ant-radio-wrapper-in-form-item\"><span class=\"ant-radio\"><input class=\"ant-radio-input\" type=\"radio\" value=\"3\"><span class=\"ant-radio-inner\"></span></span><span>多题</span\n当前页面 URL: https:/",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击了'多题'单选按钮(value=3)，分发成功且实际目标是包含'多题'文本的radio label。DOM中[28]label对应'多题'选项，点击操作已执行成功，该单选按钮应已被选中。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击了'多题'单选按钮(value=3)，分发成功，实际目标是包含'多题'文本的radio label。DOM中[28]label和[30]input(value=3)对应'多题'选项，点击操作已成功选中该选项。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     },
     {
       "step_idx": 4,
-      "success": true,
+      "success": false,
       "action": {
         "type": "click",
         "intent": "点击'提交'按钮"
       },
       "llm_calls": [
         {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=false\ndispatch_message=navigation_outcome=timeout\n\ntype=click\nintent=点击'提交'按钮\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n提交后 navigation_outcome=timeout, 页面未跳转\n\n当前 URL：https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146436808\n\n页面元素摘要（节选）：\n(空)\n\n请输出 JSON。\n",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"button:has-text('提交'), button[type='submit'], input[type='submit']\",\n  \"rationale\": \"点击提交后超时未跳转，可能未正确点击到提交按钮，需重新定位提交按钮并尝试点击\"\n}\n```"
+        },
+        {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: true\n分发消息: 点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=resource_id_changed\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146395545\n分发结构化上下文: {\"navigation_outcome\"",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"提交按钮点击成功，navigation_outcome=resource_id_changed，URL从uniqId=146395542变为uniqId=146395545，说明提交成功后自动加载了下一个任务详情页面。页面显示新任务ID:146395545的详情内容，包含题目、答案、日志等信息，确认提交操作已完成并跳转到下一个任务。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: false\n分发消息: TargetClosedError: Locator.click: Target page, context or browser has been closed\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146436808\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n\n\n【下一步意图】type=assert_text, intent=验证提交后页面结果：没有下一个待完成任务则返回待领取页面，",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，错误为 TargetClosedError，表明页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"页面已关闭，需要重新导航到目标页面后再点击提交按钮。可尝试先 goto 当前 URL，再定位提交按钮，如 button:has-text('提交')\"}"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=false\ndispatch_message=TargetClosedError: Locator.click: Target page, context or browser has been closed\n\ntype=click\nintent=点击'提交'按钮\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n分发失败，错误为 TargetClosedError，表明页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\n\n当前 URL：https://www-gwp11-bc.suanshubang.co",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"无\",\n  \"suggested_value\": null,\n  \"resolve_hint\": null,\n  \"rationale\": \"页面/浏览器已关闭（TargetClosedError），可能是点击提交后页面跳转或弹窗导致上下文销毁，需要重新获取页面状态后再判断是否需要重试\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: false\n分发消息: TargetClosedError: Locator.click: Target page, context or browser has been closed\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146436808\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n\n\n【下一步意图】type=assert_text, intent=验证提交后页面结果：没有下一个待完成任务则返回待领取页面，",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，错误为 TargetClosedError，表示页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"页面已关闭，需要重新导航到目标页面后再点击提交按钮。可尝试先 goto 当前 URL，再定位提交按钮，如 button:has-text('提交')\"}"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=false\ndispatch_message=TargetClosedError: Locator.click: Target page, context or browser has been closed\n\ntype=click\nintent=点击'提交'按钮\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n分发失败，错误为 TargetClosedError，表示页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\n\n当前 URL：https://www-gwp11-bc.suanshubang.co",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"无\",\n  \"suggested_value\": null,\n  \"resolve_hint\": null,\n  \"rationale\": \"页面/浏览器已关闭（TargetClosedError），可能是点击提交后页面正常跳转或关闭导致，无法在当前上下文重试，需要重新获取页面状态后再判断。\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: false\n分发消息: TargetClosedError: Locator.click: Target page, context or browser has been closed\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146436808\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n\n\n【下一步意图】type=assert_text, intent=验证提交后页面结果：没有下一个待完成任务则返回待领取页面，",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，错误为 TargetClosedError，表示页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"页面已关闭，需要重新导航到目标页面后再点击提交按钮。可能是提交按钮触发了页面关闭/跳转导致上下文丢失，建议使用 page.waitForNavigation 配合点击，或检查是否有新页面/tab 打开。\"}"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=false\ndispatch_message=TargetClosedError: Locator.click: Target page, context or browser has been closed\n\ntype=click\nintent=点击'提交'按钮\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n分发失败，错误为 TargetClosedError，表示页面/浏览器已关闭，无法完成点击操作。DOM 摘要为空，无法确认提交是否成功。\n\n当前 URL：https://www-gwp11-bc.suanshubang.co",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"无\",\n  \"suggested_value\": null,\n  \"resolve_hint\": null,\n  \"rationale\": \"页面/浏览器已关闭（TargetClosedError），可能是点击提交后页面正常跳转或关闭导致连接断开，也可能是异常崩溃；当前无DOM可操作，需要先确认浏览器状态再决定后续步骤。\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: false\n分发消息: 找不到元素: 点击'提交'按钮\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146436808\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n\n\n【下一步意图】type=assert_text, intent=验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情\n\n请输出 JSON。\n",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，找不到'提交'按钮元素。页面DOM摘要为空，无法定位提交按钮。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"页面DOM为空，可能页面未完全加载。建议先等待页面加载完成，然后尝试 button:has-text('提交') 或 input[type='submit']\"}"
         }
       ]
     }

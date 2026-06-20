@@ -1,7 +1,7 @@
-"""步骤⑨ 第5级 元素决策解析器 —— 大模型全量解析.
+"""步骤⑨ 第3级 元素决策解析器 —— 大模型全量解析 (对齐 V3 L5).
 
 输入: 带编号的语义DOM + 意图 + 动作类型 → 大模型返回节点编号 → 映射成选择器.
-最慢但最灵活. 成功后由 resolver 回填 1~4 级 (阶段B).
+最慢但最灵活. 成功后由 resolver 回填 L1 缓存与 L2 记忆.
 """
 from __future__ import annotations
 
@@ -51,12 +51,18 @@ class LLMElementDecider:
         if len(dom) == 0:
             return None, None
         # hint 只作为补充上下文注入意图, 不改变 action_type 或 DOM 输入.
-        intent_text = intent if not hint else f"{intent} (提示: {hint})"
-        # PromptLoader 支持 prompts/*.md 和 config.yaml 覆盖, 默认文本只是兜底.
+        intent_text = intent if not hint else f"{intent}"
+        hint_block = ""
+        if hint:
+            hint_block = (
+                "\n\n【重试策略提示】上一步页面校验未通过, 请认真参考下列线索选择编号 "
+                "(若与意图冲突以意图为准, 但线索中的选择器/index 优先):\n"
+                f"{hint.strip()[:800]}"
+            )
         system = self.prompts.system("element_decide", _DEFAULT_SYSTEM)
         user = self.prompts.user(
             "element_decide", _DEFAULT_USER,
-            action_type=action_type, intent=intent_text, dom=dom.numbered_text,
+            action_type=action_type, intent=intent_text + hint_block, dom=dom.numbered_text,
         )
         try:
             data = self.llm.complete_json("element_decide", system, user).data

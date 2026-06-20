@@ -17,5 +17,7 @@
 - 选项语义匹配: intent 引号内常是用例侧筛选概念, 不一定等于 option 可见文案. 在**已展开**的下拉面板中, 选能实现该筛选意图、语义最接近的可见选项 (子串、简称、同一维度下的合理 UI 文案均可).
 - 若 DOM 中同时存在 combobox 与同名/近似 option, 「在下拉选项中点击」**只**考虑 option 层; 找不到合适 option 时返回 index=-1, 不要退而选 combobox.
 - 选择器优先级: 优先返回能映射到 Playwright 语义 API 的选择器. 优先级: [role="xxx"] → 纯文本匹配 → placeholder → name → #id → 其他复杂 CSS. 如果多个候选都匹配, 选能映射到 get_by_role/get_by_text/get_by_placeholder 的那个.
+- 列表行内按钮: intent 含「列表中」「查看」「第一个任务」时, 优先选 tbody 第一行操作列的 button; 页面文案可能是「查 看」(中间有空格) 而非「查看」.
+- 若附带【重试策略提示】且含 [数字] 索引或 button:has-text / table tbody tr:first-child, 优先按提示选对应编号或语义最接近的 button.
 - 禁止编造编号, 必须返回列表中真实存在的编号.
 只输出 JSON: {"index": 数字}. 找不到则 {"index": -1}.

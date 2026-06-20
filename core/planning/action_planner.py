@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..variable_substitution import format_session_context
 from ..llm import LLMAdapter, PromptLoader
 from ..parser import ExecutionBlock, ParsedCase
 from .action_schema import PlannedAction, coerce_action
@@ -65,6 +66,10 @@ _BLOCK_OPS_USER = """\
 执行块: 第 {{block_no}} / {{total_blocks}} (仅操作, 本块后将有对应断言)
 会话模式: {{session_mode}}
 当前页面 URL: {{current_url}}
+
+跨用例会话上下文:
+{{session_context}}
+
 前 {{pre_count}} 条操作步骤由前置条件解析得到, 必须保持顺序.
 
 操作步骤:
@@ -167,6 +172,7 @@ class ActionPlanner:
         *,
         current_url: str | None = None,
         cross_case_session: bool = False,
+        session_context: str | None = None,
     ) -> tuple[list[PlannedAction], str]:
         """返回 (动作列表, 模型原始响应)."""
         # 系统提示词可由 prompts/action_plan.system.md 或 config 覆盖.
@@ -198,6 +204,7 @@ class ActionPlanner:
             roles=roles_text,
             current_url=current_url or "(未知)",
             session_mode=session_mode,
+            session_context=session_context or "(无)",
         )
 
         result = self.llm.complete_json("action_plan", system, user)
@@ -221,6 +228,7 @@ class ActionPlanner:
         current_url: str | None = None,
         preconditions: list[str] | None = None,
         cross_case_session: bool = False,
+        session_context: str | None = None,
     ) -> tuple[list[PlannedAction], list[Any]]:
         """按执行块规划: 先仅操作, 再仅断言 (供交错式用例分块执行)."""
         system_base = self.prompts.system("action_plan", _DEFAULT_SYSTEM)
@@ -247,6 +255,7 @@ class ActionPlanner:
                 roles=roles_text,
                 current_url=current_url or "(未知)",
                 session_mode=session_mode,
+                session_context=session_context or "(无)",
             )
             result = self.llm.complete_json("action_plan", system, user)
             block_ops = _extract_actions(result.data)

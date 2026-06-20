@@ -1,6 +1,6 @@
 """步骤⑭ 执行编排器 PlaywrightRunner —— 逐动作执行主循环.
 
-阶段A: 意图拆分在编排器(agent)预先完成; 这里逐动作分发, 记录结果, 失败截图,
+阶段A: 动作规划在 agent 单次 LLM 完成; 这里逐动作分发, 记录结果, 失败截图,
 保存 执行日志.json, 生成 HTML 报告.
 阶段B: 接入 步骤⑩就绪检查 / 步骤⑫后校验 / 步骤⑬带重试 (开关位已预留).
 """
@@ -244,6 +244,27 @@ class PlaywrightRunner:
                     value=action.value,
                     url=url,
                 )
+
+            if not last_post_ok and action.is_assert():
+                duration = int((time.time() - t0) * 1000)
+                msg = "前置步骤后校验未通过, 预期结果断言不成立"
+                self.console.print(f"  [red]✘ FAIL ({duration}ms) {msg}[/red]")
+                r = ExecResult(
+                    step_no=seq,
+                    raw_text=action.intent,
+                    action=action.type,
+                    status="FAIL",
+                    duration_ms=duration,
+                    error=msg,
+                    message=msg,
+                    post_check_ok=False,
+                )
+                if self.observability:
+                    self.observability.end_step(seq, r)
+                self._log_result(r)
+                results.append(r)
+                last_post_ok = False
+                continue
 
             if self.post_step_check and should_post_check(action):
                 # 开启后校验时, RetryController 内部负责执行、校验和必要重试.
@@ -514,6 +535,7 @@ class PlaywrightRunner:
     ) -> Optional[tuple[bool, str, bool, int]]:
         """步骤失败后的恢复重试: 就绪检查 → 恢复动作 → 再次执行失败步骤."""
         from ..readiness import should_run_readiness
+        from .deterministic_recovery import _is_submit_action, attempt_submit_prerecovery
 
         if not should_run_readiness(action):
             return None
@@ -533,6 +555,30 @@ class PlaywrightRunner:
                 ],
             )
         if rdy.ready or not rdy.recovery:
+            if _is_submit_action(action):
+                prior = actions[:action_idx] if actions else []
+                if attempt_submit_prerecovery(
+                    self.dispatcher, action, self.console, prior_actions=prior,
+                ):
+                    self.console.print(
+                        f"  [yellow]步骤失败, 补选审核原因后重试: {action.intent}[/yellow]"
+                    )
+                    retry_action = action.model_copy(
+                        update={
+                            "force_selector": None,
+                            "selector": None,
+                            "exclude_selectors": [],
+                            "resolve_hint": None,
+                            "skip_acceleration": True,
+                        }
+                    )
+                    if self.post_step_check:
+                        outcome = self.retry_controller.run(
+                            retry_action, case_id, next_action=next_action,
+                        )
+                        if outcome.ok and outcome.post_ok:
+                            action.selector = retry_action.selector
+                            return True, outcome.message, True, seq
             return None
         self.console.print(
             f"  [yellow]步骤失败, 执行恢复后重试原动作: {action.intent}[/yellow]"
@@ -600,6 +646,23 @@ class PlaywrightRunner:
         self.console.print(
             f"[blue]▶ Step {seq:02d}[/blue] [assert_or] {intents[:120]}{'...' if len(intents) > 120 else ''}"
         )
+        if not last_post_ok:
+            duration = int((time.time() - t0) * 1000)
+            msg = "前置步骤后校验未通过, 或断言组不成立"
+            self.console.print(f"  [red]✘ FAIL ({duration}ms) {msg}[/red]")
+            r = ExecResult(
+                step_no=seq,
+                raw_text=intents,
+                action="assert_or",
+                status="FAIL",
+                duration_ms=duration,
+                error=msg,
+                message=msg,
+                post_check_ok=False,
+            )
+            self._log_result(r)
+            results.append(r)
+            return seq, False
         ok, msg = False, ""
         for branch in group:
             ok, msg = self.dispatcher.dispatch(branch, case_id=case_id)

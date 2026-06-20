@@ -27,8 +27,7 @@
 ┌──────────────────────────────────────────────────────────────┐
 │  步骤④ 自动登录 — 打开登录页, 填账号密码, 会话复用               │
 │  步骤⑤ 模块导航 — 按模块路径逐级点菜单                          │
-│  步骤⑥ 动作规划 — LLM 翻译成 {类型, 意图, 值}, 不含选择器       │
-│  步骤⑦ 意图拆分 — 复合动作拆成原子动作                          │
+│  步骤⑥ 动作规划 — LLM 翻译并拆成原子 {类型, 意图, 值}, 不含选择器  │
 │  步骤⑧ 语义 DOM 抽取 — 实时页面快照 (弹窗/表单优先)             │
 │  步骤⑨ 元素定位五级链 — 缓存→记忆→规则→学习→大模型               │
 │  步骤⑩ 步骤前就绪检查 — 页面就绪? 恢复动作                      │
@@ -58,7 +57,6 @@ ui_automation/
 │   ├── action_plan.system.md   # 动作规划系统提示词
 │   ├── action_plan.user.md     # 动作规划用户提示词
 │   ├── precondition.system.md  # 前置条件展开
-│   ├── intent_split.system.md  # 意图拆分
 │   ├── element_decide.*.md     # 元素决策
 │   ├── readiness.*.md          # 就绪检查
 │   ├── post_check.*.md         # 步骤后校验
@@ -78,19 +76,18 @@ ui_automation/
 │   │   ├── navigator.py        #   模块导航
 │   │   ├── menu_scanner.py     #   动态菜单扫描 (留桩)
 │   │   └── feature_selectors.py#   静态映射字典
-│   ├── planning/               # 步骤⑥⑦ 动作规划 + 意图拆分
+│   ├── planning/               # 动作规划
 │   │   ├── action_schema.py    #   PlannedAction (无选择器)
-│   │   ├── action_planner.py   #   LLM 动作规划 (注入技能知识)
-│   │   └── intent_splitter.py  #   复合拆分 + 菜单剥离
+│   │   ├── action_planner.py   #   LLM 动作规划 (含拆分)
+│   │   └── intent_splitter.py  #   菜单点击剥离
 │   ├── dom/                    # 步骤⑧ 语义 DOM 抽取
 │   │   └── semantic_dom.py     #   弹窗/表单优先 + DOM 稳定等待
-│   ├── locating/               # 步骤⑨ 五级定位链
-│   │   ├── resolver.py         #   编排: 缓存→记忆→规则→学习→LLM
+│   ├── locating/               # 步骤⑨ 三级定位链
+│   │   ├── resolver.py         #   编排: L1缓存→L2记忆→L3大模型
 │   │   ├── cache.py            #   L1 选择器缓存 (30min TTL)
 │   │   ├── memory.py           #   L2 长期记忆 (加减分)
-│   │   ├── rule_engine.py      #   L3 意图规则引擎 (11条)
-│   │   ├── structure_learner.py#   L4 页面结构学习 (Jaccard>0.6)
-│   │   ├── llm_decider.py      #   L5 大模型元素决策
+│   │   ├── llm_decider.py      #   L3 大模型元素决策
+│   │   ├── node_refiner.py     #   L3 纠偏 (skill 祖先爬升)
 │   │   ├── self_heal.py        #   自愈三策略
 │   │   └── normalize.py        #   URL/意图归一化 + 选择器校验
 │   ├── readiness/              # 步骤⑩ 步骤前就绪检查
@@ -268,7 +265,6 @@ P0
 | 环节 | 文件 | 占位符 |
 |------|------|--------|
 | 动作规划 | `action_plan.*.md` | `{{module_path}}`, `{{steps}}`, `{{expectations}}` |
-| 意图拆分 | `intent_split.*.md` | `{{type}}`, `{{intent}}` |
 | 元素决策 | `element_decide.*.md` | `{{action_type}}`, `{{intent}}`, `{{dom}}` |
 | 前置展开 | `precondition.*.md` | `{{preconditions}}` |
 | 用例排序 | `case_sort.*.md` | `{{cases}}` |

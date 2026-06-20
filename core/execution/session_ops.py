@@ -8,11 +8,13 @@ import json
 import re
 from typing import Any, Optional
 
-from .script_helpers import extract_url_query
+from .script_helpers import FIRST_TABLE_ROW_KEY, extract_url_query
 
 _DEFAULT_SESSION_OPS: dict[str, Any] = {
     "ops_key_field": "id",
     "table_row_field": "",
+    "table_row_key_column": "",
+    "status_column": "",
     "entity_id": {"sources": ["extras", "context", "api"]},
     "resolve": {},
     "fields": {},
@@ -64,6 +66,7 @@ def record_op(
     entry = dict(prev)
     entry.update({k: v for k, v in fields.items() if v is not None and v != ""})
     ops[key] = entry
+    ctx["_last_entity_id"] = key
     if index_by:
         _update_ops_index(ctx, key, entry, index_by)
     return entry
@@ -84,6 +87,58 @@ def _entry_table_row_value(entry: Any, table_row_field: str) -> Optional[str]:
     if val is None or str(val).strip() == "":
         return None
     return str(val).strip()
+
+
+def _extract_label_from_intent(intent: str) -> Optional[str]:
+    """从 bind/记录类 intent 的括号或引号中提取业务标签 (如审核原因文案)."""
+    text = intent or ""
+    if not text:
+        return None
+    paren = re.findall(r"[（(]([^）)]+)[）)]", text)
+    if paren:
+        return paren[-1].strip() or None
+    quoted = re.findall(
+        r"[\"'“”‘’「」『』]([^\"'“”‘’「」『』]+)[\"'“”‘’「」『』]",
+        text,
+    )
+    if quoted:
+        return quoted[-1].strip() or None
+    return None
+
+
+def table_row_key_matches(cell: str, row_key: str) -> bool:
+    """行主键列与 row_key 精确匹配 (整格或 token 相等, 禁止子串误匹配)."""
+    key = (row_key or "").strip()
+    if not key:
+        return False
+    cell = (cell or "").strip()
+    if not cell:
+        return False
+    if cell == key:
+        return True
+    tokens = [t.strip() for t in re.split(r"[\s,;|/、]+", cell) if t.strip()]
+    return key in tokens
+
+
+def _ops_resolve_hint(
+    row_key: str,
+    ctx: dict[str, Any],
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> str:
+    """assert_table 未命中时, 列出 ops 反向索引里已有的 key."""
+    cfg = _merge_cfg(session_ops_cfg)
+    index_by = cfg.get("index_by") or []
+    if isinstance(index_by, str):
+        index_by = [index_by]
+    idx_root = ctx.get("_ops_index") or {}
+    parts: list[str] = []
+    for field in index_by:
+        bucket = idx_root.get(str(field)) or {}
+        if bucket:
+            parts.append(f"{field}→{list(bucket.keys())[:8]}")
+    if parts:
+        return f"会话 ops 索引已有: {'; '.join(parts)}"
+    return f"会话 ops 中无 {row_key!r} 的索引, 需先 bind_session 记录"
 
 
 def resolve_table_row_key(
@@ -128,6 +183,20 @@ def resolve_table_row_key(
         if row_val:
             return row_val, f"ops[{field}]→{table_row_field}={row_val}"
 
+    # reason 等索引键允许子串互含 (如用例写「不良导向」、ops 存全文)
+    for field in index_by:
+        bucket = idx_root.get(str(field)) or {}
+        if not isinstance(bucket, dict):
+            continue
+        for indexed_val, entity_id in bucket.items():
+            iv = str(indexed_val).strip()
+            if not iv or (key != iv and key not in iv and iv not in key):
+                continue
+            entry = ops.get(str(entity_id))
+            row_val = _entry_table_row_value(entry, table_row_field)
+            if row_val:
+                return row_val, f"ops[{field}]~{iv!r}→{table_row_field}={row_val}"
+
     for entity_id, entry in ops.items():
         if not isinstance(entry, dict):
             continue
@@ -139,6 +208,252 @@ def resolve_table_row_key(
                     return row_val, f"ops[{entity_id}].{field}→{table_row_field}={row_val}"
 
     return key, None
+
+
+def _effective_table_row_field(cfg: dict[str, Any]) -> str:
+    ops_key = str(cfg.get("ops_key_field") or "id").strip()
+    return str(cfg.get("table_row_field") or ops_key).strip() or ops_key
+
+
+def extract_row_key_from_extras(
+    extras: Optional[dict[str, Any]],
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> str:
+    """读取规划 extras 里直接给出的行 ID (row_key / table_row_field / 列名键)."""
+    ex = extras or {}
+    cfg = _merge_cfg(session_ops_cfg)
+    for name in (
+        _effective_table_row_field(cfg),
+        str(cfg.get("table_row_key_column") or "").strip(),
+        "row_key",
+    ):
+        if name and ex.get(name) is not None and str(ex[name]).strip():
+            return str(ex[name]).strip()
+    return ""
+
+
+def explicit_row_keys_from_action(
+    extras: Optional[dict[str, Any]],
+    api_context: dict[str, Any],
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> list[tuple[str, Optional[str]]]:
+    """规划已给出目标行 ID → 直接定位, 不经 ops 二次转换."""
+    ex = extras or {}
+    direct = extract_row_key_from_extras(ex, session_ops_cfg)
+    if not direct:
+        return []
+    if direct == FIRST_TABLE_ROW_KEY:
+        return [(FIRST_TABLE_ROW_KEY, "extras.first_row")]
+
+    cfg = _merge_cfg(session_ops_cfg)
+    table_field = _effective_table_row_field(cfg)
+    if ex.get(table_field) and str(ex[table_field]).strip() == direct:
+        return [(direct, f"extras.{table_field}")]
+    if ex.get("row_key") and str(ex["row_key"]).strip() == direct:
+        src = str(ex.get("row_key_source") or "").strip()
+        return [(direct, src or "extras.row_key")]
+
+    ops = get_ops_bucket(api_context)
+    if direct in ops:
+        entry = ops[direct]
+        row_val = _entry_table_row_value(entry, table_field)
+        if row_val and row_val != direct:
+            return [(
+                row_val,
+                f"ops[{direct}].{table_field}={row_val}",
+            )]
+
+    if direct.isdigit() or len(direct) >= 4:
+        return [(direct, "extras直接指定")]
+    return []
+
+
+def resolve_click_row_candidates(
+    row_hint: str,
+    ctx: dict[str, Any],
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+    *,
+    status_hint: str = "",
+) -> list[tuple[str, Optional[str]]]:
+    """行内按钮: 将行提示 (index_by 字段值 / 数字 ID) 解析为表格主键列候选值."""
+    key = (row_hint or "").strip()
+    cfg = _merge_cfg(session_ops_cfg)
+    table_field = str(cfg.get("table_row_field") or "orderId").strip()
+
+    if key == FIRST_TABLE_ROW_KEY:
+        return [(FIRST_TABLE_ROW_KEY, "first_table_row")]
+
+    if key:
+        resolved, hint = resolve_table_row_key(key, ctx, session_ops_cfg)
+        if hint:
+            return [(resolved, hint)]
+        if resolved.isdigit():
+            return [(resolved, hint)]
+
+    # ops 索引未命中且带状态过滤时, 枚举会话内 orderId, 由表格 status_column 二次筛选
+    if status_hint:
+        ops = get_ops_bucket(ctx)
+        seen: set[str] = set()
+        out: list[tuple[str, Optional[str]]] = []
+        for entry in ops.values():
+            if not isinstance(entry, dict):
+                continue
+            v = str(entry.get(table_field) or "").strip()
+            if v and v not in seen:
+                out.append((v, f"ops.{table_field}={v}"))
+                seen.add(v)
+        if out:
+            return out
+
+    if key:
+        return [(key, None)]
+    return []
+
+
+def enrich_table_row_clicks(
+    actions: list[Any],
+    ctx: dict[str, Any] | None,
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> list[Any]:
+    """规划后补全行内 click 的 extras.row_key (索引字段 → 表格行主键), 避免仅靠 intent 无法定位."""
+    if not actions or not ctx:
+        return actions
+    from .script_helpers import FIRST_TABLE_ROW_KEY, is_table_row_click_intent, parse_table_row_click
+
+    for action in actions:
+        if getattr(action, "type", None) != "click":
+            continue
+        ex = dict(getattr(action, "extras", None) or {})
+        intent = getattr(action, "intent", "") or ""
+        explicit_id = extract_row_key_from_extras(ex, session_ops_cfg)
+        if not ex.get("row_key") and not is_table_row_click_intent(intent) and not explicit_id:
+            continue
+        if explicit_id and not ex.get("row_key"):
+            ex["row_key"] = explicit_id
+        parsed = parse_table_row_click(intent, ex)
+        row_hint = ""
+        status_hint: Optional[str] = None
+        if parsed:
+            button, row_hint, status_hint = parsed
+            ex.setdefault("button", button)
+            if status_hint:
+                ex.setdefault("status_filter", status_hint)
+        if not row_hint:
+            skip = {str(ex.get("button") or ""), "日志", "查看", "编辑", "删除"}
+            row_hint = extract_assert_row_hint(intent, skip=skip)
+        if not ex.get("button"):
+            for label in ("日志", "查看", "编辑", "删除"):
+                if label in intent:
+                    ex["button"] = label
+                    break
+        row_key = str(ex.get("row_key") or "").strip()
+        explicit_cands = explicit_row_keys_from_action(ex, ctx, session_ops_cfg)
+        if explicit_cands and explicit_cands[0][0]:
+            ex["row_key"] = explicit_cands[0][0]
+            if explicit_cands[0][1]:
+                ex["row_key_source"] = explicit_cands[0][1]
+        elif not row_key or not row_key.isdigit():
+            hint = row_hint or row_key
+            if hint:
+                resolved, ops_hint = resolve_table_row_key(hint, ctx, session_ops_cfg)
+                if ops_hint and resolved and str(resolved).strip().isdigit():
+                    ex["row_key"] = str(resolved).strip()
+        if not ex.get("row_key") and is_table_row_click_intent(intent):
+            if parsed and parsed[1] == FIRST_TABLE_ROW_KEY:
+                ex["row_key"] = FIRST_TABLE_ROW_KEY
+            elif not row_key and ex.get("button"):
+                ex["row_key"] = FIRST_TABLE_ROW_KEY
+        if ex:
+            action.extras = ex
+    return actions
+
+
+def extract_assert_row_hint(intent: str, *, skip: Optional[set[str]] = None) -> str:
+    """从 assert_table intent 提取索引字段值 (如 选择「多题」→ 多题)."""
+    text = (intent or "").strip()
+    if not text:
+        return ""
+    skip = skip or set()
+    for pat in (
+        r"前面选择了[「'\"]([^」'\"]+)[」'\"]",
+        r"选择[了]?[「'\"]([^」'\"]+)[」'\"]",
+        r"前序选择[了]?[「'\"]([^」'\"]+)[」'\"]",
+        r"记录[为是]?[「'\"]([^」'\"]+)[」'\"]",
+    ):
+        m = re.search(pat, text)
+        if m:
+            val = m.group(1).strip()
+            if val and val not in skip:
+                return val
+    for q in re.findall(r"[「'\"]([^」'\"]+)[」'\"]", text):
+        q = q.strip()
+        if q and q not in skip:
+            return q
+    return ""
+
+
+def resolve_assert_table_row_key(
+    action: Any,
+    ctx: dict[str, Any],
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> bool:
+    """将 assert_table 的 value/row_key 从索引语义或残留 ${} 解析为表格行主键值. 成功返回 True."""
+    if getattr(action, "type", None) != "assert_table":
+        return False
+    ex = dict(getattr(action, "extras", None) or {})
+    row_key = str(getattr(action, "value", None) or ex.get("row_key") or "").strip()
+    if row_key.isdigit():
+        return False
+    skip = {str(ex.get("expected") or ""), str(ex.get("column") or "")}
+    hint = row_key if row_key and not row_key.startswith("${") else ""
+    if not hint or "${" in hint:
+        hint = extract_assert_row_hint(getattr(action, "intent", "") or "", skip=skip)
+    if not hint:
+        return False
+    resolved, ops_hint = resolve_table_row_key(hint, ctx, session_ops_cfg)
+    if not ops_hint or not resolved or not str(resolved).strip().isdigit():
+        return False
+    action.value = str(resolved).strip()
+    if ex.get("row_key"):
+        ex["row_key"] = action.value
+        action.extras = ex
+    return True
+
+
+def enrich_session_assertions(
+    actions: list[Any],
+    ctx: dict[str, Any] | None,
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> list[Any]:
+    """规划后补全 assert_table 行标识 (索引字段 → 表格行主键)."""
+    if not actions or not ctx:
+        return actions
+    for action in actions:
+        resolve_assert_table_row_key(action, ctx, session_ops_cfg)
+    return actions
+
+
+def enrich_session_actions(
+    actions: list[Any],
+    ctx: dict[str, Any] | None,
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> list[Any]:
+    """规划后统一补全会话相关的 click / assert_table 行主键."""
+    enrich_table_row_clicks(actions, ctx, session_ops_cfg)
+    enrich_session_assertions(actions, ctx, session_ops_cfg)
+    return actions
+
+
+def get_table_columns_cfg(
+    session_ops_cfg: Optional[dict[str, Any]] = None,
+) -> tuple[str, str, str]:
+    """(table_row_field, table_row_key_column, status_column) 来自 session_ops 或 extras 覆盖."""
+    cfg = _merge_cfg(session_ops_cfg)
+    return (
+        str(cfg.get("table_row_field") or "orderId").strip(),
+        str(cfg.get("table_row_key_column") or "").strip(),
+        str(cfg.get("status_column") or "").strip(),
+    )
 
 
 def capture_from_page(page: Any, page_capture: Optional[dict[str, Any]]) -> dict[str, str]:
@@ -162,6 +477,8 @@ def _merge_cfg(overrides: Optional[dict[str, Any]]) -> dict[str, Any]:
     cfg: dict[str, Any] = {
         "ops_key_field": _DEFAULT_SESSION_OPS["ops_key_field"],
         "table_row_field": _DEFAULT_SESSION_OPS["table_row_field"],
+        "table_row_key_column": _DEFAULT_SESSION_OPS["table_row_key_column"],
+        "status_column": _DEFAULT_SESSION_OPS["status_column"],
         "entity_id": dict(_DEFAULT_SESSION_OPS["entity_id"]),
         "resolve": dict(_DEFAULT_SESSION_OPS["resolve"]),
         "fields": dict(_DEFAULT_SESSION_OPS["fields"]),
@@ -173,6 +490,10 @@ def _merge_cfg(overrides: Optional[dict[str, Any]]) -> dict[str, Any]:
         cfg["ops_key_field"] = overrides["ops_key_field"]
     if overrides.get("table_row_field"):
         cfg["table_row_field"] = overrides["table_row_field"]
+    if overrides.get("table_row_key_column"):
+        cfg["table_row_key_column"] = overrides["table_row_key_column"]
+    if overrides.get("status_column"):
+        cfg["status_column"] = overrides["status_column"]
     if isinstance(overrides.get("entity_id"), dict):
         cfg["entity_id"].update(overrides["entity_id"])
     if isinstance(overrides.get("resolve"), dict):
@@ -284,6 +605,7 @@ def _build_fields(
     prev_click: Optional[str],
     extras_fields: Optional[dict[str, Any]],
     api_context: Optional[dict[str, Any]] = None,
+    intent: str = "",
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
     ctx = api_context or {}
@@ -304,8 +626,13 @@ def _build_fields(
             val = ctx.get(key)
             if val is not None and str(val).strip():
                 out[name] = str(val).strip()
-        elif src == "prev_click" and prev_click:
-            out[name] = prev_click
+        elif src == "prev_click":
+            hinted = _extract_label_from_intent(intent)
+            # intent 括号/引号内的文案优先于可能来自上一用例的陈旧 prev_click
+            if hinted and (not prev_click or hinted in intent):
+                out[name] = hinted
+            elif prev_click:
+                out[name] = prev_click
         elif src == "case_id" and case_id:
             out[name] = case_id
         elif src == "literal" and spec.get("value") is not None:
@@ -404,6 +731,7 @@ def execute_bind_session(
         prev_click=prev_click,
         extras_fields=ex.get("fields") if isinstance(ex.get("fields"), dict) else None,
         api_context=api_context,
+        intent=intent,
     )
     if var_name:
         fields.setdefault("var", var_name)

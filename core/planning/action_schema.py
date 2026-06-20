@@ -1,6 +1,6 @@
 """规划动作结构 —— 规划器只产出"做什么", 不含选择器.
 
-与旧 Action 的本质区别: 没有 locator 字段. 选择器在执行时由五级链动态解析,
+与旧 Action 的本质区别: 没有 locator 字段. 选择器在执行时由三级链动态解析,
 这样页面改版后选择器变了、意图不变, 也能继续工作.
 
 type 动作类型枚举 (英文标识符, 中文意图):
@@ -39,6 +39,7 @@ class PlannedAction(BaseModel):
     force_selector: Optional[str] = Field(None, exclude=True)
     exclude_selectors: list[str] = Field(default_factory=list, exclude=True)
     resolve_hint: Optional[str] = Field(None, exclude=True)
+    skip_acceleration: bool = Field(False, exclude=True, description="重试时跳过 L1/L2 缓存记忆 (对齐 V3 skip heuristic)")
     locator_info: Optional[dict] = Field(None, exclude=True, description="运行时定位信息(含 method)")
 
     def needs_locating(self) -> bool:

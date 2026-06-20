@@ -10,6 +10,7 @@ from ..locating.normalize import normalize_url
 
 _EMPTY_ROW_MARKERS = ("暂无数据", "无数据", "No data", "no data")
 _SUBMIT_ERROR_MARKERS = ("任务已处理", "请勿重复提交", "不可重复提交")
+FIRST_TABLE_ROW_KEY = "__first_row__"
 
 
 def bring_page_to_front(page: Any) -> None:
@@ -226,6 +227,220 @@ def _is_list_page_url(url: str) -> bool:
     return "/wait-preview" in u or "/all-question" in u
 
 
+def is_table_row_click_intent(intent: str) -> bool:
+    """表格行内按钮 (对应/该行/工单等), 非侧栏/筛选区."""
+    text = intent or ""
+    if "点击" not in text:
+        return False
+    if any(w in text for w in ("侧栏", "菜单", "下拉", "筛选区")):
+        return False
+    markers = (
+        "对应", "该行", "此行", "列表中", "某行", "工单", "订单", "记录", "行内",
+        "第一个", "第一行", "首行", "首条", "任务的",
+    )
+    return any(m in text for m in markers)
+
+
+def _extract_status_hint_from_intent(intent: str) -> Optional[str]:
+    """从 intent 抽取状态过滤值, 如 生产状态为「已退场」."""
+    text = intent or ""
+    for pat in (
+        r"(?:生产)?状态[为是][「'\"]([^」'\"]+)[」'\"]",
+        r"(?:生产)?状态[为是]\s*([^\s，。;；（(]+)",
+    ):
+        m = re.search(pat, text)
+        if m:
+            val = m.group(1).strip()
+            if val:
+                return val
+    return None
+
+
+def parse_table_row_click(
+    intent: str,
+    extras: Optional[dict[str, Any]] = None,
+) -> Optional[tuple[str, str, Optional[str]]]:
+    """(按钮文案, 行提示, 状态列过滤值). extras 可覆盖 row_key / status_filter."""
+    ex = extras or {}
+    row_key_extra = str(ex.get("row_key") or "").strip()
+    status_extra = str(ex.get("status_filter") or ex.get("status") or "").strip()
+
+    text = (intent or "").strip()
+    if not row_key_extra and not is_table_row_click_intent(text):
+        return None
+
+    button = str(ex.get("button") or "").strip()
+    row_hint = row_key_extra
+    status_hint = status_extra or None
+
+    if text:
+        quoted = re.findall(
+            r"[\"'“”‘’「」『』]([^\"'“”‘’「」『』]+)[\"'“”‘’「」『』]",
+            text,
+        )
+        if not button:
+            btn_m = re.search(r"点击[「'\"]([^」'\"]+)[」'\"]", text)
+            button = (btn_m.group(1) if btn_m else (quoted[-1] if quoted else "")).strip()
+        if not row_hint:
+            for block in reversed(re.findall(r"[（(]([^）)]+)[）)]", text)):
+                m = re.search(r"选择[了]?[「'\"]([^」'\"]+)[」'\"]", block)
+                if m:
+                    row_hint = m.group(1).strip()
+                    break
+            if not row_hint:
+                m = re.search(r"选择[了]?[「'\"]([^」'\"]+)[」'\"]", text)
+                if m:
+                    row_hint = m.group(1).strip()
+            m = re.search(r"工单ID[为是]?\s*(\d+)", text)
+            if m:
+                row_hint = m.group(1).strip()
+            if not row_hint and quoted:
+                skip = {button}
+                if status_hint:
+                    skip.add(status_hint)
+                for q in reversed(quoted):
+                    if q not in skip:
+                        row_hint = q.strip()
+                        break
+        if not status_hint:
+            status_hint = _extract_status_hint_from_intent(text)
+
+    if not button:
+        return None
+    if not row_hint:
+        if re.search(r"第一个|第一行|首行|首条", text):
+            row_hint = FIRST_TABLE_ROW_KEY
+        elif is_table_row_click_intent(text):
+            row_hint = FIRST_TABLE_ROW_KEY
+        else:
+            return None
+    return button, row_hint, status_hint
+
+
+def _button_label_variants(label: str) -> list[str]:
+    """UI 按钮文案可能与用例不一致, 如「查看」vs「查 看」."""
+    out: list[str] = []
+    for v in (label, label.replace("\u00a0", " "), label.replace(" ", "")):
+        v = (v or "").strip()
+        if v and v not in out:
+            out.append(v)
+    collapsed = label.replace(" ", "").replace("\u00a0", "")
+    if collapsed in ("查看",) or label in ("查看", "查 看", "查\u00a0看"):
+        for v in ("查看", "查 看"):
+            if v not in out:
+                out.append(v)
+    return out
+
+
+def _find_row_button(row: Any, label: str) -> Any:
+    for variant in _button_label_variants(label):
+        btn = row.get_by_role("button", name=variant)
+        if btn.count():
+            return btn.last
+        btn = row.get_by_role("link", name=variant)
+        if btn.count():
+            return btn.last
+        esc = variant.replace("'", "\\'")
+        btn = row.locator(f"button:has-text('{esc}'), a:has-text('{esc}')")
+        if btn.count():
+            return btn.last
+    return None
+
+
+def _table_key_col_index(headers: list[str], configured: str) -> int:
+    for name in (configured, "任务ID", "工单ID", "ID"):
+        if name and name in headers:
+            return headers.index(name)
+    return -1
+
+
+def _row_matches_key(cells: list[str], row_key: str, key_idx: int) -> bool:
+    """行是否含目标 ID: 优先 key 列, 无列配置时扫整行任意单元格."""
+    from .session_ops import table_row_key_matches
+
+    if key_idx >= 0 and key_idx < len(cells):
+        if table_row_key_matches(cells[key_idx], row_key):
+            return True
+    for cell in cells:
+        if table_row_key_matches(cell, row_key):
+            return True
+    return False
+
+
+def _row_matches_status(cells: list[str], status_filter: str, status_idx: int) -> bool:
+    if not status_filter:
+        return True
+    if status_idx >= 0 and status_idx < len(cells):
+        return status_filter in cells[status_idx]
+    joined = "".join(cells)
+    return status_filter in joined
+
+
+def locate_button_in_table_row(
+    page: Any,
+    *,
+    button_label: str,
+    row_keys: list[str],
+    key_col: str = "",
+    status_column: str = "",
+    status_filter: Optional[str] = None,
+) -> tuple[Any, str]:
+    """在表格指定行操作列定位按钮; 多个按钮时取该行最后一个匹配.
+
+    row_keys 由规划 extras 直接给出时, 无需 session_ops 列名配置, 会在整行单元格中匹配 ID.
+    """
+    label = (button_label or "").strip()
+    keys = [k.strip() for k in row_keys if (k or "").strip()]
+    if not label or not keys:
+        return None, "行内定位: 缺少按钮或行标识"
+
+    want_first = FIRST_TABLE_ROW_KEY in keys
+
+    for table_sel in ("table", ".ant-table table"):
+        tables = page.locator(table_sel)
+        for ti in range(tables.count()):
+            table = tables.nth(ti)
+            headers = [h.strip() for h in table.locator("thead th, thead td").all_inner_texts()]
+            if not headers:
+                continue
+            key_idx = _table_key_col_index(headers, key_col)
+            status_idx = (
+                headers.index(status_column)
+                if status_filter and status_column and status_column in headers
+                else -1
+            )
+            body_rows = table.locator("tbody tr")
+            if want_first:
+                for ri in range(body_rows.count()):
+                    row = body_rows.nth(ri)
+                    cells = [c.strip() for c in row.locator("td").all_inner_texts()]
+                    if not cells or any(m in "".join(cells) for m in _EMPTY_ROW_MARKERS):
+                        continue
+                    if status_idx >= 0 and status_filter:
+                        if status_idx >= len(cells) or status_filter not in cells[status_idx]:
+                            continue
+                    btn = _find_row_button(row, label)
+                    if btn is not None:
+                        row_id = cells[key_idx] if 0 <= key_idx < len(cells) else str(ri)
+                        return btn, f"table_row[first:{row_id}].{label}"
+                continue
+            for row_key in keys:
+                if row_key == FIRST_TABLE_ROW_KEY:
+                    continue
+                for ri in range(body_rows.count()):
+                    row = body_rows.nth(ri)
+                    cells = [c.strip() for c in row.locator("td").all_inner_texts()]
+                    if not _row_matches_key(cells, row_key, key_idx):
+                        continue
+                    if not _row_matches_status(cells, status_filter or "", status_idx):
+                        continue
+                    btn = _find_row_button(row, label)
+                    if btn is not None:
+                        hit = cells[key_idx] if 0 <= key_idx < len(cells) else row_key
+                        return btn, f"table_row[{hit}].{label}"
+    return None, f"行内定位: 未找到 row_keys={keys[:3]!r}"
+
+
 def wait_and_recover_active_page(
     page: Any, *, poll_ms: int = 200, max_polls: int = 25, prefer: Any = None,
 ) -> tuple[Any, bool]:
@@ -273,6 +488,15 @@ def _reload_list_page(page: Any, *, timeout_ms: int = 15000) -> None:
         page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
     except Exception:
         pass
+    try:
+        from ..dom.semantic_dom import wait_for_dom_stable
+
+        wait_for_dom_stable(page, quiet_ms=300, timeout_ms=min(timeout_ms, 8000))
+    except Exception:
+        try:
+            page.wait_for_timeout(500)
+        except Exception:
+            pass
 
 
 def wait_after_detail_submit(

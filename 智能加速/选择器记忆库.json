@@ -33,9 +33,10 @@
     "name": "题目内容涉及不良导向/敏感信息",
     "exact": true,
     "nth": 0,
-    "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
-    "score": 1,
-    "ts": 1781507296.975231
+    "in_dialog": false,
+    "selector": "text:\"题目内容涉及不良导向/敏感信息\"",
+    "score": 4,
+    "ts": 1781957138.970579
   },
   "/video/wait-preview\u0001click\u0001点击领取按钮": {
     "method": "role",
@@ -328,17 +329,6 @@
     "score": 1,
     "ts": 1781779824.268596
   },
-  "/video/wait-preview\u0001click\u0001点击待前审列表中任务的查看": {
-    "method": "role",
-    "role": "button",
-    "name": "查 看",
-    "exact": false,
-    "nth": 0,
-    "in_dialog": false,
-    "selector": "role=button[name=\"查 看\"]",
-    "score": 1,
-    "ts": 1781779849.614113
-  },
   "/video/all-question\u0001click\u0001点击提交按钮": {
     "method": "role",
     "role": "button",
@@ -418,17 +408,6 @@
     "score": 1,
     "ts": 1781887069.522936
   },
-  "/video/detail\u0001click\u0001点击提交按钮": {
-    "method": "role",
-    "role": "button",
-    "name": "提 交",
-    "exact": false,
-    "nth": 0,
-    "in_dialog": false,
-    "selector": "role=button[name=\"提 交\"]",
-    "score": 1,
-    "ts": 1781887228.884606
-  },
   "/video/welcome\u0001click\u0001点击全部题目": {
     "method": "role",
     "role": "link",
@@ -438,5 +417,12 @@
     "selector": "role=link[name=\"全部题目\"]",
     "score": 1,
     "ts": 1781888678.3441339
+  },
+  "/video/all-question\u0001click\u0001在下拉选项中点击策略投放": {
+    "method": "css",
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option-content:has-text(\"策略投放\")",
+    "nth": 0,
+    "score": 1,
+    "ts": 1781926282.135861
   }
 }

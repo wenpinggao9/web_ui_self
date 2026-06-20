@@ -28,7 +28,6 @@ from core.execution.post_check import _DEFAULT_SYSTEM as OLD_POST_CHECK  # noqa:
 from core.llm import LLMAdapter, PromptLoader  # noqa: E402
 from core.llm_client import _extract_json  # noqa: E402
 from core.planning.action_planner import _DEFAULT_SYSTEM as OLD_ACTION_PLAN  # noqa: E402
-from core.planning.intent_splitter import _DEFAULT_SYSTEM as OLD_INTENT_SPLIT  # noqa: E402
 from core.preprocess.case_sort import _DEFAULT_SYSTEM as OLD_CASE_SORT  # noqa: E402
 from core.preprocess.precondition import _DEFAULT_SYSTEM as OLD_PRECONDITION  # noqa: E402
 from core.readiness.pre_check import _DEFAULT_SYSTEM as OLD_READINESS  # noqa: E402
@@ -39,7 +38,6 @@ REPLAY_STAGES = (
     "action_plan",
     "post_check",
     "readiness",
-    "intent_split",
     "precondition",
     "case_sort",
     "element_decide",
@@ -49,7 +47,6 @@ OLD_DEFAULTS: dict[str, str] = {
     "action_plan": OLD_ACTION_PLAN,
     "post_check": OLD_POST_CHECK,
     "readiness": OLD_READINESS,
-    "intent_split": OLD_INTENT_SPLIT,
     "precondition": OLD_PRECONDITION,
     "case_sort": OLD_CASE_SORT,
     "element_decide": OLD_ELEMENT_DECIDE,
@@ -205,16 +202,6 @@ def _compare_stage(stage: str, hist: Optional[dict], old: Optional[dict], new: O
             if old_n != new_n:
                 notes.append(f"⚠ 动作数变化 {old_n} → {new_n}")
 
-    elif stage == "intent_split":
-        for label, data in [("历史", hist), ("旧版", old), ("新版", new)]:
-            if not data:
-                continue
-            steps = data.get("steps") or []
-            split = data.get("split")
-            if split is None:
-                split = len(steps) > 1
-            notes.append(f"{label} split={split} steps={len(steps)}")
-
     elif stage == "element_decide":
         for label, data in [("历史", hist), ("旧版", old), ("新版", new)]:
             if data and "index" in data:
@@ -320,7 +307,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="从可观测性.json 回放并对比旧/新提示词")
     ap.add_argument("target", help="可观测性.json 文件或包含它的目录")
     ap.add_argument("--config", default="config.yaml", help="LLM 配置")
-    ap.add_argument("--stages", default="post_check,readiness,action_plan,intent_split",
+    ap.add_argument("--stages", default="post_check,readiness,action_plan",
                     help="逗号分隔的环节名")
     ap.add_argument("--limit", type=int, default=5, help="每个文件每个环节最多回放条数")
     ap.add_argument("--dry-run", action="store_true", help="只收集样本并解析历史 raw, 不调 LLM")

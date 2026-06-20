@@ -1549,21 +1549,6 @@
     "nth": 0
   },
   {
-    "route": "/video/detail",
-    "action_type": "click",
-    "intent": "点击'提交'按钮",
-    "tokens": [
-      "按",
-      "钮",
-      "交",
-      "击",
-      "点",
-      "提"
-    ],
-    "selector": "role=button[name=\"提 交\"]",
-    "nth": 0
-  },
-  {
     "route": "/video/welcome",
     "action_type": "click",
     "intent": "点击'全部题目'",
@@ -1576,6 +1561,27 @@
       "击"
     ],
     "selector": "role=link[name=\"全部题目\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在下拉选项中点击\"策略投放\"",
+    "tokens": [
+      "项",
+      "略",
+      "拉",
+      "下",
+      "选",
+      "中",
+      "点",
+      "投",
+      "放",
+      "在",
+      "击",
+      "策"
+    ],
+    "selector": ".ant-select-dropdown:visible .ant-select-item-option-content:has-text(\"策略投放\")",
     "nth": 0
   }
 ]

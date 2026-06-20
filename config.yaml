@@ -32,7 +32,6 @@ llm:
   #   action_plan:
   #     system: "自定义系统提示词, 覆盖 prompts/action_plan.system.md"
   #     user: "自定义用户提示词, 支持 {{module_path}} {{steps}} {{expectations}} 占位符"
-  #   intent_split: {system: "", user: ""}
   #   element_decide: {system: "", user: ""}
   #   precondition: {system: "", user: ""}
   #   case_sort: {system: "", user: ""}

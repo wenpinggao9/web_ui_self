@@ -368,6 +368,38 @@ def recover_expected_radio(page: Any, label: str, console: Any = None) -> bool:
         return False
 
 
+def attempt_submit_prerecovery(
+    dispatcher: Any,
+    action: PlannedAction,
+    console: Any = None,
+    *,
+    prior_actions: Optional[list[PlannedAction]] = None,
+) -> bool:
+    """提交步骤后校验失败时, 补选审核原因 (不依赖 LLM readiness)."""
+    if not _is_submit_action(action):
+        return False
+    page = dispatcher.page
+    case_steps: list[str] = []
+    case_notes: list[str] = []
+    expected = resolve_expected_radio_label(
+        last_click_label=getattr(dispatcher, "_last_click_label", None),
+        api_context=getattr(dispatcher, "api_context", {}) or {},
+        prior_actions=prior_actions or [],
+        case_steps=case_steps,
+        case_notes=case_notes,
+    )
+    if not expected:
+        return False
+    # 已选中则无需恢复; 未选中则点击 wrapper
+    try:
+        state = page.evaluate(_RADIO_CHECK_JS, expected) or {}
+        if state.get("checked"):
+            return False
+    except Exception:
+        pass
+    return recover_expected_radio(page, expected, console)
+
+
 def run_deterministic_pre_readiness(
     dispatcher: Any,
     next_action: PlannedAction,

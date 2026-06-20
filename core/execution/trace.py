@@ -71,15 +71,6 @@ class ExecutionTrace:
             c.print(f"[dim]  ├─ 动作规划[/dim] 共 {data.get('count', 0)} 个动作")
             for i, a in enumerate(data.get("actions") or [], 1):
                 c.print(self._fmt_action(i, a))
-        elif phase == "intent_split":
-            c.print(
-                f"[dim]  ├─ 意图拆分[/dim] {data.get('before', 0)} → {data.get('after', 0)} 个动作"
-                + (f" (拆分 {data.get('split_count', 0)} 处)" if data.get("split_count") else "")
-            )
-            for d in data.get("details") or []:
-                c.print(f"[dim]  │   · {d}[/dim]")
-            for i, a in enumerate(data.get("actions") or [], 1):
-                c.print(self._fmt_action(i, a, prefix="  │   "))
         elif phase == "step_begin":
             c.print(
                 f"[dim]  ├─ 执行准备[/dim] step={data.get('step_no')} "
@@ -89,7 +80,7 @@ class ExecutionTrace:
                 c.print(f"[dim]  │   URL: {data['url']}[/dim]")
         elif phase == "locate_chain":
             c.print(
-                f"[dim]  ├─ 五级定位链[/dim] [{data.get('action_type')}] {data.get('intent', '')[:60]}"
+                f"[dim]  ├─ 三级定位链[/dim] [{data.get('action_type')}] {data.get('intent', '')[:60]}"
             )
             if data.get("hint"):
                 c.print(f"[dim]  │   resolve_hint: {str(data.get('hint'))[:120]}[/dim]")
@@ -109,13 +100,13 @@ class ExecutionTrace:
                     f"selector={data.get('hit_selector')!r}[/dim]"
                 )
             elif data.get("llm_called"):
-                c.print("[dim]  │   ✗ 五级均未命中 (含 L5 大模型)[/dim]")
+                c.print("[dim]  │   ✗ 三级均未命中 (含 L3 大模型)[/dim]")
             else:
-                c.print("[dim]  │   ✗ 五级均未命中 (未调用 L5)[/dim]")
+                c.print("[dim]  │   ✗ 三级均未命中 (未调用 L3)[/dim]")
         elif phase == "locate":
             src = data.get("source", "?")
             if src == "失败":
-                src = "五级均未命中"
+                src = "三级均未命中"
             c.print(
                 f"[dim]  ├─ 元素定位结果[/dim] 来源={src} "
                 f"selector={data.get('selector')!r}"
@@ -133,6 +124,11 @@ class ExecutionTrace:
             t = data.get("type", "")
             label = "API" if t == "api_call" else "Playwright"
             c.print(f"[{color}]  ├─ {label} 分发 {mark}[/{color}] {data.get('message', '')[:200]}")
+        elif phase == "retry_plan":
+            c.print(
+                f"[dim]  ├─ 重试策略 LLM[/dim] focus={data.get('retry_focus')} "
+                f"hint={str(data.get('resolve_hint') or '')[:100]}"
+            )
         elif phase == "retry":
             c.print(
                 f"[dim]  ├─ 后校验重试[/dim] 第{data.get('attempt')}次 "

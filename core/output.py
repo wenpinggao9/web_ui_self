@@ -9,8 +9,6 @@
     ├── 使用的模型提示词.md
     ├── 模型原始响应.txt          (动作规划 LLM)
     ├── 模型原始响应.json
-    ├── 意图拆分原始响应.txt      (意图拆分 LLM, 每 case 一次)
-    ├── 意图拆分原始响应.json
     ├── 已规划动作.json
     ├── playwright_<用例编号>.py  (可独立运行的脚本)
     ├── 执行追踪.json   (verbose_trace 开启时)
@@ -51,12 +49,6 @@ class FileManager:
     def save_raw_response(self, case_id: str, text: str) -> None:
         (self.case_dir(case_id) / "模型原始响应.txt").write_text(text, encoding="utf-8")
         self._try_save_json(text, self.case_dir(case_id) / "模型原始响应.json")
-
-    def save_intent_split_response(self, case_id: str, text: str) -> None:
-        if not text:
-            return
-        (self.case_dir(case_id) / "意图拆分原始响应.txt").write_text(text, encoding="utf-8")
-        self._try_save_json(text, self.case_dir(case_id) / "意图拆分原始响应.json")
 
     def _try_save_json(self, text: str, path: Path) -> None:
         import re

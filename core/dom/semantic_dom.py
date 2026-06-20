@@ -82,7 +82,7 @@ def extract_semantic_dom(
 
 
 class DomIndex:
-    """带编号的 DOM 摘要 + 每个编号对应的选择器, 供 L5 元素决策使用."""
+    """带编号的 DOM 摘要 + 每个编号对应的选择器, 供 L3 元素决策使用."""
     def __init__(self, numbered_text: str, selectors: list[dict]) -> None:
         self.numbered_text = numbered_text
         self.selectors = selectors
@@ -122,7 +122,7 @@ def compact_dom_lines(
 
 
 def dom_index_from_items(items: list[dict], limit: int = 80) -> DomIndex:
-    """从已抽取的 semantic_items 构建 L5 DomIndex (不再读页)."""
+    """从已抽取的 semantic_items 构建 L3 DomIndex (不再读页)."""
     sliced = items[:limit]
     lines: list[str] = []
     sel_list: list[dict] = []
@@ -141,7 +141,7 @@ def extract_semantic_items(
     items: Optional[list[dict]] = None,
     profile: str = "locate",
 ) -> list[dict]:
-    """返回原始语义 DOM 条目列表, 供 L5 纠偏脚本使用."""
+    """返回原始语义 DOM 条目列表, 供 L3 纠偏脚本使用."""
     if items is not None:
         return items
     return _snapshot_items(page, dialog_first, stable, selectors, profile=profile)

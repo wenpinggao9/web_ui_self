@@ -62,7 +62,11 @@ dispatch_success 与页面结论:
 失败时的重试建议:
 - retry_focus 只能是: 值、选择器、两者、无
 - suggested_value: 当 retry_focus 为 值 或 两者 时, 给出建议的新输入值
-- resolve_hint: 当 retry_focus 为 选择器 或 两者 时, 给出换元素时的提示, 例如"点击弹窗中的确认按钮而不是取消按钮"
+- resolve_hint: 当 retry_focus 为 选择器 或 两者 时, 给出换元素时的提示
+  - **必须尽量给出可直接执行的 Playwright 选择器**, 如 `button:has-text('查 看')` 或 `table tbody tr:first-child button`
+  - 若 DOM 摘要中已明确按钮索引, 写出 `[89]` 等索引号
+  - 列表「查看」按钮在页面上常为「查 看」(中间有空格), resolve_hint 应使用页面真实文案
+  - 禁止只写自然语言而不给选择器/index (如仅说「点击第一行」而无 selector)
 
 输出规则:
 - 只输出一个 JSON 对象, 不要输出解释、Markdown、注释或分析过程。

@@ -1,6 +1,7 @@
 """变量替换工具 —— 将步骤/预期中的 ${varName} 替换为运行时值."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -26,3 +27,62 @@ def substitute_in_list(items: list[str], context: dict[str, Any]) -> list[str]:
         # 没有上下文时原样返回, 保持调用方列表对象不被无意义复制.
         return items
     return [substitute_variables(item, context) for item in items]
+
+
+def format_session_context(
+    ctx: dict[str, Any] | None,
+    session_ops_cfg: dict[str, Any] | None = None,
+) -> str:
+    """将跨用例会话变量/ops 格式化为动作规划可读摘要."""
+    if not ctx:
+        return "(无)"
+    cfg = session_ops_cfg or {}
+    table_field = str(cfg.get("table_row_field") or "").strip() or "行主键"
+    index_by = cfg.get("index_by") or []
+    if isinstance(index_by, str):
+        index_by = [index_by]
+
+    lines: list[str] = []
+    skip = frozenset({"ops", "_ops_index"})
+    scalars: list[str] = []
+    for k, v in sorted(ctx.items()):
+        if k in skip or isinstance(v, (dict, list)):
+            continue
+        scalars.append(f"- {k} = {v}")
+    if scalars:
+        lines.append("标量变量 (步骤中可用 ${名称} 引用):")
+        lines.extend(scalars)
+
+    ops = ctx.get("ops")
+    if isinstance(ops, dict) and ops:
+        lines.append(
+            f"ops 记录 (bind_session 写入; 行内点击 extras.row_key 填 {table_field}):"
+        )
+        for eid, entry in ops.items():
+            if not isinstance(entry, dict):
+                continue
+            row_val = entry.get(table_field) or entry.get("orderId") or ""
+            if index_by and row_val:
+                tags = [
+                    f"{f}={entry.get(f)!r}"
+                    for f in index_by
+                    if entry.get(f) not in (None, "")
+                ]
+                if tags:
+                    lines.append(f"- {' | '.join(tags)} → {table_field}={row_val}")
+                    continue
+            lines.append(
+                f"- ops[{eid}] = {json.dumps(entry, ensure_ascii=False)}"
+            )
+    idx = ctx.get("_ops_index")
+    if isinstance(idx, dict) and idx:
+        lines.append("ops 反向索引 (索引字段值 → 实体ID):")
+        for field, bucket in idx.items():
+            if not isinstance(bucket, dict) or not bucket:
+                continue
+            pairs = ", ".join(
+                f"{k!r}→{v}" for k, v in list(bucket.items())[:12]
+            )
+            lines.append(f"- {field}: {pairs}")
+
+    return "\n".join(lines) if lines else "(无)"
