@@ -448,6 +448,7 @@ class PlaywrightRunner:
 
         if try_dismiss_blocking_dialog(self.dispatcher.page):
             self.console.print("  [cyan]就绪恢复: 规则关弹窗成功, 重新就绪检查[/cyan]")
+            self.dispatcher.mark_popup_dismiss_used(before_intent=action.intent)
             rdy = self.readiness_checker.check(self.dispatcher.page, action, context=rctx)
             if rdy.ready:
                 return seq, idx, False
@@ -486,10 +487,13 @@ class PlaywrightRunner:
         if any(is_redline_recovery_intent(r.intent) for r in recovery):
             if try_dismiss_blocking_dialog(self.dispatcher.page):
                 self.console.print("  [cyan]恢复: 规则关弹窗成功[/cyan]")
+                if main_action and main_action.intent:
+                    self.dispatcher.mark_popup_dismiss_used(before_intent=main_action.intent)
                 if all(is_redline_recovery_intent(r.intent) for r in recovery):
                     return RecoveryExecResult(seq=seq, outcomes=[], skip_main=False)
 
         outcomes: list = []
+        executed_recovery: list[PlannedAction] = []
         for rec in recovery:
             rec.is_recovery = True
             prepare_dialog_recovery_action(rec)
@@ -533,6 +537,8 @@ class PlaywrightRunner:
                 row_msg = f"{msg} | 恢复后校验未通过"
 
             outcomes.append(RecoveryStepOutcome(rec, ok, post_ok, row_msg))
+            if ok and (post_ok is None or post_ok):
+                executed_recovery.append(rec)
             results.append(ExecResult(
                 step_no=seq,
                 raw_text=f"[恢复] {rec.intent}",
@@ -545,6 +551,11 @@ class PlaywrightRunner:
                 locator_repr=rec.selector,
                 post_check_ok=post_ok if post_ok is not None else True,
             ))
+
+        if executed_recovery:
+            self.dispatcher.record_popup_recovery(executed_recovery)
+            if main_action and main_action.intent:
+                self.dispatcher.mark_popup_dismiss_used(before_intent=main_action.intent)
 
         skip_main = (
             should_skip_main_after_recovery(outcomes, main_action)

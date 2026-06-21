@@ -1,89 +1,61 @@
 {
-  "case_id": "vip_前审_005",
+  "case_id": "vip_前审_006",
   "feature_titles": [
     "大学增加前审",
     "前审功能",
-    "Case 5"
+    "Case 6"
   ],
-  "total_steps": 8,
+  "total_steps": 7,
   "passed": 7,
-  "failed": 1,
-  "summary": "失败",
-  "execution_time": "1分53秒",
-  "generated_time": "2026-06-21 18:30:04",
+  "failed": 0,
+  "summary": "通过",
+  "execution_time": "1分6秒",
+  "generated_time": "2026-06-21 23:25:46",
   "details": [
     {
       "step": "步骤1: click",
       "action": {
         "type": "click",
-        "intent": "点击侧栏菜单'全部题目'进入全部题目页面",
+        "intent": "点击'全部题目'",
         "selector": "role=link[name=\"全部题目\"]"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击侧栏菜单'全部题目'进入全部题目页面 | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c",
+      "message": "点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c",
       "error": "",
       "selector": "role=link[name=\"全部题目\"]",
-      "resolved_html": "点击 点击侧栏菜单'全部题目'进入全部题目页面 | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852"
+      "resolved_html": "点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"dis"
     },
     {
       "step": "步骤2: click",
       "action": {
         "type": "click",
-        "intent": "在筛选区点击'来源'下拉框",
-        "selector": "label:\"来源\""
+        "intent": "点击'工单ID'作为搜索类型",
+        "selector": "label:has-text(\"工单ID\")"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 在筛选区点击'来源'下拉框 | 实际目标: <input type=\"search\" id=\"source\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"source_list\" aria-autocomplete=\"list\" aria-controls=\"so",
+      "message": "点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>",
       "error": "",
-      "selector": "label:\"来源\"",
-      "resolved_html": "点击 在筛选区点击'来源'下拉框 | 实际目标: <input type=\"search\" id=\"source\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"source_list\" aria-autocomplete"
+      "selector": "label:has-text(\"工单ID\")",
+      "resolved_html": "点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>"
     },
     {
-      "step": "步骤3: click",
+      "step": "步骤3: fill",
       "action": {
-        "type": "click",
-        "intent": "在下拉选项中点击'策略'",
-        "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"策略\")"
+        "type": "fill",
+        "intent": "在筛选区搜索框输入工单ID",
+        "selector": "input#searchText"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 在下拉选项中点击'策略' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"策略投放\"><div class=\"ant-select-item-option-content\">策略投放</div><span class=\"ant-select-item-",
+      "message": "输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">",
       "error": "",
-      "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"策略\")",
-      "resolved_html": "点击 在下拉选项中点击'策略' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"策略投放\"><div class=\"ant-select-item-option-content\">策略投放</div><span"
+      "selector": "input#searchText",
+      "resolved_html": "输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">"
     },
     {
       "step": "步骤4: click",
-      "action": {
-        "type": "click",
-        "intent": "在筛选区点击'学段'下拉框",
-        "selector": "#period"
-      },
-      "success": true,
-      "status": "passed",
-      "message": "点击 在筛选区点击'学段'下拉框 | 实际目标: <input type=\"search\" id=\"period\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"period_list\" aria-autocomplete=\"list\" aria-controls=\"pe",
-      "error": "",
-      "selector": "#period",
-      "resolved_html": "点击 在筛选区点击'学段'下拉框 | 实际目标: <input type=\"search\" id=\"period\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"period_list\" aria-autocomplete"
-    },
-    {
-      "step": "步骤5: click",
-      "action": {
-        "type": "click",
-        "intent": "在下拉选项中点击'大学'",
-        "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"大学\")"
-      },
-      "success": true,
-      "status": "passed",
-      "message": "点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-state\" unselectable=\"on\" ar",
-      "error": "",
-      "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"大学\")",
-      "resolved_html": "点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-sta"
-    },
-    {
-      "step": "步骤6: click",
       "action": {
         "type": "click",
         "intent": "点击'提交'按钮",
@@ -97,57 +69,55 @@
       "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>"
     },
     {
-      "step": "步骤7: assert_table",
+      "step": "步骤5: click",
       "action": {
-        "type": "assert_table",
-        "intent": "验证工单146482429的生产状态为待前审",
-        "selector": null
+        "type": "click",
+        "intent": "点击工单ID为146487944的'日志'",
+        "selector": "ant_table_row[146487944].日志 (extras.row_key)"
       },
-      "success": false,
-      "status": "failed",
-      "message": "表格断言: 行标识 '146482429' 列 '生产状态' 期望 '待前审' 实际 '已退场'",
-      "error": "表格断言: 行标识 '146482429' 列 '生产状态' 期望 '待前审' 实际 '已退场'",
-      "selector": null,
-      "resolved_html": ""
+      "success": true,
+      "status": "passed",
+      "message": "点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>",
+      "error": "",
+      "selector": "ant_table_row[146487944].日志 (extras.row_key)",
+      "resolved_html": "点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>"
     },
     {
-      "step": "步骤8: assert_table",
+      "step": "步骤6: assert_text",
       "action": {
-        "type": "assert_table",
-        "intent": "验证工单146482429的生产状态为已退场",
+        "type": "assert_text",
+        "intent": "验证日志末尾包含行为'前审领取'",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "表格断言: 行标识 '146482429' 列 '生产状态' 期望 '已退场' 实际 '已退场'",
+      "message": "断言: 页面含 '前审领取'",
       "error": "",
       "selector": null,
-      "resolved_html": "表格断言: 行标识 '146482429' 列 '生产状态' 期望 '已退场' 实际 '已退场'"
-    }
-  ],
-  "screenshot_timeline": [
+      "resolved_html": "断言: 页面含 '前审领取'"
+    },
     {
-      "step_idx": 7,
-      "success": false,
-      "screenshot": "截图/step_007_fail.png",
-      "message": "表格断言: 行标识 '146482429' 列 '生产状态' 期望 '待前审' 实际 '已退场'",
-      "action_type": "assert_table",
-      "intent": "验证工单146482429的生产状态为待前审"
+      "step": "步骤7: assert_text",
+      "action": {
+        "type": "assert_text",
+        "intent": "验证日志末尾包含行为'前审举报'",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "断言: 页面含 '前审举报'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "断言: 页面含 '前审举报'"
     }
   ],
+  "screenshot_timeline": [],
   "failure_analysis": {
-    "total_failures": 1,
-    "failures": [
-      {
-        "step": "步骤7",
-        "intent": "验证工单146482429的生产状态为待前审",
-        "classification": "unknown",
-        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
-      }
-    ]
+    "total_failures": 0,
+    "failures": []
   },
   "llm_call_summary": {
-    "total_calls": 15
+    "total_calls": 12
   },
   "llm_call_details": [
     {
@@ -155,14 +125,14 @@
       "success": true,
       "action": {
         "type": "click",
-        "intent": "点击侧栏菜单'全部题目'进入全部题目页面"
+        "intent": "点击'全部题目'"
       },
       "llm_calls": [
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击侧栏菜单'全部题目'进入全部题目页面\n输入值: \n分发成功: true\n分发消息: 点击 点击侧栏菜单'全部题目'进入全部题目页面 | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c\n当前页面 ",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"URL已变为 /video/all-question，页面显示全部题目列表（含筛选表单、题目数据表格，当前总数9619），侧栏菜单中'全部题目'项可见，确认已成功进入全部题目页面。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'全部题目'\n输入值: \n分发成功: true\n分发消息: 点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c\n当前页面 URL: https://www-gwp11-b",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击'全部题目'成功，当前页面URL为 /video/all-question，左侧菜单中'全部题目'菜单项处于选中状态，页面已加载全部题目列表（显示当前总数为9629，表格含题目数据及分页），符合intent预期。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     },
@@ -171,14 +141,14 @@
       "success": true,
       "action": {
         "type": "click",
-        "intent": "在筛选区点击'来源'下拉框"
+        "intent": "点击'工单ID'作为搜索类型"
       },
       "llm_calls": [
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'来源'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'来源'下拉框 | 实际目标: <input type=\"search\" id=\"source\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"source_list\" aria-autocomplete=\"list\" aria-controls=\"so\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击来源下拉框后，下拉列表已展开，可见 source_list 中包含策略投放、高考真题、老系统等选项（索引[1036]-[1092]），下拉面板已成功展开。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'工单ID'作为搜索类型\n输入值: \n分发成功: true\n分发消息: 点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 状态\n切分状态\n供应商\n学段\n学科\n来源\n标签\n优先级\n审核模式\n录制老师等级\n奖励原因\n寸功结果\n投放时间\n分发时间\n上传时间\n首次上线时间\n退回时间\n题目ID\n工单ID\n教师UID\n重 置",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"DOM中可见搜索类型区域（[159]-[179]）包含三个radio选项：题目ID、工单ID、教师UID。分发消息确认点击了'工单ID'对应的span（[174]），对应radio input value='orderId'（[172]）。虽然DOM摘要未明确显示哪个radio被选中（checked状态），但dispatch_success为true且点击目标正确匹配'工单ID'选项，操作已成功执行。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     },
@@ -186,52 +156,20 @@
       "step_idx": 3,
       "success": true,
       "action": {
-        "type": "click",
-        "intent": "在下拉选项中点击'策略'"
+        "type": "fill",
+        "intent": "在筛选区搜索框输入工单ID"
       },
       "llm_calls": [
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在下拉选项中点击'策略'\n输入值: 策略投放\n分发成功: true\n分发消息: 点击 在下拉选项中点击'策略' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"策略投放\"><div class=\"ant-select-item-option-content\">策略投放</div><span class=\"ant-select-item-\n当前页面 URL: https:/",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"「来源」筛选框已显示选中值「策略投放」（见索引[50]-[57]），且下拉选项中「策略投放」option 标记为 [已选]（索引[1091]），表格数据来源列也全部显示「策略投放」，说明选择成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: fill\n操作意图: 在筛选区搜索框输入工单ID\n输入值: 146487944\n分发成功: true\n分发消息: 输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[134] <span name=\"to\" #58>  [表单]\n[135] <span role=\"img\" nam",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"输入框 [182] id=searchText 的 value 已为 '146487944'，与意图一致，填写成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     },
     {
       "step_idx": 4,
-      "success": true,
-      "action": {
-        "type": "click",
-        "intent": "在筛选区点击'学段'下拉框"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'学段'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'学段'下拉框 | 实际目标: <input type=\"search\" id=\"period\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"period_list\" aria-autocomplete=\"list\" aria-controls=\"pe\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击学段下拉框成功，DOM中可见 period_list (id=\\\"period_list\\\") 的 listbox 已展开，包含小学、初中、高中、大学等选项（[1117]-[1122]均未标记[hidden]），下拉面板已正常显示，满足展开学段下拉框的意图。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
-    {
-      "step_idx": 5,
-      "success": true,
-      "action": {
-        "type": "click",
-        "intent": "在下拉选项中点击'大学'"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在下拉选项中点击'大学'\n输入值: \n分发成功: true\n分发消息: 点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-state\" unselectable=\"on\" ar\n当前页面 URL: https://www",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"学段下拉框已成功选中'大学'，从DOM可见：[36]和[39]显示'大学'文本在学段字段中，[1130]显示period_list中'大学'选项标记为[已选]，表单中学段字段已显示'大学'值。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
-    {
-      "step_idx": 6,
       "success": true,
       "action": {
         "type": "click",
@@ -241,8 +179,24 @@
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: true\n分发消息: 点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 状态\n切分状态\n供应商\n学段\n大学\n学科\n来源\n策略投放\n标签\n优先级\n审核模式\n录",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击提交按钮成功，页面已返回筛选结果，显示'当前总数为:1134'，表格中已展示符合筛选条件（学段=大学、来源=策略投放）的数据列表，表单提交查询生效。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: true\n分发消息: 点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 状态\n切分状态\n供应商\n学段\n学科\n来源\n标签\n优先级\n审核模式\n录制老师等级\n奖励",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"提交按钮点击成功，页面已返回查询结果，显示'当前总数为:1'，表格中有一条记录（题目ID 69619875，工单ID 146487944），说明表单提交查询已生效。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 5,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "点击工单ID为146487944的'日志'"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 点击工单ID为146487944的'日志'\n输入值: \n分发成功: true\n分发消息: 点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <div role=\"dialog\"> 日志\n来源\t工单",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击工单ID 146487944 的'日志'按钮后，已成功弹出日志对话框（role=dialog），其中包含工单ID 146487944 的多条日志记录（如初始化、初始化决策、前审领取、前审超时、前审举报等），符合 intent 预期。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     }

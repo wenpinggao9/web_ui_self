@@ -14,7 +14,7 @@ from typing import Any
 
 from .execution.assert_codegen import should_skip_or_branch
 from .execution.dispatcher import _parse_count_spec
-from .execution.script_helpers import min_count_for_compare
+from .execution.script_helpers import min_count_for_compare, parse_table_row_click
 from .locating.playwright_api import infer_from_selector, info_to_python_expr, normalize_info
 from .planning import PlannedAction
 
@@ -89,6 +89,8 @@ from core.execution.script_helpers import (
     wait_for_list_count_at_least,
     wait_for_url_fragment,
     get_scoped_page_text,
+    locate_button_in_table_row,
+    wait_for_table_row_button,
 )
 
 _DIALOG_VISIBLE = '[role="dialog"]:visible, .ant-modal-wrap:visible'
@@ -193,12 +195,25 @@ def generate_spec(
     return path
 
 
+def _extract_login_username(script_path: Path) -> str:
+    """从已生成的用例脚本 login() 中提取账号 (用于套件判断是否需要重新登录)."""
+    try:
+        text = script_path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(
+        r"get_by_placeholder\([^)]+\)\.fill\((['\"])(.+?)\1\)",
+        text,
+    )
+    return m.group(2) if m else ""
+
+
 def generate_suite_script(
     batch_dir: str | Path,
     case_ids: list[str],
     project_root: str | Path | None = None,
 ) -> Path | None:
-    """生成批次套件脚本: 同浏览器会话连续执行, 仅登录一次."""
+    """生成批次套件脚本: 共享浏览器会话; 同账号仅登录一次, 切换角色时重新登录."""
     batch_dir = Path(batch_dir)
     root = Path(project_root) if project_root else batch_dir.parent.parent.parent
     entries: list[tuple[str, Path]] = []
@@ -210,26 +225,35 @@ def generate_suite_script(
     if len(entries) < 2:
         return None
 
-    rel_scripts: list[tuple[str, str, Path]] = []
+    rel_scripts: list[tuple[str, str, Path, str]] = []
     for cid, script in entries:
         try:
             rel = script.relative_to(root)
         except ValueError:
             rel = script
-        rel_scripts.append((cid, _safe(cid), rel))
+        rel_scripts.append((cid, _safe(cid), rel, _extract_login_username(script)))
 
     load_lines = []
     run_lines = []
-    for cid, mod_safe, rel in rel_scripts:
+    for cid, mod_safe, rel, login_user in rel_scripts:
         var = f"_mod_{mod_safe}"
         load_lines.append(
-            f"    {var} = _load_case_module(PROJECT_ROOT / {_py_str(str(rel))})"
+            f"            {var} = _load_case_module(PROJECT_ROOT / {_py_str(str(rel))})"
         )
-        run_lines.append(f"            print('▶ 用例 {cid} 开始', flush=True)")
-        run_lines.append(f"            {var}.run_steps(page)")
-        run_lines.append(f"            print('用例 {cid} 执行完成', flush=True)")
+        run_lines.append(f"            def _run_{mod_safe}():")
+        if login_user:
+            run_lines.append("                global page")
+            run_lines.append(
+                f"                page = _get_page_for_user(browser, {_py_str(login_user)}, "
+                f"{var}.login, case_id={_py_str(cid)})"
+            )
+        run_lines.append(f"                {var}.run_steps(page)")
+        run_lines.append(
+            f"            if not _run_one_case({_py_str(cid)}, _run_{mod_safe}):"
+        )
+        run_lines.append("                _print_suite_summary()")
+        run_lines.append("                sys.exit(1)")
 
-    first_mod = f"_mod_{rel_scripts[0][1]}"
     try:
         suite_rel = (batch_dir / "playwright_suite.py").relative_to(root)
         suite_run = str(suite_rel)
@@ -237,17 +261,23 @@ def generate_suite_script(
         suite_run = str(batch_dir / "playwright_suite.py")
 
     content = f'''\
-"""批次连续执行套件 — 共享浏览器会话, 仅登录一次.
+"""批次连续执行套件 — 同浏览器多账号隔离.
 
 运行: 在项目根目录执行 python {suite_run}
 
-说明: 单独跑 Case 2+ 脚本会因缺少前置数据/页面状态失败; 请用本套件或 run.py.
+说明: 每个账号独立 browser context (新窗口会话), 同账号仅登录一次;
+切换账号时新建 context 并 goto 登录页, 与 run.py 角色切换一致.
+单独跑 Case 2+ 脚本会因缺少前置数据/页面状态失败; 请用本套件或 run.py.
 """
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import sys
 from playwright.sync_api import sync_playwright
 
 PROJECT_ROOT = Path({_py_str(str(root))})
+
+_USER_SESSIONS: dict[str, tuple] = {{}}
+_CASE_RESULTS: list[tuple[str, bool]] = []
 
 
 def _load_case_module(script_path: Path):
@@ -257,20 +287,58 @@ def _load_case_module(script_path: Path):
     return mod
 
 
+def _get_page_for_user(browser, account: str, login_fn, *, case_id: str = ""):
+    """每个账号独立 context; 同账号复用已登录页, 换账号时新开 context 再登录."""
+    if account in _USER_SESSIONS:
+        _ctx, pg = _USER_SESSIONS[account]
+        pg.bring_to_front()
+        return pg
+    print(f"▶ 登录 ({{case_id}}, {{account!r}})", flush=True)
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    login_fn(pg)
+    _USER_SESSIONS[account] = (ctx, pg)
+    return pg
+
+
+def _run_one_case(case_id: str, action) -> bool:
+    global page
+    print(f"▶ 用例 {{case_id}} 开始", flush=True)
+    try:
+        action()
+        print(f"用例 {{case_id}} 执行完成 ✅ 通过", flush=True)
+        _CASE_RESULTS.append((case_id, True))
+        return True
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print(f"用例 {{case_id}} 执行失败 ❌", flush=True)
+        _CASE_RESULTS.append((case_id, False))
+        if page is not None:
+            safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in case_id)
+            page.screenshot(path=f"error_{{safe}}.png")
+        return False
+
+
+def _print_suite_summary() -> None:
+    passed = sum(1 for _, ok in _CASE_RESULTS if ok)
+    total = len(_CASE_RESULTS)
+    print(f"批次套件汇总: 通过 {{passed}}/{{total}}", flush=True)
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
+        page = None
         try:
 {chr(10).join(load_lines)}
-            print("▶ 套件登录 (仅一次)", flush=True)
-            {first_mod}.login(page)
 {chr(10).join(run_lines)}
-            print("批次套件全部用例执行完成")
+            _print_suite_summary()
         except Exception:
             import traceback
             traceback.print_exc()
-            page.screenshot(path="error_suite.png")
+            _print_suite_summary()
+            sys.exit(1)
         finally:
             browser.close()
 
@@ -397,6 +465,68 @@ def _gen_click_loc_expr(
     return ""
 
 
+def _is_table_row_click(action: PlannedAction) -> bool:
+    info = normalize_info(action.locator_info or {})
+    if info.get("method") == "table_row":
+        return True
+    sel = (action.selector or info.get("selector") or "").strip()
+    return sel.startswith(("ant_table_row[", "table_row["))
+
+
+def _gen_table_row_click_step(
+    action: PlannedAction,
+    api_context: dict[str, Any],
+    runtime_api: bool,
+    prefix: str = "    ",
+    *,
+    after_popup_dismiss: bool = False,
+    idempotent: bool = False,
+) -> list[str]:
+    """行内表格按钮: 调用 locate_button_in_table_row, 禁止把 row_note 当 CSS."""
+    extras = dict(action.extras or {})
+    parsed = parse_table_row_click(action.intent or "", extras)
+    if not parsed:
+        return []
+    button, row_hint, status_hint = parsed
+    row_key = str(extras.get("row_key") or row_hint or "").strip()
+    row_key = _apply_api_context(row_key, api_context, runtime_api)
+    if not row_key or not button:
+        return []
+
+    key_col = str(extras.get("row_key_column") or "工单ID").strip()
+    status_col = str(extras.get("status_column") or "").strip()
+    kwargs = [
+        f"button_label={_py_str(button)}",
+        f"row_keys=[{_py_str(row_key)}]",
+        f"key_col={_py_str(key_col)}",
+    ]
+    if status_hint:
+        kwargs.append(f"status_filter={_py_str(status_hint)}")
+        if status_col:
+            kwargs.append(f"status_column={_py_str(status_col)}")
+
+    lines: list[str] = []
+    if after_popup_dismiss:
+        lines.append(f"{prefix}# 运行期曾遇阻断弹窗, 若存在则先关闭 (非用例主步骤)")
+        lines.append(f"{prefix}_dismiss_blocking_dialog_if_present(page)")
+    lines.append(
+        f"{prefix}_btn, _row_note = wait_for_table_row_button(page, {', '.join(kwargs)})"
+    )
+    lines.append(f"{prefix}assert _btn is not None, f'行内定位失败: {{_row_note}}'")
+    if idempotent:
+        lines.append(f"{prefix}if _btn.is_enabled():")
+        lines.append(f"{prefix}    _btn.click()")
+        lines.append(f"{prefix}elif count_real_table_rows(page) > 0:")
+        lines.append(f"{prefix}    pass  # 幂等: 列表已有数据, 跳过本步")
+        lines.append(f"{prefix}else:")
+        lines.append(f"{prefix}    expect(_btn).to_be_enabled(timeout=10000)")
+        lines.append(f"{prefix}    _btn.click()")
+    else:
+        lines.append(f"{prefix}expect(_btn).to_be_visible(timeout=10000)")
+        lines.append(f"{prefix}_btn.click()")
+    return lines
+
+
 def _needs_runtime_import(
     actions: list[PlannedAction],
     popup_dismiss_used: bool,
@@ -412,6 +542,8 @@ def _needs_runtime_import(
     if any(a.type == "assert_count" for a in actions):
         return True
     if any(a.type == "bind_session" for a in actions):
+        return True
+    if any(_is_table_row_click(a) for a in actions if a.type == "click"):
         return True
     if any(a.is_assert() for a in actions):
         return True
@@ -807,7 +939,14 @@ def _gen_ui_steps(
 
         # 有执行期选择器时优先用定位器; 否则用 value 文本兜底
         if loc_info or a.selector:
-            if a.type == "click":
+            if a.type == "click" and _is_table_row_click(a):
+                lines.extend(_gen_table_row_click_step(
+                    a, api_context, runtime_api, prefix=prefix,
+                    after_popup_dismiss=_click_needs_dismiss(a.intent),
+                    idempotent=a.intent in idempotent,
+                ))
+                lines.extend(_gen_click_label_assign(a, prefix))
+            elif a.type == "click":
                 loc_expr = _gen_click_loc_expr(a, loc_info, a.selector)
                 lines.extend(_gen_click_step(
                     prefix, loc_expr,
@@ -869,10 +1008,11 @@ _TEMPLATE = '''\
 """自动生成的 Playwright Python 脚本 —— 用例 {case_id}
 选择器取自实际执行时由定位链解析出的结果.
 独立运行: python <本脚本路径>
-连续套件: 使用同批次 playwright_suite.py (共享会话, 仅登录一次)
+连续套件: 使用同批次 playwright_suite.py (同账号仅登录一次, 换角色时重新登录)
 """
 from pathlib import Path
 import re
+import sys
 from playwright.sync_api import sync_playwright, expect
 
 PROJECT_ROOT = Path({project_root})
@@ -898,11 +1038,13 @@ def main():
         page = browser.new_page()
         try:
             run(page)
-            print("用例 {case_id} 执行完成")
+            print("用例 {case_id} 执行完成 ✅ 通过", flush=True)
         except Exception:
             import traceback
             traceback.print_exc()
             page.screenshot(path="error_{case_id_safe}.png")
+            print("用例 {case_id} 执行失败 ❌", flush=True)
+            sys.exit(1)
         finally:
             browser.close()
 

@@ -15,6 +15,7 @@ from ..execution.trace import dom_console_print_enabled
 from ..dom.semantic_dom import (
     build_locator_info,
     dom_index_from_items,
+    dom_index_from_picked_indices,
     extract_dom_index,
     extract_semantic_items,
 )
@@ -27,12 +28,25 @@ from .normalize import normalize_intent, normalize_url, skip_locator_persistence
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
 from .self_heal import heal
+from .intent_window import pick_intent_window_indices
 from .skill_resolver import (
     build_selector_via_skill,
     extract_target_text_from_intent,
     info_from_recommended_selector,
+    resolve_component_type,
     try_auto_skill_selector,
 )
+
+_COMPONENT_TYPE_TO_SKILL = {
+    "select_trigger": "build_el_select_trigger_selector",
+    "dropdown_option": "build_dropdown_option_selector",
+    "checkbox": "build_checkbox_selector",
+    "radio": "build_radio_selector",
+    "tree_checkbox": "build_tree_checkbox_selector",
+    "tree_node": "build_tree_node_selector",
+    "date_picker": "build_date_picker_selector",
+    "text_input": "build_fill_input_selector",
+}
 
 
 def _is_strong_checkbox_selector(sel: str) -> bool:
@@ -97,11 +111,16 @@ class LocatorResolver:
         cache: Optional[SelectorCache] = None,
         memory: Optional[SelectorMemory] = None,
         console: Optional[Console] = None,
+        *,
+        dom_limit: int = 80,
+        intent_window: bool = True,
     ) -> None:
         self.decider = decider
         self.cache = cache
         self.memory = memory
         self.console = console or Console()
+        self.dom_limit = max(1, int(dom_limit))
+        self.intent_window = bool(intent_window)
         self._trace: Optional[Any] = None
         self._framework_selectors: Optional[dict[str, str]] = None
         self.last_chain: Optional[ResolveChain] = None
@@ -119,7 +138,7 @@ class LocatorResolver:
         page: Any,
         intent: str,
         action_type: str,
-        dom_limit: int = 80,
+        dom_limit: Optional[int] = None,
         exclude: Optional[list[str]] = None,
         hint: Optional[str] = None,
         action_value: str = "",
@@ -129,6 +148,7 @@ class LocatorResolver:
         feature_titles_menu_nav: bool = False,
         feature_titles: Optional[list[str]] = None,
     ) -> Optional[dict]:
+        limit = self.dom_limit if dom_limit is None else max(1, int(dom_limit))
         url = _url(page)
         excl = set(exclude or [])
         chain = ResolveChain(
@@ -206,26 +226,56 @@ class LocatorResolver:
 
         # L3 大模型 — 优先复用已抽取的 semantic_items (共用 DOM)
         if semantic_items:
-            items = semantic_items[:dom_limit]
-            dom = dom_index_from_items(items, limit=dom_limit)
-            dom_note = f"DOM候选={len(dom)}个(共用)" + (", 有hint" if hint else "")
+            source_items = semantic_items
+            dom_note_prefix = "共用"
         else:
-            items = extract_semantic_items(
+            source_items = extract_semantic_items(
                 page, dialog_first=True, stable=True,
                 selectors=self._framework_selectors, profile="locate",
-            )[:dom_limit]
-            dom = extract_dom_index(
-                page, limit=dom_limit, dialog_first=True, stable=False,
-                selectors=self._framework_selectors, items=items,
             )
-            dom_note = f"DOM候选={len(dom)}个(实时)" + (", 有hint" if hint else "")
+            dom_note_prefix = "实时"
+
+        # 规则 skill 扫完整 DOM; LLM 用意图窗口或前 N 条
+        rule_items = source_items
+        rule_info = self._try_rule_skill_resolve(
+            page, intent, action_type, rule_items, excl, chain,
+        )
+        if rule_info is not None:
+            self._backfill(url, action_type, intent, rule_info)
+            chain.mark_hit("L3规则", rule_info.get("selector") or "")
+            self._emit_chain(chain)
+            return self._tag(rule_info, "L3规则")
+
+        llm_items: list[dict]
+        if (
+            self.intent_window
+            and len(source_items) > limit
+        ):
+            picked = pick_intent_window_indices(
+                source_items, intent, action_type, limit=limit,
+            )
+            dom = dom_index_from_picked_indices(source_items, picked)
+            llm_items = source_items
+            dom_note = (
+                f"DOM候选={len(picked)}个(意图窗口/{len(source_items)}, {dom_note_prefix})"
+                + (", 有hint" if hint else "")
+            )
+        else:
+            sliced = source_items[:limit]
+            dom = dom_index_from_items(sliced, limit=limit)
+            llm_items = sliced if len(source_items) > limit else source_items
+            dom_note = (
+                f"DOM候选={len(dom)}个({dom_note_prefix})"
+                + (", 有hint" if hint else "")
+            )
 
         chain.llm_called = True
         chain.add("L3大模型", "已调用", note=dom_note)
+
         if dom_console_print_enabled():
             if semantic_items:
                 self.console.print(
-                    f"  [dim]└─ DOM (共用, {len(dom)} items) — 见上方抓取输出[/dim]"
+                    f"  [dim]└─ DOM ({dom_note_prefix}, {len(dom)}→LLM / {len(source_items)} 全量) — 见上方抓取输出[/dim]"
                 )
                 if dom_source:
                     self.console.print(f"  [dim]   ↳ 来源: {dom_source}[/dim]")
@@ -235,7 +285,7 @@ class LocatorResolver:
                     self.console.print(f"  [dim]   {line}[/dim]")
         result = self.decider.decide(
             dom, intent, action_type,
-            items=items,
+            items=llm_items,
             exclude=list(excl),
             hint=hint,
             action_value=action_value,
@@ -267,7 +317,7 @@ class LocatorResolver:
 
         if info is None and result.skill_name and result.skill_name.startswith("build_"):
             sel = build_selector_via_skill(
-                result.skill_name, items, intent,
+                result.skill_name, source_items, intent,
                 target_text=extract_target_text_from_intent(intent) or "",
                 page=page, exclude=excl_set,
             )
@@ -279,14 +329,14 @@ class LocatorResolver:
 
         if info is None and llm_index is not None and llm_index >= 0:
             refined_idx, skill_name = refine_node_index(
-                items, llm_index, intent, action_type, action_value=action_value,
+                llm_items, llm_index, intent, action_type, action_value=action_value,
             )
             if skill_name and refined_idx != llm_index:
                 chain.add("L3纠偏", "命中", f"{llm_index}->{refined_idx}", note=skill_name)
                 llm_index = refined_idx
-            if 0 <= llm_index < len(items):
+            if 0 <= llm_index < len(llm_items):
                 auto_sel = try_auto_skill_selector(
-                    items, intent, action_type, llm_index,
+                    llm_items, intent, action_type, llm_index,
                     page=page, exclude=excl_set,
                     skill_path=getattr(self.decider, "skill_path", None),
                     llm_xpath_builder=self._llm_xpath_builder(),
@@ -297,7 +347,7 @@ class LocatorResolver:
                         chain.add("L3Skill", "命中", info_key(skill_info), note="auto_skill")
                         info = skill_info
                 if info is None:
-                    info = build_locator_info(items[llm_index])
+                    info = build_locator_info(llm_items[llm_index])
                     info = dict(info)
 
         if info:
@@ -310,6 +360,37 @@ class LocatorResolver:
         chain.add("L3大模型", "未命中", note="index=-1/排除/调用失败")
         self._emit_chain(chain)
         return None
+
+    def _try_rule_skill_resolve(
+        self,
+        page: Any,
+        intent: str,
+        action_type: str,
+        items: list[dict],
+        excl: set[str],
+        chain: ResolveChain,
+    ) -> Optional[dict]:
+        """L3 规则: 语义 DOM 推断组件类型 → build_* skill, 不经 LLM."""
+        comp = resolve_component_type(items, intent, action_type)
+        if not comp:
+            return None
+        skill_name = _COMPONENT_TYPE_TO_SKILL.get(comp)
+        if not skill_name:
+            return None
+        target = extract_target_text_from_intent(intent) or ""
+        sel = build_selector_via_skill(
+            skill_name, items, intent,
+            target_text=target, page=page, exclude=excl,
+        )
+        if not sel:
+            chain.add("L3规则", "未命中", note=skill_name)
+            return None
+        info = info_from_recommended_selector(sel)
+        if info_key(info) in excl or not validate_selector(page, info):
+            chain.add("L3规则", "校验失败", info_key(info), note=skill_name)
+            return None
+        chain.add("L3规则", "命中", info_key(info), note=skill_name)
+        return info
 
     def _maybe_upgrade_component_selector(
         self,

@@ -88,3 +88,8 @@ runner:
 acceleration:
   l1_ttl_minutes: 30   # L1 纯内存缓存, 进程结束即失效
   l2_ttl_days: 10      # L2 记忆库文件, 超过此天数未更新则清理
+
+# 步骤⑨ L3 元素决策 — DOM 窗口 (L3大模型 子步骤, 在 L3规则 之后)
+locating:
+  dom_limit: 80          # 喂给 L3 element_decide LLM 的候选节点上限 (大上下文模型可调 120~150)
+  intent_window: true    # true: 从完整 DOM 按 intent 抽相关节点; false: 取前 dom_limit 条

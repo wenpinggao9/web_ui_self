@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 
 def is_dropdown_option(intent: str) -> bool:
@@ -59,6 +60,19 @@ def is_date_picker(intent: str) -> bool:
 
 def is_switch_in_row(intent: str) -> bool:
     return "状态开关" in intent or ("开关" in intent and "行" in intent)
+
+
+def is_text_input_fill(intent: str, action_type: Optional[str] = None) -> bool:
+    """fill 到文本输入框 (搜索/筛选/表单), 非下拉/日期/单选."""
+    if (action_type or "").strip().lower() != "fill":
+        return False
+    if is_dropdown_option(intent) or is_select_trigger(intent) or is_date_picker(intent):
+        return False
+    if any(w in intent for w in ("搜索框", "搜索", "筛选区", "筛选", "输入框", "文本框")):
+        return True
+    if re.search(r"(?:输入|填写|填入)\s*.+(?:ID|id|编号|号码)", intent):
+        return True
+    return False
 
 
 def is_ant_radio_option(intent: str) -> bool:

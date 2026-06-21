@@ -189,6 +189,17 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
     {"type":"assert_text","intent":"验证原因选项包含'选项B'","value":"选项B"}
     {"type":"assert_text","intent":"验证原因选项包含'选项C'","value":"选项C"}
 - 行标识列默认按唯一标识符匹配; 若用例写的是其他标识, 在 extras 中补充 row_key_column.
+- **全表/所有行约束 (禁止误用 assert_table)**:
+  - 「所有行/每条/每一行 + 某列都是/均为/都是非 X」「列表不出现 X」「不能出现 X 学段/状态」等**没有具体行 ID** 的预期 → **禁止** assert_table (缺 row_key 必失败).
+  - 数量部分 (大于 N、至少 N 条) → **assert_count** (如 value=`>1`).
+  - 列值「全是某类 / 都不是某值 / 不出现某词」→ **assert_text** + `"negate": true`, intent 须含 **列表/表格** + **不含/不出现/没有**, value 写不应出现的词 (如 `大学`).
+  - 示例: "待完成列表数量大于1，且学段都是非大学" → 两条:
+    {"type":"assert_count","intent":"验证待完成列表数量大于1","value":">1"}
+    {"type":"assert_text","intent":"验证待完成列表各行学段均不含大学","value":"大学","negate":true}
+  - 示例: "所有待完成任务学段都是大学，不能出现小学" →
+    {"type":"assert_text","intent":"验证待完成列表各行均包含大学学段","value":"大学"}
+    {"type":"assert_text","intent":"验证待完成列表各行不含小学学段","value":"小学","negate":true}
+  - 仅当预期明确到 **某一条** 记录 (工单ID/任务ID/${变量}) 的某列值时, 才用 assert_table.
 
 表格行内按钮 (查看/编辑/删除等):
 - 步骤含 `${行主键}` 或需点某行按钮时, 在 extras 写 **row_key**、**button**; 可选 **status_filter**、**row_key_column**、**status_column**.

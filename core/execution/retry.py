@@ -33,6 +33,7 @@ from .post_check import PostStepChecker, upgrade_submit_post_result
 from .retry_hint import resolve_force_selector_from_hint
 from .submit_post_verify import finalize_submit_after_dispatch, submit_dispatch_should_succeed
 from .script_helpers import is_detail_submission_url, _page_usable, find_usable_context_pages
+from .page_session import PageSession
 from .target_text import backfill_click_from_dispatch
 from .trace import ExecutionTrace
 
@@ -241,8 +242,12 @@ class RetryController:
                 self.dispatcher, action, self.dispatcher.last_dispatch_meta,
             )
             if tab_ok:
+                meta = self.dispatcher.last_dispatch_meta or {}
+                if PageSession.needs_list_tab_handoff(meta):
+                    self.dispatcher.finish_submit_step_handoff(meta, recapture=True)
+                elif PageSession.is_same_tab_submit_nav(meta):
+                    self.dispatcher.sync_page_after_post_check(None, meta, recapture=True)
                 self.console.print(f"  [green]✓ {tab_ok}[/green]")
-                self.dispatcher.capture_page_state_if_needed(action)
                 return RetryOutcome(True, True, tab_ok, attempt, tab_ok, last_selector)
 
             if (
@@ -445,6 +450,29 @@ def _apply_retry(
     else:  # 选择器 / 两者 → 换元素
         items = dispatcher.get_cached_semantic_items() if dispatcher else None
         forced = resolve_force_selector_from_hint(resolve_hint, semantic_items=items)
+        if not forced and dispatcher and items:
+            from ..locating.skill_resolver import (
+                build_selector_via_skill,
+                extract_target_text_from_intent,
+                resolve_component_type,
+            )
+            comp = resolve_component_type(items, action.intent or "", action.type)
+            skill_map = {
+                "radio": "build_radio_selector",
+                "checkbox": "build_checkbox_selector",
+                "dropdown_option": "build_dropdown_option_selector",
+                "select_trigger": "build_el_select_trigger_selector",
+                "text_input": "build_fill_input_selector",
+            }
+            skill = skill_map.get(comp or "")
+            if skill:
+                forced = build_selector_via_skill(
+                    skill,
+                    items,
+                    action.intent or "",
+                    target_text=extract_target_text_from_intent(action.intent or "") or "",
+                    page=dispatcher.page,
+                )
         action.force_selector = forced
         action.selector = None
         action.resolve_hint = resolve_hint if not forced else None

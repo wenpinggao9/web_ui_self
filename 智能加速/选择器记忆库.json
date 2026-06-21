@@ -502,5 +502,44 @@
     "exact": false,
     "score": 1,
     "ts": 1782033708.642881
+  },
+  "/video/all-question\u0001click\u0001在筛选区点击工单ID作为搜索类型": {
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "label:has-text(\"工单ID\")",
+    "method": "text",
+    "name": "工单ID",
+    "exact": false,
+    "score": 1,
+    "ts": 1782045210.719043
+  },
+  "/video/all-question\u0001fill\u0001在筛选区搜索框输入工单ID": {
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "input#searchText",
+    "method": "css",
+    "score": 1,
+    "ts": 1782046902.534577
+  },
+  "/video/welcome\u0001click\u0001点击侧栏菜单待前审进入待前审列表页": {
+    "method": "role",
+    "role": "menuitem",
+    "name": "待前审",
+    "exact": true,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=menuitem[name=\"待前审\"]",
+    "score": 1,
+    "ts": 1782049632.572054
+  },
+  "/video/all-question\u0001click\u0001点击工单ID作为搜索类型": {
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "label:has-text(\"工单ID\")",
+    "method": "text",
+    "name": "工单ID",
+    "exact": false,
+    "score": 1,
+    "ts": 1782050578.9442308
   }
 }

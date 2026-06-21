@@ -320,8 +320,32 @@ def build_radio_selector(
         for node in semantic_dom
         if node.get("role") is not None
     }
+    tags = {(str(node.get("tag") or "")).lower() for node in semantic_dom}
 
     candidates: List[str] = []
+
+    # 原生 radio: label 文案 + 邻近 input[value=…] (从 DOM 读, 不写死业务字段)
+    if text:
+        for i, node in enumerate(semantic_dom):
+            node_text = str(node.get("text") or "").strip()
+            tag = (str(node.get("tag") or "")).lower()
+            if tag == "label" and text in node_text:
+                candidates.append(f'label:has-text("{name_escaped}")')
+                for near in semantic_dom[i : i + 6]:
+                    if (str(near.get("tag") or "")).lower() != "input":
+                        continue
+                    if (str(near.get("type") or "")).lower() != "radio":
+                        continue
+                    val = str(near.get("value") or "").strip()
+                    if val:
+                        esc = val.replace("\\", "\\\\").replace('"', '\\"')
+                        candidates.insert(0, f'input[type="radio"][value="{esc}"]')
+            if tag == "input" and (str(node.get("type") or "")).lower() == "radio":
+                val = str(node.get("value") or "").strip()
+                if val and text in node_text:
+                    esc = val.replace("\\", "\\\\").replace('"', '\\"')
+                    candidates.insert(0, f'input[type="radio"][value="{esc}"]')
+
     if text:
         if "radio" in roles:
             candidates.append(f'role=radio[name="{name_escaped}"]')
@@ -338,6 +362,8 @@ def build_radio_selector(
 
     if "radio" in roles:
         candidates.append("role=radio")
+    if "input" in tags:
+        candidates.append('input[type="radio"]')
     candidates.extend(
         [
             "(//label[contains(@class,'ant-radio-wrapper')])[1]",
@@ -917,6 +943,103 @@ def _extract_date_picker_field_from_intent(intent: str) -> str:
     return ""
 
 
+def build_fill_input_selector(
+    semantic_dom: List[SemanticNode],
+    intent: str,
+    target_text: str = "",
+) -> Dict[str, Any]:
+    """文本输入框 fill: 筛选区/搜索框/表单, 优先 id > placeholder > name."""
+    search_kw = ("搜索", "筛选", "过滤", "查询", "条件")
+    dialog_kw = ("弹窗", "对话框", "抽屉", "新建", "编辑", "创建", "新增")
+    prefer_search = any(k in intent for k in search_kw)
+    prefer_dialog = any(k in intent for k in dialog_kw) and not prefer_search
+
+    scored: List[tuple[float, int, str]] = []
+    for idx, node in enumerate(semantic_dom):
+        tag = (str(node.get("tag") or "")).lower()
+        if tag not in ("input", "textarea"):
+            continue
+        if tag == "input":
+            typ = (str(node.get("type") or "text")).lower()
+            if typ in ("checkbox", "radio", "button", "submit", "hidden", "file"):
+                continue
+            if node.get("readOnly"):
+                continue
+
+        el_id = str(node.get("id") or "").strip()
+        placeholder = str(node.get("placeholder") or "").strip()
+        name = str(node.get("name") or "").strip()
+        in_form = bool(node.get("in_form"))
+        in_dialog = bool(node.get("in_dialog"))
+        hidden = bool(node.get("hidden"))
+
+        score = 0.0
+        if hidden:
+            score -= 10.0
+        if prefer_search and in_form and not in_dialog:
+            score += 8.0
+        elif prefer_search and not in_dialog:
+            score += 4.0
+        if prefer_dialog and in_dialog:
+            score += 8.0
+        if el_id:
+            score += 5.0
+            if "search" in el_id.lower():
+                score += 3.0
+        if placeholder:
+            score += 2.0
+        if name:
+            score += 1.0
+        for kw in search_kw:
+            if kw in placeholder or kw in name:
+                score += 2.0
+        for tok in re.split(r"\s+", intent or ""):
+            if len(tok) >= 2 and (tok in placeholder or tok in name):
+                score += 1.0
+
+        if score <= -5.0:
+            continue
+
+        node_candidates: List[str] = []
+        if el_id:
+            node_candidates.append(f"input#{el_id}" if tag == "input" else f"#{el_id}")
+            node_candidates.append(f"#{el_id}")
+        if placeholder:
+            esc = placeholder.replace("\\", "\\\\").replace('"', '\\"')
+            node_candidates.append(f'{tag}[placeholder="{esc}"]')
+        if name:
+            esc = name.replace("\\", "\\\\").replace('"', '\\"')
+            node_candidates.append(f'{tag}[name="{esc}"]')
+
+        for sel in node_candidates:
+            scored.append((score, idx, sel))
+
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    candidates: List[str] = []
+    seen: set[str] = set()
+    for _, _, sel in scored:
+        if sel in seen:
+            continue
+        seen.add(sel)
+        candidates.append(sel)
+
+    if prefer_search:
+        candidates.extend([
+            ".ant-form input.ant-input:not([type='radio']):not([type='checkbox'])",
+            "input.ant-input[type='text']",
+        ])
+
+    deduped: List[str] = []
+    for s in candidates:
+        if s and s not in deduped:
+            deduped.append(s)
+
+    return {
+        "selector": deduped[0] if deduped else None,
+        "candidates": deduped,
+    }
+
+
 def build_date_picker_selector(
     semantic_dom: List[SemanticNode],
     intent: str,
@@ -1028,5 +1151,6 @@ __all__ = [
     "build_tree_checkbox_selector",
     "build_tree_node_selector",
     "build_el_select_trigger_selector",
+    "build_fill_input_selector",
     "build_date_picker_selector",
 ]

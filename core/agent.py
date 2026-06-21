@@ -103,6 +103,8 @@ class UITestAgent:
         )
         self.resolver = LocatorResolver(
             self.decider, cache=self.cache, memory=self.memory, console=self.console,
+            dom_limit=int(config.get("locating", {}).get("dom_limit", 80)),
+            intent_window=bool(config.get("locating", {}).get("intent_window", True)),
         )
         # 步骤⑩⑫ 可靠性组件
         self.readiness = ReadinessChecker(self.llm, self.prompts)
@@ -411,6 +413,7 @@ class UITestAgent:
                 results = runner.run_actions(actions, case.case_id)
                 passed = bool(results) and all(r.status == "PASS" for r in results)
                 page = dispatcher.page
+                fm.save_planned_actions(case.case_id, actions)
 
             elif by_blocks:
                 self.console.print(
@@ -483,6 +486,7 @@ class UITestAgent:
                 results = runner.run_actions(actions, case.case_id)
                 passed = bool(results) and all(r.status == "PASS" for r in results)
                 page = dispatcher.page
+                fm.save_planned_actions(case.case_id, actions)
 
             if dispatcher is not None and session_vars is not None:
                 session_vars.update(dispatcher.api_context)

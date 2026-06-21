@@ -198,6 +198,22 @@ def submit_left_detail_context(
     return False
 
 
+def still_on_same_detail_after_submit(url_before: str, url_now: str) -> bool:
+    """提交等待 timeout 后仍停在同一详情实体 (未关 tab / 未切下一任务)."""
+    if not url_before or not url_now:
+        return False
+    if not is_detail_submission_url(url_before) or not is_detail_submission_url(url_now):
+        return False
+    if url_entity_maps_differ(url_before, url_now):
+        return False
+    if normalize_url(url_before) != normalize_url(url_now):
+        return False
+    id_b, id_n = _url_query_id(url_before), _url_query_id(url_now)
+    if id_b and id_n and id_b != id_n:
+        return False
+    return True
+
+
 def recover_after_submit_tab_close(
     page: Any,
     *,
@@ -221,14 +237,24 @@ def recover_after_submit_tab_close(
         if changed:
             recovered = True
         if list_anchor is not None and _page_usable(list_anchor):
-            try:
-                list_anchor.bring_to_front()
-            except Exception:
-                pass
-            cur = list_anchor
-            recovered = True
+            cur_url = _url_safe(cur) if _page_usable(cur) else ""
+            should_use_anchor = (
+                not _page_usable(cur)
+                or submit_left_detail_context(
+                    url_before, cur_url, list_anchor=list_anchor,
+                )
+            )
+            if should_use_anchor:
+                try:
+                    list_anchor.bring_to_front()
+                except Exception:
+                    pass
+                cur = list_anchor
+                recovered = True
         if _page_usable(cur):
             u = _url_safe(cur)
+            if still_on_same_detail_after_submit(url_before, u):
+                return cur, recovered, u
             if _left(u) or not want_leave:
                 return cur, recovered, u
         ctx = _context_from_any(cur, list_anchor)
@@ -258,9 +284,13 @@ def recover_after_submit_tab_close(
 
     cur, changed = recover_active_page(cur, prefer=list_anchor)
     recovered = recovered or changed
+    cur_url = _url_safe(cur) if _page_usable(cur) else ""
     if list_anchor is not None and _page_usable(list_anchor):
-        cur = list_anchor
-        recovered = True
+        if not _page_usable(cur) or submit_left_detail_context(
+            url_before, cur_url, list_anchor=list_anchor,
+        ):
+            cur = list_anchor
+            recovered = True
     u = _url_safe(cur) if _page_usable(cur) else ""
     if not u and list_anchor is not None and _page_usable(list_anchor):
         u = _url_safe(list_anchor)
@@ -324,6 +354,14 @@ def pick_surviving_tab_after_detail_close(
     list_anchor: Any = None,
 ) -> tuple[Any, bool, str, bool]:
     """详情 tab 关闭后选存活 tab. 返回 (page, recovered, url, left_detail)."""
+    url_now = _url_safe(page) if _page_usable(page) else ""
+    if (
+        is_detail_submission_url(url_before)
+        and still_on_same_detail_after_submit(url_before, url_now)
+        and _page_usable(page)
+    ):
+        return page, False, url_now, False
+
     anchor = find_list_tab_anchor(page, list_anchor)
     page, recovered, url = recover_after_submit_tab_close(
         page,
@@ -354,15 +392,18 @@ def pick_surviving_tab_after_detail_close(
     elif _page_usable(page) and not is_detail_submission_url(url):
         left = True
     elif anchor is not None and _page_usable(anchor):
-        page = anchor
-        try:
-            page.bring_to_front()
-        except Exception:
-            pass
-        url = _url_safe(page)
-        left = True
-        recovered = True
-    elif not _page_usable(page) or is_detail_submission_url(url):
+        if still_on_same_detail_after_submit(url_before, url) and _page_usable(page):
+            pass  # timeout 仍停同一详情: 不切 list_anchor, 不标 left
+        else:
+            page = anchor
+            try:
+                page.bring_to_front()
+            except Exception:
+                pass
+            url = _url_safe(page)
+            left = True
+            recovered = True
+    elif not _page_usable(page):
         usable = find_usable_context_pages(page, anchor)
         non_detail = [
             p for p in usable
@@ -447,6 +488,23 @@ _NAV_SUCCESS_OUTCOMES = frozenset({
 })
 
 
+def is_same_tab_detail_entity_nav(
+    url_before: str,
+    url_after: str,
+    outcome: str = "",
+) -> bool:
+    """同 tab 内详情实体切换 (自动下一任务), 无需 tab recover / 长 wait_before_assert."""
+    if outcome and outcome not in ("resource_id_changed", "route_changed"):
+        return False
+    if not is_detail_submission_url(url_before):
+        return False
+    if not url_after or not is_detail_submission_url(url_after):
+        return False
+    if outcome in ("resource_id_changed", "route_changed"):
+        return True
+    return url_entity_maps_differ(url_before, url_after)
+
+
 def _collect_context_pages(page: Any, list_anchor: Any = None) -> list[Any]:
     """收集当前 context 内可用 tab, 当前页优先."""
     pages: list[Any] = []
@@ -516,29 +574,6 @@ def _try_wait_url_entity_change(
 
 def _body_has_submit_error(body: str) -> bool:
     return any(m in body for m in _SUBMIT_ERROR_MARKERS)
-
-
-def recover_active_page(page: Any, prefer: Any = None) -> tuple[Any, bool]:
-    """当前 tab 不可用/已关闭时, 切到同 context 内仍打开的 tab (可优先列表锚点)."""
-    if _page_usable(page):
-        return page, False
-    if prefer is not None and _page_usable(prefer):
-        try:
-            prefer.bring_to_front()
-        except Exception:
-            pass
-        return prefer, True
-    ctx = _context_from_any(page, prefer)
-    if ctx is None:
-        return page, False
-    for p in reversed(ctx.pages):
-        if _page_usable(p):
-            try:
-                p.bring_to_front()
-            except Exception:
-                pass
-            return p, True
-    return page, False
 
 
 def _context_from_any(*pages: Any) -> Any:
@@ -665,18 +700,27 @@ def parse_table_row_click(
 
 
 def _button_label_variants(label: str) -> list[str]:
-    """UI 按钮文案可能与用例不一致, 如「查看」vs「查 看」."""
+    """UI 按钮文案可能与用例不一致, 如「日志」vs「日 志」."""
     out: list[str] = []
-    for v in (label, label.replace("\u00a0", " "), label.replace(" ", "")):
-        v = (v or "").strip()
+    normalized = (label or "").replace("\u00a0", " ").strip()
+    collapsed = re.sub(r"\s+", "", normalized)
+    for v in (normalized, collapsed):
         if v and v not in out:
             out.append(v)
-    collapsed = label.replace(" ", "").replace("\u00a0", "")
+    # Ant Design 常在两字按钮 span 间插空格
+    if collapsed and len(collapsed) == 2:
+        spaced = f"{collapsed[0]} {collapsed[1]}"
+        if spaced not in out:
+            out.append(spaced)
     if collapsed in ("查看",) or label in ("查看", "查 看", "查\u00a0看"):
         for v in ("查看", "查 看"):
             if v not in out:
                 out.append(v)
     return out
+
+
+def _normalize_btn_label(text: str) -> str:
+    return re.sub(r"\s+", "", (text or "").replace("\u00a0", ""))
 
 
 def _find_row_button(row: Any, label: str) -> Any:
@@ -691,6 +735,29 @@ def _find_row_button(row: Any, label: str) -> Any:
         btn = row.locator(f"button:has-text('{esc}'), a:has-text('{esc}')")
         if btn.count():
             return btn.last
+    collapsed_target = _normalize_btn_label(label)
+    if not collapsed_target:
+        return None
+    for role in ("button", "link"):
+        loc = row.get_by_role(role)
+        for i in range(loc.count()):
+            el = loc.nth(i)
+            try:
+                txt = _normalize_btn_label(el.inner_text(timeout=800))
+            except Exception:
+                continue
+            if txt == collapsed_target:
+                return el
+    for sel in ("button", "a", "[role='button']"):
+        loc = row.locator(sel)
+        for i in range(loc.count()):
+            el = loc.nth(i)
+            try:
+                txt = _normalize_btn_label(el.inner_text(timeout=800))
+            except Exception:
+                continue
+            if txt == collapsed_target:
+                return el
     return None
 
 
@@ -712,6 +779,94 @@ def _row_matches_key(cells: list[str], row_key: str, key_idx: int) -> bool:
         if table_row_key_matches(cell, row_key):
             return True
     return False
+
+
+def _row_text_contains_key(text: str, row_key: str) -> bool:
+    """整行 inner_text 是否含 row_key (兼容 ant-table 固定列拆表)."""
+    from .session_ops import table_row_key_matches
+
+    key = (row_key or "").strip()
+    blob = (text or "").strip()
+    if not key or not blob:
+        return False
+    if key.isdigit():
+        return bool(re.search(rf"(?<!\d){re.escape(key)}(?!\d)", blob))
+    if table_row_key_matches(blob, key):
+        return True
+    for line in blob.splitlines():
+        if table_row_key_matches(line.strip(), key):
+            return True
+    return False
+
+
+def _locate_in_ant_split_table(
+    page: Any,
+    *,
+    button_label: str,
+    row_keys: list[str],
+    status_filter: Optional[str] = None,
+    status_column: str = "",
+) -> tuple[Any, str]:
+    """Ant Design 固定列: 工单ID 与操作列可能在不同 .ant-table-tbody 中, 按行索引对齐."""
+    tbodies = page.locator(".ant-table-tbody")
+    tbody_count = tbodies.count()
+    if not tbody_count:
+        return None, ""
+
+    base_rows = tbodies.first.locator("tr")
+    row_count = base_rows.count()
+    if not row_count:
+        return None, ""
+
+    want_first = FIRST_TABLE_ROW_KEY in row_keys
+    keys = [k for k in row_keys if k and k != FIRST_TABLE_ROW_KEY]
+
+    for ri in range(row_count):
+        row_parts: list[str] = []
+        for bi in range(tbody_count):
+            row = tbodies.nth(bi).locator("tr").nth(ri)
+            try:
+                row_parts.append(row.inner_text(timeout=1500))
+            except Exception:
+                continue
+        joined = "\n".join(row_parts)
+        if not joined.strip() or any(m in joined for m in _EMPTY_ROW_MARKERS):
+            continue
+
+        if want_first and not keys:
+            if status_filter and status_filter not in joined:
+                continue
+            btn = _find_button_in_ant_row_index(page, ri, button_label)
+            if btn is not None:
+                return btn, f"ant_table_row[first:{ri}].{button_label}"
+            continue
+
+        matched_key = None
+        for row_key in keys:
+            if _row_text_contains_key(joined, row_key):
+                if status_filter and status_filter not in joined:
+                    continue
+                matched_key = row_key
+                break
+        if not matched_key:
+            continue
+        btn = _find_button_in_ant_row_index(page, ri, button_label)
+        if btn is not None:
+            return btn, f"ant_table_row[{matched_key}].{button_label}"
+
+    if want_first:
+        return None, "行内定位: 未找到首行或按钮"
+    return None, f"行内定位: 未找到 row_keys={keys[:3]!r}"
+
+
+def _find_button_in_ant_row_index(page: Any, row_index: int, label: str) -> Any:
+    tbodies = page.locator(".ant-table-tbody")
+    for bi in range(tbodies.count()):
+        row = tbodies.nth(bi).locator("tr").nth(row_index)
+        btn = _find_row_button(row, label)
+        if btn is not None:
+            return btn
+    return None
 
 
 def _row_matches_status(cells: list[str], status_filter: str, status_idx: int) -> bool:
@@ -742,6 +897,16 @@ def locate_button_in_table_row(
         return None, "行内定位: 缺少按钮或行标识"
 
     want_first = FIRST_TABLE_ROW_KEY in keys
+
+    loc, note = _locate_in_ant_split_table(
+        page,
+        button_label=label,
+        row_keys=keys,
+        status_filter=status_filter,
+        status_column=status_column,
+    )
+    if loc is not None:
+        return loc, note
 
     for table_sel in ("table", ".ant-table table"):
         tables = page.locator(table_sel)
@@ -788,46 +953,36 @@ def locate_button_in_table_row(
     return None, f"行内定位: 未找到 row_keys={keys[:3]!r}"
 
 
-def wait_and_recover_active_page(
-    page: Any, *, poll_ms: int = 200, max_polls: int = 25, prefer: Any = None,
-) -> tuple[Any, bool]:
-    """提交/跳转后 tab 可能异步关闭, 轮询直到落到仍存活的 page."""
-    recovered = False
-    cur = page
-    ctx = _context_from_any(page, prefer)
-    for _ in range(max_polls):
-        cur, changed = recover_active_page(cur, prefer=prefer)
-        if changed:
-            recovered = True
-        if _page_usable(cur):
-            return cur, recovered
-        # 勿在已关闭 tab 上 wait_for_timeout (会立刻抛错中断轮询)
-        if ctx is not None:
-            try:
-                new_page = ctx.wait_for_event("page", timeout=poll_ms)
-                if _page_usable(new_page):
-                    try:
-                        new_page.bring_to_front()
-                    except Exception:
-                        pass
-                    return new_page, True
-            except Exception:
-                pass
-            for p in ctx.pages:
-                if _page_usable(p):
-                    try:
-                        p.wait_for_timeout(poll_ms)
-                    except Exception:
-                        time.sleep(poll_ms / 1000.0)
-                    break
-            else:
-                time.sleep(poll_ms / 1000.0)
-        else:
-            time.sleep(poll_ms / 1000.0)
-    cur, changed = recover_active_page(cur, prefer=prefer)
-    if changed:
-        recovered = True
-    return cur, recovered
+def wait_for_table_row_button(
+    page: Any,
+    *,
+    button_label: str,
+    row_keys: list[str],
+    key_col: str = "",
+    status_column: str = "",
+    status_filter: Optional[str] = None,
+    timeout_ms: int = 15000,
+) -> tuple[Any, str]:
+    """轮询直到表格指定行的按钮出现 (搜索/列表刷新后再定位)."""
+    deadline = time.monotonic() + timeout_ms / 1000
+    last_note = ""
+    while time.monotonic() < deadline:
+        loc, note = locate_button_in_table_row(
+            page,
+            button_label=button_label,
+            row_keys=row_keys,
+            key_col=key_col,
+            status_column=status_column,
+            status_filter=status_filter,
+        )
+        if loc is not None:
+            return loc, note
+        last_note = note
+        try:
+            page.wait_for_timeout(400)
+        except Exception:
+            break
+    return None, last_note or "行内定位: 等待超时"
 
 
 def _reload_list_page(page: Any, *, timeout_ms: int = 15000) -> None:
@@ -846,217 +1001,17 @@ def _reload_list_page(page: Any, *, timeout_ms: int = 15000) -> None:
             pass
 
 
-def wait_after_detail_submit(
-    page: Any,
-    *,
-    list_anchor: Any = None,
-    url_before: str = "",
-    poll_ms: int = 200,
-    max_polls: int = 50,
-) -> tuple[Any, str, bool]:
-    """提交后等待页面结局: 列表锚点 / 路由变化 / 资源 ID 变化 / 失败提示."""
-    recovered = False
-    cur = page
-    list_url = _url_safe(list_anchor) if list_anchor is not None else ""
-    entity_before = capture_submit_entity_before(url_before)
-    total_budget_ms = max(poll_ms, max_polls * poll_ms)
-
-    def _finish(outcome: str, target: Any) -> tuple[Any, str, bool]:
-        if outcome == "returned_to_list" and _page_usable(target):
-            _reload_list_page(target)
-        return target, outcome, recovered
-
-    def _poll_outcome(target: Any) -> Optional[str]:
-        return classify_navigation_outcome(
-            url_before, _url_safe(target), list_url=list_url,
-        )
-
-    def _return_on_success(out: Optional[str], hit: Any) -> Optional[tuple[Any, str, bool]]:
-        nonlocal cur, recovered
-        if out not in _NAV_SUCCESS_OUTCOMES or hit is None:
-            return None
-        if hit is not cur:
-            try:
-                hit.bring_to_front()
-            except Exception:
-                pass
-            cur = hit
-            recovered = True
-        return _finish(out, cur)
-
-    # 快路径: 浏览器端监听任意实体型 URL 参数变化
-    if entity_before and _page_usable(cur):
-        fast_out = _try_wait_url_entity_change(
-            cur, url_before, timeout_ms=min(2000, total_budget_ms),
-        )
-        hit = _return_on_success(fast_out, cur)
-        if hit is not None:
-            return hit
-
-    for i in range(max_polls):
-        pages = _collect_context_pages(cur, list_anchor)
-        out, hit = _scan_pages_for_nav_outcome(
-            pages, url_before, list_url=list_url, entity_before=entity_before,
-        )
-        hit_result = _return_on_success(out, hit)
-        if hit_result is not None:
-            return hit_result
-
-        if entity_before and i % 3 == 0 and _page_usable(cur):
-            dom_out = detect_submit_navigation_progress(
-                url_before,
-                cur,
-                entity_before=entity_before,
-                list_url=list_url,
-                classify_fn=classify_navigation_outcome,
-                url_safe_fn=_url_safe,
-                page_usable_fn=_page_usable,
-                read_body_fn=_read_body_safe,
-                check_dom=True,
-            )
-            dom_hit = _return_on_success(dom_out, cur)
-            if dom_hit is not None:
-                return dom_hit
-
-        url_outcome = _poll_outcome(cur)
-        if url_outcome in _NAV_SUCCESS_OUTCOMES:
-            return _finish(url_outcome, cur)
-
-        if not _page_alive(cur):
-            cur, changed = recover_active_page(cur, prefer=list_anchor)
-            if changed:
-                recovered = True
-            url_outcome = _poll_outcome(cur)
-            if url_outcome in _NAV_SUCCESS_OUTCOMES:
-                return _finish(url_outcome, cur)
-            if list_anchor is not None and _page_usable(list_anchor):
-                recovered = True
-                return _finish("returned_to_list", list_anchor)
-            usable = find_usable_context_pages(cur, list_anchor)
-            if usable:
-                pick = usable[0]
-                for p in usable:
-                    if not is_detail_submission_url(_url_safe(p)):
-                        pick = p
-                        break
-                try:
-                    pick.bring_to_front()
-                except Exception:
-                    pass
-                recovered = True
-                out = _poll_outcome(pick)
-                if out in _NAV_SUCCESS_OUTCOMES:
-                    return _finish(out, pick)
-                return _finish("returned_to_list", pick)
-
-        if not _page_usable(cur):
-            cur, changed = recover_active_page(cur, prefer=list_anchor)
-            if changed:
-                recovered = True
-            url_outcome = _poll_outcome(cur)
-            if url_outcome in _NAV_SUCCESS_OUTCOMES:
-                return _finish(url_outcome, cur)
-        else:
-            body = _read_body_safe(cur)
-            if _body_has_submit_error(body):
-                return cur, "submit_error", recovered
-
-        if list_anchor is not None and _page_usable(list_anchor):
-            if entity_before and not _page_usable(cur):
-                try:
-                    list_anchor.bring_to_front()
-                except Exception:
-                    pass
-                recovered = True
-                return _finish("returned_to_list", list_anchor)
-
-        sleep_ms = 50 if entity_before and i < 40 else poll_ms
-        if ctx_sleep := (cur.context if _page_alive(cur) else None):
-            try:
-                for p in ctx_sleep.pages:
-                    if _page_usable(p):
-                        try:
-                            p.wait_for_timeout(sleep_ms)
-                        except Exception:
-                            time.sleep(sleep_ms / 1000.0)
-                        break
-                else:
-                    time.sleep(sleep_ms / 1000.0)
-            except Exception:
-                time.sleep(sleep_ms / 1000.0)
-        else:
-            time.sleep(sleep_ms / 1000.0)
-
-    cur, changed = recover_active_page(cur, prefer=list_anchor)
-    if changed:
-        recovered = True
-    url_outcome = _poll_outcome(cur)
-    if url_outcome:
-        return _finish(url_outcome, cur)
-    if _page_usable(cur):
-        body = _read_body_safe(cur)
-        if _body_has_submit_error(body):
-            return cur, "submit_error", recovered
-        now_url = _url_safe(cur)
-        if url_matches_anchor(now_url, list_anchor):
-            return _finish("returned_to_list", cur)
-        if submit_left_detail_context(url_before, now_url, list_anchor=list_anchor):
-            return _finish("returned_to_list", cur)
-        return cur, "settled", recovered
-    if list_anchor is not None and _page_usable(list_anchor):
-        recovered = True
-        return _finish("returned_to_list", list_anchor)
-    ctx = _context_from_any(cur, list_anchor)
-    if ctx is not None:
-        for p in ctx.pages:
-            if not _page_usable(p):
-                continue
-            if list_anchor is not None and (p is list_anchor or url_matches_anchor(_url_safe(p), list_anchor)):
-                recovered = True
-                return _finish("returned_to_list", p)
-    # 详情 tab 可能晚于 URL 轮询关闭: 再追等 tab 关闭并切兄弟页
-    if is_detail_submission_url(url_before):
-        cur, late_rec, late_url = recover_after_submit_tab_close(
-            cur,
-            url_before=url_before,
-            list_anchor=list_anchor,
-            max_polls=35,
-            poll_ms=150,
-        )
-        if late_rec or late_url:
-            recovered = recovered or late_rec
-            if not _page_alive(cur) or submit_left_detail_context(
-                url_before, late_url, list_anchor=list_anchor,
-            ):
-                usable = find_usable_context_pages(cur, list_anchor)
-                if usable:
-                    pick = usable[0]
-                    for p in usable:
-                        if not is_detail_submission_url(_url_safe(p)):
-                            pick = p
-                            break
-                    try:
-                        pick.bring_to_front()
-                    except Exception:
-                        pass
-                    recovered = True
-                    return _finish("returned_to_list", pick)
-            out = _poll_outcome(cur)
-            if out in ("resource_id_changed", "returned_to_list", "route_changed"):
-                return _finish(out, cur)
-    return cur, "timeout", recovered
-
-
 def wait_before_assert(
     page: Any,
     quiet_ms: int = 300,
     timeout_ms: int = 3000,
     list_anchor: Any = None,
 ) -> Any:
-    """断言前切到存活 tab 并等待页面稳定; 返回可能已切换的 page."""
-    page, _ = wait_and_recover_active_page(page, max_polls=30, prefer=list_anchor)
-    if not _page_usable(page) and list_anchor is not None and _page_usable(list_anchor):
-        page = list_anchor
+    """断言前 tab 跟随 + 短稳定等待."""
+    from .tab_follow import follow_active_tab, wait_and_recover_active_page
+
+    page, _ = wait_and_recover_active_page(page, max_polls=12, prefer=list_anchor)
+    page, _, _ = follow_active_tab(page, list_anchor)
     if not _page_usable(page):
         return page
     try:
@@ -1198,3 +1153,10 @@ def extract_url_query(page: Any, *keys: str) -> dict[str, str]:
     if "uniqId" in out and "workId" not in out:
         out["workId"] = out["uniqId"]
     return out
+
+
+from .tab_follow import (  # noqa: E402  — 统一 tab 跟随, 避免与上方循环 import
+    recover_active_page,
+    wait_and_recover_active_page,
+    wait_after_detail_submit,
+)

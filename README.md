@@ -29,7 +29,7 @@
 │  步骤⑤ 模块导航 — 按模块路径逐级点菜单                          │
 │  步骤⑥ 动作规划 — LLM 翻译并拆成原子 {类型, 意图, 值}, 不含选择器  │
 │  步骤⑧ 语义 DOM 抽取 — 实时页面快照 (弹窗/表单优先)             │
-│  步骤⑨ 元素定位五级链 — 缓存→记忆→规则→学习→大模型               │
+│  步骤⑨ 元素定位三级链 — 缓存→记忆→L3(规则/大模型/Skill)          │
 │  步骤⑩ 步骤前就绪检查 — 页面就绪? 恢复动作                      │
 │  步骤⑪ 动作分发器 — 选择器 → Playwright 执行                   │
 │  步骤⑫ 步骤后校验 — LLM 判断"点对了吗" (防假操作)                │
@@ -81,21 +81,28 @@ ui_automation/
 │   │   ├── action_planner.py   #   LLM 动作规划 (含拆分)
 │   │   └── intent_splitter.py  #   菜单点击剥离
 │   ├── dom/                    # 步骤⑧ 语义 DOM 抽取
-│   │   └── semantic_dom.py     #   弹窗/表单优先 + DOM 稳定等待
+│   │   ├── semantic_dom.py     #   索引化摘要 + build_locator_info
+│   │   └── v3_bridge.py        #   页面 traverse 采集脚本
 │   ├── locating/               # 步骤⑨ 三级定位链
-│   │   ├── resolver.py         #   编排: L1缓存→L2记忆→L3大模型
+│   │   ├── resolver.py         #   编排: L1→L2→L3
 │   │   ├── cache.py            #   L1 选择器缓存 (30min TTL)
 │   │   ├── memory.py           #   L2 长期记忆 (加减分)
-│   │   ├── llm_decider.py      #   L3 大模型元素决策
-│   │   ├── node_refiner.py     #   L3 纠偏 (skill 祖先爬升)
+│   │   ├── skill_resolver.py   #   L3 规则 skill 分发 + 组件类型推断
+│   │   ├── skill_dom_helpers.py#   build_* 选择器 (radio/checkbox/fill/…)
+│   │   ├── intent_route.py     #   意图 → 组件类型路由
+│   │   ├── intent_window.py    #   L3大模型: 从完整 DOM 抽 intent 相关节点
+│   │   ├── llm_decider.py      #   L3 大模型元素决策 + use_skill
+│   │   ├── node_refiner.py     #   L3 节点纠偏 (skill 祖先爬升)
 │   │   ├── self_heal.py        #   自愈三策略
 │   │   └── normalize.py        #   URL/意图归一化 + 选择器校验
 │   ├── readiness/              # 步骤⑩ 步骤前就绪检查
 │   │   └── pre_check.py        #   弹窗优先 + 必填检测 + 恢复动作
 │   ├── execution/              # 步骤⑪⑫⑬⑭ 执行层
-│   │   ├── dispatcher.py       #   动作分发器 (串五级链 + Playwright)
+│   │   ├── dispatcher.py       #   动作分发器 (三级链 + Playwright)
 │   │   ├── post_check.py       #   步骤后校验 (防假操作)
 │   │   ├── retry.py            #   带后校验重试 (值/选择器/两者/无)
+│   │   ├── retry_hint.py       #   后校验 hint → force_selector
+│   │   ├── page_session.py     #   Tab 跟随 + 断言 DOM 复用
 │   │   └── runner.py           #   执行编排器 PlaywrightRunner
 │   ├── llm/                    # 步骤⑱ LLM 基础层
 │   │   ├── adapter.py          #   LLM 适配器 (重试 + JSON提取)
@@ -122,12 +129,12 @@ ui_automation/
 │       └── 大学增加前审/
 │           ├── 项目配置.yaml
 │           └── cases/
-│               └── 大学增加前审case.md
+│               ├── 测试用例.md
+│               └── 前审1.md …
 │
 └── 智能加速/                   # 运行时自动生成
-    ├── 选择器缓存.json
-    ├── 选择器记忆库.json
-    └── 页面结构学习.json
+    ├── 选择器缓存.json         # L1 持久化 (进程内为主)
+    └── 选择器记忆库.json       # L2 长期记忆
 ```
 
 ---
@@ -169,13 +176,18 @@ runner:
   pre_readiness_check: true   # 步骤前就绪检查
   post_step_check: true       # 步骤后校验 (防假操作)
   post_step_max_retries: 5    # 重试上限
+
+# 步骤⑨ L3 大模型 DOM 窗口 (L3规则 仍扫完整 DOM)
+locating:
+  dom_limit: 80               # 喂给 element_decide LLM 的候选上限
+  intent_window: true         # 从完整 DOM 按 intent 抽相关节点; false 则取前 N 条
 ```
 
 ### 3. 运行
 
 ```bash
 # 单个用例
-python run.py 业务/vip视频/大学增加前审/cases/大学增加前审case.md
+python run.py 业务/vip视频/大学增加前审/cases/测试用例.md
 
 # 整个用例目录
 python run.py 业务/vip视频/大学增加前审/cases/
@@ -336,16 +348,34 @@ docker run -p 8000:8000 ui-automation
 - 支持 `config.yaml` 覆盖
 - 每次运行输出实际使用的提示词和 LLM 原始响应
 
-### 5. 五级定位链 (智能加速)
-| 级别 | 来源 | 速度 | 命中率 |
-|------|------|------|--------|
-| L1 缓存 | 运行期选择器缓存 | 最快 | ~30% |
-| L2 记忆 | 持久化选择器记忆 | 快 | ~20% |
-| L3 规则 | 意图规则引擎 (11条) | 快 | ~35% |
-| L4 学习 | 页面结构学习 | 中 | ~5% |
-| L5 大模型 | LLM 全量解析 | 最慢 | ~10% |
+### 5. 三级定位链 (智能加速)
 
-L5 成功后自动回填 L1+L2+L4, 二次运行大幅减少 LLM 调用。
+定位顺序:**L1 缓存 → L2 记忆 → L3**. L1/L2 未命中或校验失败时进入 L3; L3 成功后回填 L1+L2, 同页面二次运行显著减少 LLM 调用.
+
+```
+L1 缓存 ──→ L2 记忆 ──→ L3
+                          ├─ L3规则   build_* skill, 扫完整 semantic_items (radio/checkbox/fill/下拉/日期…)
+                          ├─ L3大模型 element_decide LLM (意图窗口 / dom_limit 限候选)
+                          ├─ L3 Skill  use_skill 节点纠偏 (choose_best_input_target 等)
+                          └─ L3纠偏    node_refiner 祖先爬升
+```
+
+| 级别 | 来源 | 说明 |
+|------|------|------|
+| L1 缓存 | `智能加速/选择器缓存.json` | 同 URL+意图+动作类型, 进程内最快 |
+| L2 记忆 | `智能加速/选择器记忆库.json` | 跨运行加减分, 长期复用 |
+| L3 规则 | `skill_dom_helpers.build_*` | 无 LLM, 从语义 DOM 推断组件并生成选择器 |
+| L3 大模型 | `element_decide` | L3规则未命中时调用; `intent_window=true` 时从全量 DOM 抽相关节点 |
+| L3 Skill | `use_skill` 协议 | LLM 指定 skill 二次精确定位 |
+| L3 纠偏 | `node_refiner` | 初匹配 index 上爬升/精炼 |
+
+**DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L3大模型** 受 `dom_limit` / 意图窗口限制.
+
+**重试 hint**: 后校验若给出裸 CSS (如 `input#searchText`), `retry_hint` 会转为 `force_selector` 跳过后续 LLM 定位.
+
+**断言 DOM**: 同 URL 连续断言复用上一步操作后的 semantic_items; 提交类操作后断言走实时 DOM, 不用固化快照.
+
+框架 **不在 `core/` 硬编码业务字段**; 业务枚举、API、角色写在各项目 `业务知识.md` / `项目配置.yaml`.
 
 ---
 

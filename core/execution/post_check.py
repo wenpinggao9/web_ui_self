@@ -17,6 +17,7 @@ from ..dom import extract_items, compact_dom_lines, wait_for_dom_stable
 from .trace import print_captured_dom
 from ..llm import LLMAdapter, PromptLoader
 from ..planning import PlannedAction
+from .script_helpers import _page_alive, _page_usable
 from .submit_post_verify import evaluate_submit_post_check, is_submit_intent
 
 # 需要后校验的动作类型
@@ -97,6 +98,34 @@ def _recovered_page_if_url_changed(before: Any, after: Any) -> Any:
         if before is not after:
             return after
     return None
+
+
+def _submit_handoff_page(
+    before: Any,
+    after: Any,
+    meta: Optional[dict[str, Any]] = None,
+) -> Any:
+    """提交后 handoff: tab 关闭/切换时即使 URL 相同也传递存活 page."""
+    meta = meta or {}
+    if after is None:
+        return None
+    if (
+        meta.get("detail_tab_closed")
+        or meta.get("recovered")
+        or meta.get("left_detail_context")
+    ):
+        return after
+    try:
+        if before is not after:
+            return after
+    except Exception:
+        return after
+    try:
+        if not _page_alive(before) and _page_usable(after):
+            return after
+    except Exception:
+        pass
+    return _recovered_page_if_url_changed(before, after)
 
 
 def should_post_check(action: PlannedAction) -> bool:
@@ -287,8 +316,10 @@ class PostStepChecker:
             dispatch_meta = submit_verdict.meta
         if submit_verdict.page is not None:
             page = submit_verdict.page
-        recovered = _recovered_page_if_url_changed(
-            page_before_submit, submit_verdict.page,
+        recovered = _submit_handoff_page(
+            page_before_submit,
+            submit_verdict.page,
+            submit_verdict.meta,
         )
         if submit_verdict.step_ok is True:
             return PostCheckResult(

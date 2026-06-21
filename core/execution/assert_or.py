@@ -5,10 +5,9 @@ import re
 from typing import Any, Optional
 
 from .post_submit_eval import (
-    SubmitSnapshot,
+    build_live_submit_facts,
     eval_submit_expect,
     infer_expect_from_text,
-    try_post_submit_eval,
 )
 from .script_helpers import is_detail_submission_url
 
@@ -29,31 +28,16 @@ def is_or_assert(action: Any) -> bool:
         return True
     value = (getattr(action, "value", None) or "").strip()
     intent = getattr(action, "intent", None) or ""
-    # value 含「或」且 intent 在验证「包含该选项/字段」→ 普通字面量断言
     if value and "或" in value:
         if value in intent or re.search(r"(包含|含)", intent):
             return False
     if _OR_INTENT_RE.search(intent):
         return True
     if "或" in intent:
-        # 剩余「或」: 仅当 intent 在描述多个可接受结果 (非「包含XXX」类单选项校验)
         if re.search(r"(包含|含|选项包括|包括)", intent):
             return False
         return True
     return False
-
-
-def _snap_from_meta(meta: Optional[dict[str, Any]]) -> Optional[SubmitSnapshot]:
-    if not meta or not meta.get("navigation_outcome"):
-        return None
-    return SubmitSnapshot(
-        navigation_outcome=str(meta.get("navigation_outcome") or ""),
-        url_before=str(meta.get("url_before") or ""),
-        url_after=str(meta.get("url_after") or ""),
-        entity_field=str(meta.get("entity_field") or ""),
-        entity_id_before=str(meta.get("entity_id_before") or ""),
-        entity_id_after=str(meta.get("entity_id_after") or ""),
-    )
 
 
 def _resolve_or_page_url(
@@ -61,16 +45,16 @@ def _resolve_or_page_url(
     page_url: str = "",
     dispatch_meta: Optional[dict[str, Any]] = None,
 ) -> str:
-    for cand in (
-        page_url,
-        str((dispatch_meta or {}).get("url_after") or ""),
-    ):
+    try:
+        live = (getattr(page, "url", None) or "").lower()
+        if live:
+            return live
+    except Exception:
+        pass
+    for cand in (page_url, str((dispatch_meta or {}).get("url_after") or "")):
         if cand:
             return cand.lower()
-    try:
-        return (getattr(page, "url", None) or "").lower()
-    except Exception:
-        return ""
+    return ""
 
 
 def _resolve_or_body_text(page: Any, body_text: str = "") -> str:
@@ -89,21 +73,11 @@ def try_or_branches(
     *,
     dispatch_meta: Optional[dict[str, Any]] = None,
     page_url: str = "",
+    live_facts: Any = None,
 ) -> Optional[tuple[bool, str]]:
-    """按 extras.branches 逐支尝试: 字面量 value 或启发式."""
+    """按 extras.branches 逐支尝试: 优先实时 DOM 字面量, 再用实时 URL/实体判定."""
     url = _resolve_or_page_url(page, page_url, dispatch_meta)
-    snap = _snap_from_meta(dispatch_meta)
-    if snap:
-        hit = try_post_submit_eval(
-            intent="",
-            extras={"branches": branches},
-            snap=snap,
-            page_url=url,
-            branches=branches,
-        )
-        if hit is not None:
-            ok, msg = hit
-            return ok, f"或断言: {msg}" if not msg.startswith("或断言") else msg
+    facts = live_facts
 
     for i, raw in enumerate(branches):
         if not isinstance(raw, dict):
@@ -113,10 +87,10 @@ def try_or_branches(
         label = branch_intent or branch_value or f"分支{i + 1}"
         if branch_value and branch_value in body_text:
             return True, f"或断言(分支{i + 1}): 页面包含 {branch_value!r} ({label})"
-        if snap:
+        if facts is not None:
             exp = infer_expect_from_text(branch_intent)
             if exp:
-                ok, msg = eval_submit_expect(exp, snap, url)
+                ok, msg = eval_submit_expect(exp, facts, url)
                 if ok:
                     return True, f"或断言(分支{i + 1}): {msg} ({label})"
         hit = try_or_heuristic(
@@ -124,6 +98,7 @@ def try_or_branches(
             dispatch_meta=dispatch_meta,
             page_url=url,
             body_text=body_text,
+            live_facts=facts,
         )
         if hit is not None:
             detail = hit[1]
@@ -153,23 +128,14 @@ def try_or_heuristic(
     dispatch_meta: Optional[dict[str, Any]] = None,
     page_url: str = "",
     body_text: str = "",
+    live_facts: Any = None,
 ) -> Optional[tuple[bool, str]]:
-    """用 URL/页面特征快速判定或断言的任一分支 (无需 LLM)."""
+    """用实时 URL/页面特征快速判定或断言分支 (无需 LLM)."""
     if not intent:
         return None
     url = _resolve_or_page_url(page, page_url, dispatch_meta)
     body = _resolve_or_body_text(page, body_text)
-    snap = _snap_from_meta(dispatch_meta)
-    if snap:
-        hit = try_post_submit_eval(
-            intent=intent,
-            extras=None,
-            snap=snap,
-            page_url=url,
-        )
-        if hit is not None:
-            ok, msg = hit
-            return ok, f"或断言(启发式): {msg}"
+    facts = live_facts
 
     want_detail = bool(_DETAIL_BRANCH_RE.search(intent))
     want_list = bool(_LIST_BRANCH_RE.search(intent))
@@ -182,7 +148,7 @@ def try_or_heuristic(
     on_list = not on_detail and not is_detail_submission_url(url)
 
     if want_detail and on_detail:
-        if body_text or snap or "/detail" in url:
+        if body_text or "/detail" in url:
             return True, "或断言(启发式): 当前在任务详情页"
         try:
             radios = page.locator("input[type=radio], .ant-radio-input").count()
@@ -193,5 +159,12 @@ def try_or_heuristic(
 
     if want_list and on_list:
         return True, "或断言(启发式): 当前在待领取/待前审页面"
+
+    if facts is not None:
+        exp = infer_expect_from_text(intent)
+        if exp:
+            ok, msg = eval_submit_expect(exp, facts, url)
+            if ok:
+                return True, f"或断言(启发式): {msg}"
 
     return None

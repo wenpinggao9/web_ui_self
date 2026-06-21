@@ -11,6 +11,12 @@ _CSS_HINT_PATTERNS = (
     re.compile(r"选择器\s*(?:如\s*)?['\"]([^'\"]+)['\"]"),
 )
 
+# 裸 CSS 选择器 (后校验直接给出 input#searchText 等)
+_BARE_SELECTOR_RE = re.compile(
+    r"^(?:[a-z][a-z0-9-]*(?:\[[^\]]+\])?|[#.\\[])[\w#.,\[\]=\-\"':]*$",
+    re.I,
+)
+
 _INDEX_HINT_PATTERNS = (
     re.compile(r"\[(\d+)\]"),
     re.compile(r"index[=\s]*(\d+)", re.I),
@@ -23,6 +29,8 @@ def extract_selector_from_resolve_hint(hint: Optional[str]) -> Optional[str]:
     text = (hint or "").strip()
     if not text:
         return None
+    if _looks_like_bare_selector(text) and _looks_like_selector(text):
+        return text
     for pat in _CSS_HINT_PATTERNS:
         m = pat.search(text)
         if not m:
@@ -33,11 +41,23 @@ def extract_selector_from_resolve_hint(hint: Optional[str]) -> Optional[str]:
     return None
 
 
+def _looks_like_bare_selector(text: str) -> bool:
+    t = (text or "").strip()
+    if not t or len(t) > 200 or " " in t:
+        return False
+    if t.startswith(("http://", "https://", "//")):
+        return False
+    return bool(_BARE_SELECTOR_RE.match(t))
+
+
 def _looks_like_selector(sel: str) -> bool:
     low = sel.lower()
     return any(
         tok in low
-        for tok in ("has-text", "tbody", "tr:first", "role=", "button", "a:", ".ant-", "#")
+        for tok in (
+            "has-text", "tbody", "tr:first", "role=", "button", "a:",
+            ".ant-", "#", "input", "textarea", "[placeholder", "[name=",
+        )
     )
 
 

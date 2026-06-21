@@ -26,6 +26,7 @@ _SELECTOR_SKILLS = frozenset({
     "build_tree_checkbox_selector",
     "build_tree_node_selector",
     "build_date_picker_selector",
+    "build_fill_input_selector",
 })
 
 _COMPONENT_TYPE_TO_SKILL = {
@@ -36,6 +37,7 @@ _COMPONENT_TYPE_TO_SKILL = {
     "tree_checkbox": "build_tree_checkbox_selector",
     "tree_node": "build_tree_node_selector",
     "date_picker": "build_date_picker_selector",
+    "text_input": "build_fill_input_selector",
 }
 
 
@@ -106,7 +108,50 @@ def detect_component_type_from_intent(intent: str, action_type: Optional[str]) -
         return "tree_node"
     if intent_route.is_date_picker(intent):
         return "date_picker"
+    if intent_route.is_text_input_fill(intent, action_type):
+        return "text_input"
     return None
+
+
+def infer_component_type_from_dom(
+    items: list[dict],
+    intent: str,
+    action_type: Optional[str],
+) -> Optional[str]:
+    """从语义 DOM + intent 引号内目标文案推断组件类型 (无业务字段假设)."""
+    if (action_type or "").strip().lower() not in ("click", "check", "uncheck", "toggle"):
+        return None
+    target = extract_target_text_from_intent(intent)
+    if not target or not items:
+        return None
+    for i, node in enumerate(items):
+        node_text = str(node.get("text") or "").strip()
+        tag = (str(node.get("tag") or "")).lower()
+        typ = (str(node.get("type") or "")).lower()
+        if tag == "input" and typ == "radio" and target in node_text:
+            return "radio"
+        if tag == "label" and target in node_text:
+            for near in items[i : i + 6]:
+                if (str(near.get("tag") or "")).lower() != "input":
+                    continue
+                if (str(near.get("type") or "")).lower() == "radio":
+                    return "radio"
+        role = (str(node.get("role") or "")).lower()
+        if role == "radio" and target in node_text:
+            return "radio"
+    return None
+
+
+def resolve_component_type(
+    items: list[dict],
+    intent: str,
+    action_type: Optional[str],
+) -> Optional[str]:
+    """DOM 推断优先, 其次 intent 关键词路由."""
+    return (
+        infer_component_type_from_dom(items, intent, action_type)
+        or detect_component_type_from_intent(intent, action_type)
+    )
 
 
 def _invoke_build_helper(skill_name: str, items: list[dict], intent: str, target_text: str = "") -> Optional[dict]:
@@ -125,6 +170,8 @@ def _invoke_build_helper(skill_name: str, items: list[dict], intent: str, target
             return invoke_skill("build_tree_node_selector", items, intent, target_text)
         if skill_name == "build_date_picker_selector":
             return invoke_skill("build_date_picker_selector", items, intent, target_text)
+        if skill_name == "build_fill_input_selector":
+            return invoke_skill("build_fill_input_selector", items, intent, target_text)
     except Exception:
         return None
     return None
@@ -213,7 +260,7 @@ def try_auto_skill_selector(
     llm_xpath_builder: Optional[Callable[[str, str, str], Optional[str]]] = None,
 ) -> Optional[str]:
     """LLM 返回 index 后自动尝试 2B selector 构建."""
-    comp_type = detect_component_type_from_intent(intent, action_type)
+    comp_type = resolve_component_type(items, intent, action_type)
     if not comp_type:
         return None
     skill_name = _COMPONENT_TYPE_TO_SKILL.get(comp_type)

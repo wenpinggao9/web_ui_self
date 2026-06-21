@@ -17,6 +17,7 @@ from .script_helpers import (
     find_usable_context_pages,
     is_detail_submission_url,
     pick_surviving_tab_after_detail_close,
+    still_on_same_detail_after_submit,
     submit_left_detail_context,
 )
 
@@ -84,8 +85,10 @@ def finalize_submit_after_dispatch(
 
     if left:
         meta["left_detail_context"] = True
+        url_after = str(meta.get("url_after") or _url_safe(page))
         if outcome in _AMBIGUOUS_OUTCOMES or outcome == "submit_error":
-            meta["navigation_outcome"] = "returned_to_list"
+            if not still_on_same_detail_after_submit(url_before, url_after):
+                meta["navigation_outcome"] = "returned_to_list"
     elif not meta.get("left_detail_context"):
         url_after = str(meta.get("url_after") or _url_safe(page))
         if submit_left_detail_context(

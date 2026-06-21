@@ -121,6 +121,20 @@ def compact_dom_lines(
     return "\n".join(lines)
 
 
+def dom_index_from_picked_indices(items: list[dict], picked_indices: list[int]) -> DomIndex:
+    """从完整 items 按原始下标构建 L3 DomIndex (意图窗口用)."""
+    lines: list[str] = []
+    sel_list: list[dict] = []
+    seen: set[int] = set()
+    for i in picked_indices:
+        if i in seen or i < 0 or i >= len(items):
+            continue
+        seen.add(i)
+        lines.append(format_indexed_dom_line(i, items[i]))
+        sel_list.append(build_locator_info(items[i]))
+    return DomIndex("\n".join(lines), sel_list)
+
+
 def dom_index_from_items(items: list[dict], limit: int = 80) -> DomIndex:
     """从已抽取的 semantic_items 构建 L3 DomIndex (不再读页)."""
     sliced = items[:limit]
