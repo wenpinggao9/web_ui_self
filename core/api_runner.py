@@ -71,22 +71,29 @@ class ApiRunner:
             results = self._call_until_success(api_name, api_tpl, params, target_count)
 
             # 提取返回值存入上下文
-            # 从原始描述中提取变量名 (如"获取 orderId3 和 orderId4")
             var_suffixes = re.findall(r'[a-zA-Z]+(\d+)', line)
             base_key = api_tpl.returns[0].split(".")[-1] if api_tpl.returns else "orderId"
-            # 提取 API 返回的实际值
+            store_as = self._extract_store_as_name(line)
             api_values = []
             for result in results:
                 val = result.get(base_key)
                 if val is not None:
                     api_values.append(val)
-            # 按描述的变量名存入上下文
             for i, val in enumerate(api_values):
-                if i < len(var_suffixes):
+                if store_as and len(api_values) == 1:
+                    self.context[store_as] = str(val)
+                    self.context.setdefault(base_key, str(val))
+                elif i < len(var_suffixes):
                     self.context[f"{base_key}{var_suffixes[i]}"] = str(val)
                 elif len(api_values) == 1:
                     self.context[base_key] = str(val)
         return self.context
+
+    @staticmethod
+    def _extract_store_as_name(line: str) -> Optional[str]:
+        """从「记录为变量名」提取目标会话变量 (通用, 不依赖业务 YAML)."""
+        m = re.search(r"记录为\s*(\w+)", line)
+        return m.group(1) if m else None
 
     def _extract_target_count(self, line: str) -> int:
         """从描述中提取目标数量."""

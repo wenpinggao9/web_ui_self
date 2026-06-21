@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-# 旧版 querySelector 快照已移除; 抽取走 core.dom.v3_bridge (V3 traverse + 下拉/option 专项).
+# 旧版 querySelector 快照已移除; 抽取走 dom bridge (traverse + 下拉/option 专项).
 
-# ---- DOM 稳定等待 (v3_bridge 复用) ----
+# ---- DOM 稳定等待 ----
 
 _DOM_STABLE_JS = r"""
 (quietMs) => new Promise((resolve) => {
@@ -45,7 +45,7 @@ def _snapshot_items(
     *,
     profile: str = "locate",
 ) -> list[dict]:
-    """V3 遍历 + iframe + 下拉/option 专项 + normalize."""
+    """遍历 + iframe + 下拉/option 专项 + normalize."""
     from .v3_bridge import collect_snapshot_items
     return collect_snapshot_items(
         page, dialog_first, stable, selectors, profile=profile,
@@ -59,7 +59,7 @@ def extract_items(
     stable: bool = True,
     selectors: Optional[dict[str, str]] = None,
 ) -> list[dict]:
-    """V3 风格统一 DOM 抽取. profile=locate(定位) | post_verify(操作后校验/断言)."""
+    """统一 DOM 抽取. profile=locate(定位) | post_verify(操作后校验/断言)."""
     return _snapshot_items(
         page, dialog_first, stable, selectors, profile=profile,
     )
@@ -92,7 +92,7 @@ class DomIndex:
 
 
 def format_indexed_dom_line(i: int, it: dict) -> str:
-    """V3 风格带 [索引] 的单行摘要 (后校验/定位/语义断言共用)."""
+    """带 [索引] 的单行摘要 (后校验/定位/语义断言共用)."""
     return f"[{i}] {_render_line(it)}"
 
 
@@ -101,7 +101,7 @@ def compact_dom_lines(
     max_nodes: Optional[int] = None,
     max_chars: Optional[int] = None,
 ) -> str:
-    """将 semantic_items 压成带 [索引] 的多行文本 (V3 post_verify 格式)."""
+    """将 semantic_items 压成带 [索引] 的多行文本 (post_verify 格式)."""
     slice_items = items if max_nodes is None else items[:max_nodes]
     lines: list[str] = []
     used = 0
@@ -206,6 +206,21 @@ def build_locator_info(it: dict) -> dict:
             "exact": role in ("tab", "menuitem"),
             "nth": nth, "in_dialog": in_dialog,
             "selector": f'role={role}[name="{text}"]',
+        })
+    cls = (it.get("class") or "").lower()
+    if role == "radio" and text:
+        name_escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return _meta({
+            "method": "role", "role": "radio", "name": text, "exact": False,
+            "nth": nth, "in_dialog": in_dialog,
+            "selector": f'role=radio[name="{name_escaped}"]',
+        })
+    if "ant-radio-wrapper" in cls and text:
+        name_escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return _meta({
+            "method": "css",
+            "selector": f'label.ant-radio-wrapper:has-text("{name_escaped}")',
+            "nth": nth, "in_dialog": in_dialog,
         })
     if text and tag in ("button", "a", "label", "span", "li"):
         if tag == "button":

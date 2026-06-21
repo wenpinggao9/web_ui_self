@@ -22,7 +22,6 @@ from .page_nav import (
     is_sub_page_name,
     step_uses_in_page_context,
 )
-
 _DEFAULT_SYSTEM = """\
 你是"动作规划器", 只负责规划"做什么", 不负责"怎么定位元素".
 
@@ -37,7 +36,7 @@ _DEFAULT_SYSTEM = """\
 8. 上传动作 type=upload, extras.field 指定输入项字段名.
 9. 不要假设具体组件库, 用语义化中文描述意图.
 10. 仅当步骤明确写"等待"时才生成 type=wait; 仅当明确写"按下/回车"等才生成 type=press.
-11. JSON 字符串值(intent/value)内严禁出现未转义的英文双引号 "; 需要引用文字时改用中文全角引号 “” 或省略引号. 这能避免 JSON 解析失败.
+11. JSON 字符串值(intent/value)内严禁出现未转义的英文双引号 "; 需要引用文字时改用中文全角引号 "" 或省略引号. 这能避免 JSON 解析失败.
 
 type 取值: click 点击 / hover 悬停 / fill 输入 / press 按键 / goto 跳转 / wait 等待 /
 upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_table 断言表格 / asset 资产.

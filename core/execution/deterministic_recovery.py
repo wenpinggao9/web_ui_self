@@ -1,4 +1,4 @@
-"""V3 风格确定性恢复: LLM readiness 之前补 fill / radio / 必填检测."""
+"""确定性恢复: LLM readiness 之前补 fill / radio / 必填检测."""
 from __future__ import annotations
 
 import json
@@ -8,11 +8,8 @@ from typing import Any, Optional
 
 from ..planning import PlannedAction
 
-_OPTION_INTENT_RE = re.compile(r"选择|点击.*(?:单选|radio|选项|审核原因|原因)", re.I)
+_OPTION_INTENT_RE = re.compile(r"选择|点击.*(?:单选|radio|选项)", re.I)
 _SUBMIT_WORDS = ("提交", "保存", "确定", "确认", "登录", "下一步", "结算", "立即支付", "支付", "完成")
-_AUDIT_REASON_HINTS = (
-    "不良导向", "敏感信息", "非大学", "非目标", "题目不完整", "多题", "水印", "无任何问题",
-)
 
 _DETECT_UNFILLED_JS = r"""
 (maxItems) => {
@@ -299,19 +296,12 @@ def extract_label_from_intent(intent: str) -> str:
     m = re.search(r"[「']([^」']+)[」']", intent or "")
     if m:
         return m.group(1).strip()
-    for hint in _AUDIT_REASON_HINTS:
-        if hint in (intent or ""):
-            return hint
     return ""
 
 
 def is_option_selection_click(action: PlannedAction, label: str) -> bool:
     intent = action.intent or ""
-    if _OPTION_INTENT_RE.search(intent):
-        return True
-    if label and any(h in label or h in intent for h in _AUDIT_REASON_HINTS):
-        return True
-    return False
+    return bool(_OPTION_INTENT_RE.search(intent))
 
 
 def resolve_expected_radio_label(
@@ -322,13 +312,11 @@ def resolve_expected_radio_label(
     case_steps: list[str],
     case_notes: list[str],
 ) -> Optional[str]:
-    reason = str(api_context.get("reason") or "").strip()
-    if reason:
-        return reason
-    if last_click_label and any(h in last_click_label for h in _AUDIT_REASON_HINTS):
-        return last_click_label
+    _ = api_context  # 标量变量由 prior_actions / 用例步骤推断, 不读 ops/reason 配置
     for act in reversed(prior_actions):
         if act.type != "click" or getattr(act, "is_recovery", False):
+            continue
+        if not _OPTION_INTENT_RE.search(act.intent or ""):
             continue
         label = extract_label_from_intent(act.intent or "")
         if label:
@@ -336,13 +324,15 @@ def resolve_expected_radio_label(
         if act.value:
             return str(act.value).strip()
     for line in case_steps:
+        if "选择" not in line and "点击" not in line:
+            continue
         label = extract_label_from_intent(line)
-        if label and ("选择" in line or "点击" in line):
+        if label:
             return label
     for note in case_notes:
-        m = re.search(r"「([^」]+(?:不良导向|敏感信息)[^」]*)」", note)
-        if m:
-            return m.group(1).strip()
+        label = extract_label_from_intent(note)
+        if label and "选择" in note:
+            return label
     return None
 
 

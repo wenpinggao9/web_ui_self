@@ -29,6 +29,13 @@ def record_literal(action: PlannedAction, text: str, *, negate: bool = False) ->
     set_codegen_assert(action, {"kind": kind, "text": text})
 
 
+def record_button_state(action: PlannedAction, label: str, *, disabled: bool) -> None:
+    set_codegen_assert(action, {
+        "kind": "button_disabled" if disabled else "button_enabled",
+        "text": label,
+    })
+
+
 def record_url_from_page(action: PlannedAction, page: Any) -> None:
     path = _url_path(getattr(page, "url", "") or "")
     if path and path != "/":

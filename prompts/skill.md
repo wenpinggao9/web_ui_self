@@ -83,6 +83,74 @@ framework_selectors:
     option_sel: '.arco-select-option, .arco-dropdown-option, [role="option"]'
     dialog_sel: '[role="dialog"], .arco-modal, .arco-modal-confirm'
     form_sel: 'form, .arco-form'
+component_structures:
+  ant-design:
+    class_features: ["ant-"]
+    dropdown_option:
+      html: |
+        <div class="ant-select-dropdown">
+          <div class="ant-select-item ant-select-item-option">
+            <div class="ant-select-item-option-content">选项</div>
+          </div>
+        </div>
+      click_target: |
+        <div class="ant-select-item ant-select-item-option">
+    checkbox:
+      html: |
+        <label class="ant-checkbox-wrapper"><span class="ant-checkbox"></span></label>
+      click_target: |
+        <span class="ant-checkbox">
+    radio:
+      html: |
+        <label class="ant-radio-wrapper"><span class="ant-radio"></span></label>
+      click_target: |
+        <label class="ant-radio-wrapper">
+    select_trigger:
+      html: |
+        <div class="ant-select ant-select-single"><div class="ant-select-selector"></div></div>
+      click_target: |
+        <div class="ant-select-selector">
+  element-plus:
+    class_features: ["el-"]
+    dropdown_option:
+      html: |
+        <div class="el-select-dropdown"><li class="el-select-dropdown__item">选项</li></div>
+      click_target: |
+        <li class="el-select-dropdown__item">
+    checkbox:
+      html: |
+        <label class="el-checkbox"><span class="el-checkbox__inner"></span></label>
+      click_target: |
+        <span class="el-checkbox__inner">
+    select_trigger:
+      html: |
+        <div class="el-select"><div class="el-select__wrapper"></div></div>
+      click_target: |
+        <div class="el-select__wrapper">
+  element-ui:
+    class_features: ["el-"]
+    dropdown_option:
+      html: |
+        <div class="el-select-dropdown"><li class="el-select-dropdown__item">选项</li></div>
+      click_target: |
+        <li class="el-select-dropdown__item">
+    checkbox:
+      html: |
+        <label class="el-checkbox"><span class="el-checkbox__inner"></span></label>
+      click_target: |
+        <span class="el-checkbox__inner">
+    select_trigger:
+      html: |
+        <div class="el-select"><div class="el-select__wrapper"></div></div>
+      click_target: |
+        <div class="el-select__wrapper">
+  generic:
+    class_features: []
+    dropdown_option:
+      html: |
+        <div role="listbox"><div role="option">选项</div></div>
+      click_target: |
+        <div role="option">
 entrypoints:
   build_dropdown_option_selector:
     kind: python
@@ -96,6 +164,10 @@ entrypoints:
     kind: python
     module: core.locating.skill_dom_helpers
     callable: build_checkbox_selector
+  build_radio_selector:
+    kind: python
+    module: core.locating.skill_dom_helpers
+    callable: build_radio_selector
   build_tree_checkbox_selector:
     kind: python
     module: core.locating.skill_dom_helpers

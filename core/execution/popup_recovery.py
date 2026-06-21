@@ -90,6 +90,18 @@ def is_redline_recovery_intent(intent: str) -> bool:
     return bool(_REDLINE_MARKERS.search(intent or ""))
 
 
+def prepare_dialog_recovery_action(rec: PlannedAction) -> None:
+    """弹窗/协议类 recovery: 跳过 L1/L2 弱缓存, 限定在 dialog 内定位."""
+    if not is_redline_recovery_intent(rec.intent or ""):
+        return
+    rec.skip_acceleration = True
+    intent = rec.intent or ""
+    if re.search(r"勾选|复选框|checkbox", intent, re.I):
+        rec.resolve_hint = rec.resolve_hint or '[role="dialog"] input[type="checkbox"]'
+    elif re.search(r"已知悉|确认|关闭|同意", intent):
+        rec.resolve_hint = rec.resolve_hint or '[role="dialog"] button:has-text("已知悉")'
+
+
 def execute_readiness_recovery(
     dispatcher: ActionDispatcher,
     readiness_checker: Any,
@@ -164,6 +176,7 @@ def execute_readiness_recovery(
                 next_action=action,
                 dom_summary=dispatcher.get_cached_dom_summary(),
                 dispatch_meta=dispatcher.last_dispatch_meta or None,
+                list_anchor=getattr(dispatcher, "_list_tab_anchor", None),
             )
             if trace:
                 trace.emit(

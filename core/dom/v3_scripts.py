@@ -1,4 +1,4 @@
-"""V3 语义 DOM 遍历脚本 (port from ui-automation-v3)."""
+"""语义 DOM 遍历脚本 (浏览器 evaluate 注入)."""
 from __future__ import annotations
 
 V3_LOCATE_SCRIPT = """

@@ -55,9 +55,7 @@ def format_session_context(
 
     ops = ctx.get("ops")
     if isinstance(ops, dict) and ops:
-        lines.append(
-            f"ops 记录 (bind_session 写入; 行内点击 extras.row_key 填 {table_field}):"
-        )
+        lines.append("ops 记录 (可选 bind_session; 一般用 api_call 标量变量即可):")
         for eid, entry in ops.items():
             if not isinstance(entry, dict):
                 continue

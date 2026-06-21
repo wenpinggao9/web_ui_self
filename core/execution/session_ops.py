@@ -1,6 +1,6 @@
-"""跨用例会话操作账本 —— ops[实体ID] = { 本次操作字段 }.
+"""跨用例会话操作账本 —— ops[实体ID] = { 字段 }.
 
-框架只做通用解析链; 字段名、API、URL 捕获、resolve 文案均在业务知识 session_ops / page_capture 中配置.
+可选能力: 业务可在 action.extras 传入 ops 字段; 框架默认不预设字段名或索引规则.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _DEFAULT_SESSION_OPS: dict[str, Any] = {
 
 
 def get_ops_index(ctx: dict[str, Any]) -> dict[str, dict[str, str]]:
-    """字段值 → 实体 ID 反向索引, 如 reason → orderId."""
+    """字段值 → 实体 ID 反向索引 (仅 bind_session + index_by 时使用)."""
     idx = ctx.get("_ops_index")
     if not isinstance(idx, dict):
         idx = {}
@@ -90,7 +90,7 @@ def _entry_table_row_value(entry: Any, table_row_field: str) -> Optional[str]:
 
 
 def _extract_label_from_intent(intent: str) -> Optional[str]:
-    """从 bind/记录类 intent 的括号或引号中提取业务标签 (如审核原因文案)."""
+    """从 bind/记录类 intent 的括号或引号中提取标签文案."""
     text = intent or ""
     if not text:
         return None

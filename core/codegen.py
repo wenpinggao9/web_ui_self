@@ -611,6 +611,18 @@ def _gen_codegen_assert_lines(
     if kind == "negate_literal":
         text = _value_expr(str(spec.get("text", "")), api_context, runtime_api)
         return [f'{indent}assert {text} not in page.inner_text("body")']
+    if kind in ("button_disabled", "button_enabled"):
+        text = str(spec.get("text") or "")
+        want_disabled = kind == "button_disabled"
+        name = _py_str(text)
+        return [
+            f"{indent}_btn = page.get_by_role('button', name={name})",
+            f"{indent}if _btn.count() == 0:",
+            f"{indent}    _btn = page.get_by_role('link', name={name})",
+            f"{indent}assert _btn.count() > 0, '未找到按钮 ' + {name}",
+            f"{indent}assert _btn.first.is_disabled() is {want_disabled!r}, "
+            f"'按钮 disabled 状态不符'",
+        ]
     if kind == "semantic_only":
         intent = str(spec.get("intent") or "")
         return [

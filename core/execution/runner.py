@@ -94,11 +94,12 @@ class PlaywrightRunner:
         self.screens_dir.mkdir(parents=True, exist_ok=True)
 
     def run_actions(self, actions: list[PlannedAction], case_id: str) -> list[ExecResult]:
-        from ..readiness import is_advancing, should_run_readiness
+        from ..readiness import should_run_readiness
         from ..skill_loader import get_framework_selectors
 
         if self.readiness_checker and self.readiness_case_context is not None:
             self.readiness_checker.set_case_context(self.readiness_case_context)
+        self.dispatcher.feature_titles = list(self.feature_titles)
         if self.retry_controller and hasattr(self.retry_controller, "set_readiness_context_fn"):
             self.retry_controller.set_readiness_context_fn(
                 lambda act, prior=None: self._readiness_context(actions, act, prior),
@@ -136,8 +137,10 @@ class PlaywrightRunner:
                 f"  [cyan]框架识别: 执行 UI 步骤前检测到 {fw_name} 框架, 已注入选择器[/cyan]"
             )
 
-        # 上一步后校验失败时, 下一步强制做就绪检查, 让页面有机会恢复到可操作状态.
-        last_post_ok = True
+        # prev_post_verify_ok: 就绪门控 (首步须做就绪检查)
+        # ui_post_gate_open: 主步骤后校验失败后阻断后续 UI (recovery 失败不关闭)
+        prev_post_verify_ok = False
+        ui_post_gate_open = True
         current_role: Optional[str] = None
         # 若首个动作已带 role, 预先切换, 避免 readiness/定位仍用上一用例的会话
         if actions and actions[0].role and self.page_switcher:
@@ -152,8 +155,8 @@ class PlaywrightRunner:
             or_bundle = self._collect_or_group(actions, idx)
             if or_bundle is not None:
                 group, end_idx = or_bundle
-                seq, last_post_ok = self._run_or_assert_group(
-                    group, case_id, results, seq, last_post_ok,
+                seq, prev_post_verify_ok, ui_post_gate_open = self._run_or_assert_group(
+                    group, case_id, results, seq, prev_post_verify_ok, ui_post_gate_open,
                 )
                 idx = end_idx
                 continue
@@ -161,7 +164,6 @@ class PlaywrightRunner:
             action = actions[idx]
             action_idx = idx
             _retry_framework_detect(action)
-            # 下一步意图, 传给后校验让 LLM 结合当前和下一步判断
             next_act = actions[idx + 1] if idx + 1 < len(actions) else None
             # 变量替换: 把 api_call 返回的 ${varName} 替换为实际值
             api_ctx = getattr(self.dispatcher, 'api_context', {})
@@ -182,11 +184,17 @@ class PlaywrightRunner:
                         self.console.print(f"  [cyan]↻ 切换角色 → {action.role}[/cyan]")
                         current_role = action.role
 
-            # 步骤⑩ 就绪检查 (推进门控: 上一步成功时只在推进类动作做检查)
+            # 步骤⑩ 就绪检查 (上步后校验通过则跳过, 推进类经 LLM 门控后仍检查)
             skip_main = False
-            if self.pre_readiness_check:
-                force = is_advancing(action) if last_post_ok else True
-                if force and should_run_readiness(action):
+            if self.pre_readiness_check and should_run_readiness(action):
+                from ..readiness import should_skip_readiness_after_post_ok
+
+                must_force_pre = False
+                if prev_post_verify_ok:
+                    must_force_pre = self.readiness_checker.llm_force_pre_readiness(action)
+                if not should_skip_readiness_after_post_ok(
+                    action, prev_post_verify_ok, must_force_pre=must_force_pre,
+                ):
                     seq, idx, skip_main = self._run_readiness_with_insert(
                         action, case_id, results, seq, actions, idx,
                     )
@@ -218,8 +226,39 @@ class PlaywrightRunner:
                 )
                 self._log_result(r)
                 results.append(r)
-                last_post_ok = False
+                prev_post_verify_ok = False
                 idx += 1
+                continue
+
+            # 主步骤后校验未通过时, 不再执行后续需后校验的 UI 操作 (断言仍并列执行).
+            if (
+                not ui_post_gate_open
+                and should_post_check(action)
+                and not action.is_assert()
+            ):
+                seq += 1
+                idx += 1
+                t0 = time.time()
+                msg = "前置 UI 操作后校验未通过, 跳过后续操作步骤"
+                self.console.print(
+                    f"[blue]▶ Step {seq:02d}[/blue] [{action.type}] {action.intent} "
+                    f"[dim](跳过)[/dim]"
+                )
+                duration = int((time.time() - t0) * 1000)
+                r = ExecResult(
+                    step_no=seq,
+                    raw_text=action.intent,
+                    action=action.type,
+                    status="FAIL",
+                    duration_ms=duration,
+                    error=msg,
+                    message=msg,
+                    post_check_ok=False,
+                )
+                if self.observability:
+                    self.observability.end_step(seq, r)
+                self._log_result(r)
+                results.append(r)
                 continue
 
             seq += 1
@@ -245,27 +284,6 @@ class PlaywrightRunner:
                     url=url,
                 )
 
-            if not last_post_ok and action.is_assert():
-                duration = int((time.time() - t0) * 1000)
-                msg = "前置步骤后校验未通过, 预期结果断言不成立"
-                self.console.print(f"  [red]✘ FAIL ({duration}ms) {msg}[/red]")
-                r = ExecResult(
-                    step_no=seq,
-                    raw_text=action.intent,
-                    action=action.type,
-                    status="FAIL",
-                    duration_ms=duration,
-                    error=msg,
-                    message=msg,
-                    post_check_ok=False,
-                )
-                if self.observability:
-                    self.observability.end_step(seq, r)
-                self._log_result(r)
-                results.append(r)
-                last_post_ok = False
-                continue
-
             if self.post_step_check and should_post_check(action):
                 # 开启后校验时, RetryController 内部负责执行、校验和必要重试.
                 outcome = self.retry_controller.run(action, case_id, next_action=next_act)
@@ -284,19 +302,7 @@ class PlaywrightRunner:
                 ok, msg = self.dispatcher.dispatch(action, case_id=case_id)
                 post_ok = ok
                 self.dispatcher.capture_page_state_if_needed(action)
-                # 断言失败自愈: 就绪恢复后重试一次
-                if not ok and action.is_assert() and self.pre_readiness_check:
-                    rctx = self._readiness_context(actions, action, actions[:action_idx])
-                    rdy = self.readiness_checker.check(
-                        self.dispatcher.page, action, context=rctx,
-                    )
-                    if not rdy.ready and rdy.recovery:
-                        self.console.print(f"  [yellow]断言失败, 执行恢复后重试: {action.intent}[/yellow]")
-                        self._execute_recovery_steps(
-                            rdy.recovery, case_id, results, seq,
-                        )
-                        ok, msg = self.dispatcher.dispatch(action, case_id=case_id)
-                        post_ok = ok
+                # 断言失败不做 recovery 重试: 页面已可读则结果即结论 (见 readiness 断言规则).
 
             status = "PASS" if ok else "FAIL"
 
@@ -338,7 +344,10 @@ class PlaywrightRunner:
                 self.observability.end_step(seq, r)
             self._log_result(r)
             results.append(r)
-            last_post_ok = post_ok
+            if should_post_check(action):
+                prev_post_verify_ok = post_ok
+                if not post_ok:
+                    ui_post_gate_open = False
 
         self._save_exec_log(results)
         self._render(case_id, results)
@@ -434,6 +443,17 @@ class PlaywrightRunner:
             self.console.print(f"  [yellow]就绪检查: {rdy.note}[/yellow]")
         if not rdy.recovery:
             return seq, idx, False
+
+        from .popup_recovery import try_dismiss_blocking_dialog
+
+        if try_dismiss_blocking_dialog(self.dispatcher.page):
+            self.console.print("  [cyan]就绪恢复: 规则关弹窗成功, 重新就绪检查[/cyan]")
+            rdy = self.readiness_checker.check(self.dispatcher.page, action, context=rctx)
+            if rdy.ready:
+                return seq, idx, False
+            if not rdy.recovery:
+                return seq, idx, False
+
         # 把恢复动作插入到 actions 列表中当前动作前面, 保证 codegen 能包含它们
         for rec in rdy.recovery:
             actions.insert(idx, rec)
@@ -457,9 +477,22 @@ class PlaywrightRunner:
         next_action: Optional[PlannedAction] = None,
     ) -> RecoveryExecResult:
         """执行恢复动作列表; 可选 post_verify; 判定是否跳过主动作."""
+        from .popup_recovery import (
+            is_redline_recovery_intent,
+            prepare_dialog_recovery_action,
+            try_dismiss_blocking_dialog,
+        )
+
+        if any(is_redline_recovery_intent(r.intent) for r in recovery):
+            if try_dismiss_blocking_dialog(self.dispatcher.page):
+                self.console.print("  [cyan]恢复: 规则关弹窗成功[/cyan]")
+                if all(is_redline_recovery_intent(r.intent) for r in recovery):
+                    return RecoveryExecResult(seq=seq, outcomes=[], skip_main=False)
+
         outcomes: list = []
         for rec in recovery:
             rec.is_recovery = True
+            prepare_dialog_recovery_action(rec)
             seq += 1
             t0 = time.time()
             self.console.print(f"  [magenta]↺ 恢复 Step {seq:02d}[/magenta] [{rec.type}] {rec.intent}")
@@ -478,6 +511,7 @@ class PlaywrightRunner:
                     next_action=main_action or next_action,
                     dom_summary=cached_dom,
                     dispatch_meta=self.dispatcher.last_dispatch_meta or None,
+                    list_anchor=getattr(self.dispatcher, "_list_tab_anchor", None),
                 )
                 post_ok = post.step_ok
                 final_ok = ok and post_ok
@@ -637,32 +671,16 @@ class PlaywrightRunner:
         case_id: str,
         results: list[ExecResult],
         seq: int,
-        last_post_ok: bool,
-    ) -> tuple[int, bool]:
-        """执行或断言组: 依次尝试, 首个通过即成功."""
+        prev_post_verify_ok: bool,
+        ui_post_gate_open: bool,
+    ) -> tuple[int, bool, bool]:
+        """执行或断言组: 依次尝试, 首个通过即成功 (不依赖上一条断言结果)."""
         seq += 1
         t0 = time.time()
         intents = " | ".join(a.intent for a in group)
         self.console.print(
             f"[blue]▶ Step {seq:02d}[/blue] [assert_or] {intents[:120]}{'...' if len(intents) > 120 else ''}"
         )
-        if not last_post_ok:
-            duration = int((time.time() - t0) * 1000)
-            msg = "前置步骤后校验未通过, 或断言组不成立"
-            self.console.print(f"  [red]✘ FAIL ({duration}ms) {msg}[/red]")
-            r = ExecResult(
-                step_no=seq,
-                raw_text=intents,
-                action="assert_or",
-                status="FAIL",
-                duration_ms=duration,
-                error=msg,
-                message=msg,
-                post_check_ok=False,
-            )
-            self._log_result(r)
-            results.append(r)
-            return seq, False
         ok, msg = False, ""
         for branch in group:
             ok, msg = self.dispatcher.dispatch(branch, case_id=case_id)
@@ -688,7 +706,7 @@ class PlaywrightRunner:
         )
         self._log_result(r)
         results.append(r)
-        return seq, ok
+        return seq, prev_post_verify_ok, ui_post_gate_open
 
     # ---------- 输出 ----------
     def _screenshot(self, step_no: int, status: str) -> Path:

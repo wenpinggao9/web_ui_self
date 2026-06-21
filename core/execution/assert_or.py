@@ -10,21 +10,37 @@ from .post_submit_eval import (
     infer_expect_from_text,
     try_post_submit_eval,
 )
+from .script_helpers import is_detail_submission_url
 
-_OR_INTENT_RE = re.compile(r"或|否则|有的话|没有.{0,24}则|任一|任意一种")
+_OR_INTENT_RE = re.compile(r"否则|有的话|没有.{0,24}则|任一|任意一种")
 _DETAIL_BRANCH_RE = re.compile(r"详情|任务详情")
 _LIST_BRANCH_RE = re.compile(r"待领取|待前审|领取页|列表页")
 
 
 def is_or_assert(action: Any) -> bool:
-    """是否为多分支「或」断言."""
+    """是否为多分支「或」断言.
+
+    注意: 选项文案本身可含「或」(如「题目不完整或题干残缺」), 不是逻辑分支.
+    """
     extras = getattr(action, "extras", None) or {}
     if extras.get("any_of") or extras.get("or_group"):
         return True
     if extras.get("branches"):
         return True
+    value = (getattr(action, "value", None) or "").strip()
     intent = getattr(action, "intent", None) or ""
-    return bool(_OR_INTENT_RE.search(intent))
+    # value 含「或」且 intent 在验证「包含该选项/字段」→ 普通字面量断言
+    if value and "或" in value:
+        if value in intent or re.search(r"(包含|含)", intent):
+            return False
+    if _OR_INTENT_RE.search(intent):
+        return True
+    if "或" in intent:
+        # 剩余「或」: 仅当 intent 在描述多个可接受结果 (非「包含XXX」类单选项校验)
+        if re.search(r"(包含|含|选项包括|包括)", intent):
+            return False
+        return True
+    return False
 
 
 def _snap_from_meta(meta: Optional[dict[str, Any]]) -> Optional[SubmitSnapshot]:
@@ -40,21 +56,49 @@ def _snap_from_meta(meta: Optional[dict[str, Any]]) -> Optional[SubmitSnapshot]:
     )
 
 
+def _resolve_or_page_url(
+    page: Any,
+    page_url: str = "",
+    dispatch_meta: Optional[dict[str, Any]] = None,
+) -> str:
+    for cand in (
+        page_url,
+        str((dispatch_meta or {}).get("url_after") or ""),
+    ):
+        if cand:
+            return cand.lower()
+    try:
+        return (getattr(page, "url", None) or "").lower()
+    except Exception:
+        return ""
+
+
+def _resolve_or_body_text(page: Any, body_text: str = "") -> str:
+    if body_text:
+        return body_text[:4000]
+    try:
+        return (page.inner_text("body") or "")[:4000]
+    except Exception:
+        return ""
+
+
 def try_or_branches(
     page: Any,
     branches: list[Any],
     body_text: str,
     *,
     dispatch_meta: Optional[dict[str, Any]] = None,
+    page_url: str = "",
 ) -> Optional[tuple[bool, str]]:
     """按 extras.branches 逐支尝试: 字面量 value 或启发式."""
+    url = _resolve_or_page_url(page, page_url, dispatch_meta)
     snap = _snap_from_meta(dispatch_meta)
     if snap:
         hit = try_post_submit_eval(
             intent="",
             extras={"branches": branches},
             snap=snap,
-            page_url=getattr(page, "url", None) or "",
+            page_url=url,
             branches=branches,
         )
         if hit is not None:
@@ -72,12 +116,15 @@ def try_or_branches(
         if snap:
             exp = infer_expect_from_text(branch_intent)
             if exp:
-                ok, msg = eval_submit_expect(
-                    exp, snap, getattr(page, "url", None) or "",
-                )
+                ok, msg = eval_submit_expect(exp, snap, url)
                 if ok:
                     return True, f"或断言(分支{i + 1}): {msg} ({label})"
-        hit = try_or_heuristic(page, branch_intent, dispatch_meta=dispatch_meta)
+        hit = try_or_heuristic(
+            page, branch_intent,
+            dispatch_meta=dispatch_meta,
+            page_url=url,
+            body_text=body_text,
+        )
         if hit is not None:
             detail = hit[1]
             if not detail.startswith("或断言"):
@@ -104,46 +151,44 @@ def try_or_heuristic(
     intent: str,
     *,
     dispatch_meta: Optional[dict[str, Any]] = None,
+    page_url: str = "",
+    body_text: str = "",
 ) -> Optional[tuple[bool, str]]:
     """用 URL/页面特征快速判定或断言的任一分支 (无需 LLM)."""
     if not intent:
         return None
+    url = _resolve_or_page_url(page, page_url, dispatch_meta)
+    body = _resolve_or_body_text(page, body_text)
     snap = _snap_from_meta(dispatch_meta)
     if snap:
         hit = try_post_submit_eval(
             intent=intent,
             extras=None,
             snap=snap,
-            page_url=getattr(page, "url", None) or "",
+            page_url=url,
         )
         if hit is not None:
             ok, msg = hit
             return ok, f"或断言(启发式): {msg}"
 
-    url = (page.url or "").lower()
-    try:
-        body = (page.inner_text("body") or "")[:4000]
-    except Exception:
-        body = ""
-
     want_detail = bool(_DETAIL_BRANCH_RE.search(intent))
     want_list = bool(_LIST_BRANCH_RE.search(intent))
 
     on_detail = (
-        "/detail" in url
+        is_detail_submission_url(url)
         or "请选择审核原因" in body
         or ("任务id" in body.lower() and "审核原因" in body)
     )
-    on_list = "/wait-preview" in url or (
-        not on_detail and ("待领取" in body or "领取题目" in body)
-    )
+    on_list = not on_detail and not is_detail_submission_url(url)
 
-    if want_detail and on_detail and not snap:
+    if want_detail and on_detail:
+        if body_text or snap or "/detail" in url:
+            return True, "或断言(启发式): 当前在任务详情页"
         try:
             radios = page.locator("input[type=radio], .ant-radio-input").count()
         except Exception:
             radios = 0
-        if radios >= 1 or "/detail" in url:
+        if radios >= 1:
             return True, "或断言(启发式): 当前在任务详情页"
 
     if want_list and on_list:

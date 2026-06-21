@@ -37,7 +37,7 @@
 11. 上传动作 type=upload, extras.field 指定输入项字段名.
 12. 不要假设具体组件库, 用语义化中文描述动作意图.
 13. 仅当步骤明确写"等待"时才生成 type=wait; 仅当明确写"按下/回车"等才生成 type=press.
-14. JSON 字符串值(intent/value)内严禁出现未转义的英文双引号 "; 需要引用文字时改用中文全角引号 “” 或省略引号. 这能避免 JSON 解析失败.
+14. JSON 字符串值(intent/value)内严禁出现未转义的英文双引号 "; 需要引用文字时改用中文全角引号 "" 或省略引号. 这能避免 JSON 解析失败.
 
 允许的动作对象字段:
 - type: 必填, 只能取 click、hover、fill、press、goto、wait、upload、assert_text、assert_count、assert_table、asset、api_call、bind_session、scroll.
@@ -54,15 +54,11 @@ api_call 动作:
 - **一步一义**: 一条用例步骤只对应一种 API 语义; **不要**把「查询/解析 ID」与「记录到会话」合并成一条 api_call 或 bind_session.
 - **拆分规则**: 如果一条步骤涉及多个独立的同类型 API 操作 (如"执行A获取id1、执行B获取id2" 或 "执行A获取id1、执行A获取id2"), 必须拆成多条独立的 api_call, 每条只描述一个操作和一个返回值，以调用api次数为拆分步骤参考，禁止同一接口多次调用合并为一条 step.
 
-bind_session 动作:
-- **触发条件 (硬门槛)**: **仅当用例「操作步骤」原文存在独立一句, 且含「记录」「登记」「写入会话」等记入账本语义时**, 才规划 type=bind_session.
-- **禁止**:
-  - 前置条件、预期结果中出现「记录」→ **不**规划 bind_session;
-  - api_call 之后**自动补** bind_session (查询返回值已在会话变量, 除非步骤原文另有「记录」句);
-  - 把「查询/解析/获取 ID」规划成 bind_session → 必须是 **api_call**;
-  - 为用例未写出的「记录」步骤**臆造** bind_session.
-- bind_session 不写选择器; 实体 ID 与 ops 字段由执行层按业务知识 session_ops 配置读取.
-- 用例若原文拆成「先查询 ID、再记录」两步 → 依序规划 api_call + bind_session; **两句都须来自操作步骤原文**.
+跨用例会话变量 (api_call 写入):
+- 步骤含「获取 orderId1 和 orderId2」→ 前置/步骤 api_call, 返回值按变量名写入会话.
+- 步骤含「…查询…，记录为变量名」→ **一条 api_call**, 执行层写入 `${变量名}` (如 `记录为orderId1001`).
+- **禁止**为「记录为变量名」单独规划 bind_session; 也禁止 api_call 后自动补 bind_session.
+- bind_session 为可选高级动作: 仅当用例原文有**独立**「记录/登记/写入会话」句且确需 ops 账本时才用; 无业务 YAML 配置时由 action.extras 提供字段, 框架不预设 reason/orderId 等字段名.
 
 角色推断 (role 字段):
 - **role 只能填「可用角色」列表中的 key**, 禁止编造或选用列表外的值.
@@ -80,6 +76,7 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
 动作规划规则:
 - 将每一句自然语言步骤转换为动作意图, type 必须从允许的动作类型中选择.
 - 如果一个步骤描述了多个连续操作, 必须拆分为多条独立 action. 禁止输出复合意图, 每条 action 只表达一个原子操作.
+
 - **所有关键名称(按钮名、输入框名、下拉框名、选项值、区域名、标签名)都用单引号包裹**. 例如: "点击'提交'按钮"、"在'用户名'输入框输入'张三'"、"在筛选区点击'来源'下拉框".
 - intent 应该描述业务语义, 不要描述技术定位方式.
 - 点击、输入、菜单、弹窗、表格、上传、断言等操作优先映射为 click、fill、press、wait、upload、assert_text、assert_count、assert_table、asset.
@@ -128,48 +125,56 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
 - 若当前 URL 与步骤描述的业务上下文一致 (同模块子路径、查询参数表明在同一记录页), 可省略重复的侧栏进入动作.
 - 前置仅写「XX列表不为空」等页面状态型条件时, **不等于**要求先点侧栏进入 XX; 直接按操作步骤规划, 页面恢复交给执行层.
 
-**会话记录引用** (步骤依据前序 case 的会话数据指代某条记录时):
-- **识别**: 步骤、前置或预期出现「那条」「对应」「前序选择 xxx 的那条」「case N 记录的」「${变量名}」等, 指向前序 api_call / bind_session 写入的会话数据, 而非当前步骤现场新建的数据.
-- **依据**: 必须结合用户提示中的「跨用例会话上下文」(标量变量、ops 记录、索引字段反向映射) 理解用户真正要操作/校验的是哪条记录.
-- **落实为具体操作**: 从「跨用例会话上下文」查出目标记录的 **表格行 ID 数值** (如 orderId=146420011), 写入 **extras.row_key** 或 **extras[该字段名]** (如 extras.orderId); 执行层**直接按此 ID 在表格任意列匹配行**, 不再依赖业务配置列名.
-  - 同时写 **extras.button** (按钮文案); 有状态条件写 **extras.status_filter**; intent 保留业务描述.
-  - **禁止**把 workId/任务ID 等 ops 实体键填进行定位字段; 应填 orderId 等列表页出现的行 ID.
-  - 若只有索引语义 (如 reason 全文) 无数值 ID, 可只写索引字段, 执行层从 ops 反查.
-- 示例: 会话含 orderId=146420011 →
-  {"type":"click","extras":{"orderId":"146420011","status_filter":"已退场","button":"日志"}}
+**跨用例变量引用** (步骤引用前序 case 写入的会话变量时):
+- **识别**: 步骤、前置或预期出现 `${变量名}` (如 `${orderId1001}`), 或「上面投放的」「前序获取的」等, 指向前序 api_call 写入的标量变量.
+- **依据**: 结合用户提示中的「跨用例会话上下文」标量变量列表; **仅使用已出现的 ${名称}**, 禁止臆造占位符.
+- **表格行内点击**: 若步骤含 `${orderId}` 等行主键, 写入 **extras.row_key** (值为 `${orderId}` 或解析后的 ID); 同时写 **extras.button**; 有状态条件写 **extras.status_filter**; 列名写在 **extras.row_key_column / status_column**, 不依赖业务 YAML.
+- 示例: 会话含 orderId1001=146420011 →
+  {"type":"click","intent":"点击${orderId1001}的'日志'","extras":{"row_key":"${orderId1001}","button":"日志","row_key_column":"工单ID"}}
 
 - 按钮/菜单名须用用例或页面真实文案, 不要擅自缩写或改写.
 - 不要使用任何组件库类名或技术细节来描述动作, 例如不要写 "点击 el-select 下拉箭头", 应写 "点击下拉框" 或 "点击角色选择下拉框".
 - extras 用于确有必要的扩展参数; **表格行内点击**、**assert_table** 等场景下 extras.row_key / column / status_filter / button 等为必填或推荐字段, 不算冗余.
 
-筛选与选项选择场景 (必须拆成原子动作):
-- 步骤中出现「从 XX 中筛选/选择」时, 必须直接拆成多条原子动作:
-  1. click — 点击区域/标签, intent 写 "点击'XX'".
-  2. click — 点击筛选器触发器, intent 写 "在筛选区点击'YY'下拉框".
-  3. click — 在展开的下拉中选择选项, intent 写 "在下拉选项中点击'ZZ'".
-- **字段名 vs 筛选值**: 第2步 YY 用字段/筛选项名称 (如「来源」「状态」), 不要用业务筛选值充当字段名. 第3步 ZZ **保留用例原文的业务概念** (如用例写「策略来源」则仍写「策略来源」), 不要臆造或改写为猜测的页面选项文案; 执行层会做语义匹配.
-- 用例「筛选策略来源」→ 第2步点「来源」类字段下拉, 第3步点「策略来源」; 不要把「策略来源」写成第2步的下拉框名.
-- 示例: "从'商品列表'中筛选'状态'为'已上架'" → 拆成 3 条:
+筛选场景 (必须拆成原子动作; 第 2 步起可能是「点击选固定值」或「输入具体值」):
+
+- 步骤含「从 XX 中筛选/搜索/查询」时, 第 1 步固定为 click — `点击'XX'` 进入该区域; 之后按筛选值性质继续拆 (见下).
+
+**路径 A — 筛选值是固定选项 (点击选择)**:
+- 识别: 值是状态/类别/枚举词, 如「已上架」「策略」「女」; 常见「字段：值」「筛选 XX 是 YY」且 YY 非变量/编号.
+- 拆分 (区域 click 之后):
+  1. click — `在筛选区点击'字段名'下拉框` (YY 是字段名, 不要用筛选值充当字段名).
+  2. click — `在下拉选项中点击'选项值'` (保留用例原文; 执行层做语义匹配).
+- 示例: "从'商品列表'中筛选'状态'为'已上架'" →
   {"type":"click","intent":"点击'商品列表'"}
   {"type":"click","intent":"在筛选区点击'状态'下拉框"}
   {"type":"click","intent":"在下拉选项中点击'已上架'"}
-- 不带区域的选择操作 "选择XX为YY" / "筛选XX是YY" 拆成 2 条:
-  {"type":"click","intent":"在筛选区点击'XX'下拉框"}
-  {"type":"click","intent":"在下拉选项中点击'YY'"}
-- **禁止把字段名与筛选值拼成一个词**: 用例写「筛选性别是女」→ 点字段「性别」、再点值「女」; **不要**写成「性别女」、也不要在下拉选项一步里写「性别女」. 同理「来源：策略」→ 点「来源」+ 点「策略」, **不要**写成「策略来源」(除非用例原文整句就是「策略来源」).
-- 示例: 「筛选性别是女」→
-  {"type":"click","intent":"在筛选区点击'性别'下拉框"}
-  {"type":"click","intent":"在下拉选项中点击'女'"}
-- 示例: 「筛选来源：策略」→
-  {"type":"click","intent":"在筛选区点击'来源'下拉框"}
-  {"type":"click","intent":"在下拉选项中点击'策略'"}
+
+**路径 B — 筛选值是具体标识 (先选类型再输入)**:
+- 识别: 值含 `${...}`、以数字为主的 ID/编号, 或「字段=值」「按字段搜索 值」且值为精确标识.
+- 拆分 (区域 click 之后):
+  1. click — `点击'字段名'` 或 `选择'字段名'作为搜索/筛选类型` (字段名取自用例, 如「筛选 XX=…」里的 XX).
+  2. fill — `在筛选区搜索框输入…`; value 填具体值; intent 用「搜索框/筛选输入框」, **禁止**写成「在'字段名'输入框」(字段名通常是搜索类型, 不是 input label).
+  3. 用例另有「提交/查询」→ 单独 click, 不与 fill 合并.
+- 示例: "从'列表页'中筛选记录ID=${recordId}" →
+  {"type":"click","intent":"点击'列表页'"}
+  {"type":"click","intent":"点击'记录ID'作为搜索类型"}
+  {"type":"fill","intent":"在筛选区搜索框输入记录ID","value":"${recordId}"}
+
+**不带区域的筛选** (已在目标页):
+- 路径 A: "筛选 XX 是 YY" / "选择 XX 为 YY" → click 点字段下拉 + click 点选项 (2 条).
+- 路径 B: "筛选 XX=${id}" / "按 XX 搜索 ${id}" → click 选类型 + fill 搜索框 (2 条); 有提交再补 click.
+
+**禁止**: 把字段名与筛选值拼成一个词; 对精确值用路径 A; 对枚举选项用路径 B; 把 fill 写成「在'字段名'输入框」.
+- 示例: 「筛选性别是女」→ 路径 A (点「性别」下拉 + 点「女」).
+- 示例: 「筛选来源：策略」→ 路径 A (点「来源」下拉 + 点「策略」).
 
 
 表格/列表行断言:
 - 列表/表格中各字段分列展示, 单元格之间常有其他列文本, 禁止把"行标识符+字段值"拼接到 value 里用 assert_text 校验.
 - "列表中存在某条记录/出现某标识符" → assert_text, value 只写行标识符, 不要附带其他列.
 - "某条记录的某列/某字段为某值" → assert_table, 用 value 写行标识符, extras 写列名与期望值.
-- **会话记录引用下的 assert_table**: 从「跨用例会话上下文」查表格行主键值写入 value; 或用索引字段原文 (如「多题」) 作 value, 由执行层解析. **禁止**臆造 ${multi_question_id} 等未出现在会话标量变量中的占位符; 仅步骤/前置已定义的 ${orderId1} 等才可使用.
+- **会话变量下的 assert_table**: value 使用 `${变量名}`; 禁止臆造未在会话中出现的占位符.
 - **多标识符断言必须拆分**: 如果 intent 或 value 中同时出现两个及以上的标识符 (如 ${id1} 和 ${id2}), 必须拆成多条独立断言, 每条只校验一条记录.
   - "A为X和Y的..." → 拆成 "A为X的..." + "A为Y的..."
   - 示例: "验证列表中存在记录ID为${id1}和${id2}的记录" → 拆成两条:
@@ -180,17 +185,15 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
     {"type":"assert_table","intent":"验证记录ID为${id2}的状态为进行中","value":"${id2}","extras":{"column":"状态","expected":"进行中"}}
 - 列表项/选项包含多个候选 (如"选项包括A、B、C、D"): **拆成多条** assert_text, 每条校验一个选项.
   - 示例: "原因选项包括'选项A'、'选项B'、'选项C'" → 拆成三条:
-    {"type":"assert_text","intent":"验证原因选项","value":"'选项A'"}
-    {"type":"assert_text","intent":"验证原因选项","value":"'选项B'"}
-    {"type":"assert_text","intent":"验证原因选项","value":"'选项C'"}
+    {"type":"assert_text","intent":"验证原因选项包含'选项A'","value":"选项A"}
+    {"type":"assert_text","intent":"验证原因选项包含'选项B'","value":"选项B"}
+    {"type":"assert_text","intent":"验证原因选项包含'选项C'","value":"选项C"}
 - 行标识列默认按唯一标识符匹配; 若用例写的是其他标识, 在 extras 中补充 row_key_column.
 
 表格行内按钮 (查看/编辑/删除等):
-- 属于上方「会话记录引用」的常见场景; **必须**在 extras 写入 **row_key** (会话中的表格行主键值), 以及 **button**; 用例有状态条件时写 **status_filter**.
-- intent 保留用例业务描述; 定位以 extras.row_key 为准, 执行层在业务知识配置的表格主键列匹配该行后点 button.
-- 跨用例会话上下文中的索引字段→行主键映射用于填写 row_key; 禁止只输出索引语义而不写 row_key.
-- 列名由业务知识 session_ops 配置; 单步可用 extras 覆盖: row_key_column, status_column.
-- 示例: {"type":"click","intent":"对状态为「已关闭」的记录点击「查看」（前序选择「选项A」的那条）","extras":{"row_key":"10001","status_filter":"已关闭","button":"查看"}}
+- 步骤含 `${行主键}` 或需点某行按钮时, 在 extras 写 **row_key**、**button**; 可选 **status_filter**、**row_key_column**、**status_column**.
+- intent 保留用例业务描述; 定位以 extras.row_key 为准.
+- 示例: {"type":"click","intent":"点击${orderId1001}的'日志'","extras":{"row_key":"${orderId1001}","button":"日志","row_key_column":"工单ID"}}
 
 - 不要假设页面一定使用某个特定组件库, 例如 Element UI、Element Plus、Ant Design、Naive UI 等.
 - 不要在 intent 中出现组件库类名、内部 DOM 名称或实现细节, 例如 el-select、ant-select、el-tree、el-dialog、下拉箭头、内部 input、某个 class.
@@ -227,6 +230,10 @@ upload 上传 / assert_text 断言文本 / assert_count 断言计数 / assert_ta
   - "页面不包含/无 X" → {"type":"assert_text","intent":"验证页面不包含X","value":"X","negate":true}
   - "X 不可见/隐藏" → {"type":"assert_text","intent":"验证页面不存在X","value":"X","negate":true}
   - "X 不包含 Y" → {"type":"assert_text","intent":"在X区域内验证不包含Y","value":"Y","negate":true}
+  - **按钮置灰/不可点/高亮可点** (必须校验 disabled, 不能只断言文案存在):
+    - 「提交」按钮置灰 → {"type":"assert_text","intent":"验证提交按钮置灰","value":"提交","extras":{"state":"disabled"}}
+    - 「领取」按钮高亮可点 → {"type":"assert_text","intent":"验证领取按钮可点击","value":"领取","extras":{"state":"enabled"}}
+    - intent 含置灰/不可点/disabled 时也可识别, 但 **推荐显式写 extras.state**.
   - **区域 + 具体文案**: 用例写「最上方/标题区包含某文案」时, **value 写该文案本身**, intent 写区域 + 文案, **不要**把类别描述 (如学段学科信息) 拆成与 value 分离的抽象字段名.
     - 用例「最上方标题包含学段学科:大学数学」→ {"type":"assert_text","intent":"验证最上方标题包含大学数学","value":"大学数学"}
     - 错误: intent 写「验证最上方标题包含学段学科信息」、value 写「大学数学」—— 执行层会误当成字段标签断言.

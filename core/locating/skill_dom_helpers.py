@@ -295,6 +295,69 @@ def build_checkbox_selector(
     }
 
 
+def _extract_radio_target_text_from_intent(intent: str) -> Optional[str]:
+    if not intent:
+        return None
+    for pat in (r"[「\"'](.*?)[」\"']", r'"([^"]+)"', r"'([^']+)'"):
+        m = re.search(pat, intent)
+        if m and (m.group(1) or "").strip():
+            return m.group(1).strip()[:200]
+    return None
+
+
+def build_radio_selector(
+    semantic_dom: List[SemanticNode],
+    intent: str,
+    target_text: str = "",
+) -> Dict[str, Any]:
+    """单选/审核选项: 优先 ant-radio-wrapper / el-radio / role=radio, 避免只点内层 span 文案."""
+    text = (target_text or _extract_radio_target_text_from_intent(intent) or "").strip()[:200]
+    text_escaped = _escape_xpath_literal(text) if text else None
+    name_escaped = text.replace("\\", "\\\\").replace('"', '\\"') if text else ""
+
+    roles = {
+        (str(node.get("role")).lower())
+        for node in semantic_dom
+        if node.get("role") is not None
+    }
+
+    candidates: List[str] = []
+    if text:
+        if "radio" in roles:
+            candidates.append(f'role=radio[name="{name_escaped}"]')
+        candidates.extend(
+            [
+                f'label.ant-radio-wrapper:has-text("{name_escaped}")',
+                f'.ant-radio-wrapper:has-text("{name_escaped}")',
+                f'.el-radio:has-text("{name_escaped}")',
+                f'xpath=(//label[contains(@class,"ant-radio-wrapper") and contains(normalize-space(.), {text_escaped})])[1]',
+                f'xpath=(//*[contains(@class,"el-radio") and contains(normalize-space(.), {text_escaped})])[1]',
+                f'xpath=(//*[@role="radio" and contains(normalize-space(.), {text_escaped})])[1]',
+            ]
+        )
+
+    if "radio" in roles:
+        candidates.append("role=radio")
+    candidates.extend(
+        [
+            "(//label[contains(@class,'ant-radio-wrapper')])[1]",
+            "(//*[contains(@class,'el-radio')])[1]",
+            "(//*[@role='radio'])[1]",
+        ]
+    )
+
+    deduped: List[str] = []
+    for s in candidates:
+        if s and s not in deduped:
+            deduped.append(s)
+
+    return {
+        "selector": deduped[0] if deduped else None,
+        "candidates": deduped,
+        "target_text": text,
+    }
+
+
 # =============================================================================
 # 5c. 树勾选 Selector
 # =============================================================================
@@ -961,6 +1024,7 @@ __all__ = [
     "find_switch_in_row",
     "build_dropdown_option_selector",
     "build_checkbox_selector",
+    "build_radio_selector",
     "build_tree_checkbox_selector",
     "build_tree_node_selector",
     "build_el_select_trigger_selector",

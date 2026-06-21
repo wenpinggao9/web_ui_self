@@ -311,15 +311,6 @@
     "selector": "role=button[name=\"查 看\"]",
     "ts": 1781243456.8210409
   },
-  "/video/detail\u0001click\u0001在弹出选项中点击题目内容涉及不良导向/敏感信息": {
-    "method": "text",
-    "name": "题目内容涉及不良导向/敏感信息",
-    "exact": true,
-    "nth": 0,
-    "in_dialog": false,
-    "selector": "text:\"题目内容涉及不良导向/敏感信息\"",
-    "ts": 1781243487.856225
-  },
   "/video/detail\u0001click\u0001点击提交按钮": {
     "method": "role",
     "role": "button",
@@ -364,22 +355,5 @@
     "nth": 0,
     "selector": "role=button[name=\"领取\"]",
     "ts": 1781266169.168671
-  },
-  "/video/detail\u0001click\u0001在下拉选项中点击题目内容涉及不良导向/敏感信息": {
-    "method": "text",
-    "name": "题目内容涉及不良导向/敏感信息",
-    "exact": true,
-    "nth": 0,
-    "in_dialog": false,
-    "selector": "text:\"题目内容涉及不良导向/敏感信息\"",
-    "ts": 1781496064.022275
-  },
-  "/video/detail\u0001click\u0001在详情页选择题目内容涉及不良导向/敏感信息": {
-    "method": "text",
-    "name": "题目内容涉及不良导向/敏感信息",
-    "exact": true,
-    "nth": 0,
-    "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
-    "ts": 1781502825.211136
   }
 }

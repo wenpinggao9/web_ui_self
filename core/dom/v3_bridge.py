@@ -1,4 +1,4 @@
-"""V3 语义 DOM 抽取桥接: 遍历脚本 + iframe + normalize + 下拉/option 专项补充."""
+"""语义 DOM 抽取桥接: 遍历脚本 + iframe + normalize + 下拉/option 专项补充."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -182,7 +182,7 @@ def _build_component_supplement_js(selectors: Optional[dict[str, str]] = None) -
 
 
 def normalize_v3_item(raw: dict) -> dict:
-    """V3 元素条目 → 本项目 semantic_items 字段."""
+    """原始遍历条目 → 本项目 semantic_items 字段."""
     aria = raw.get("aria") if isinstance(raw.get("aria"), dict) else {}
     el_id = str(raw.get("id") or "")
     pub_id = el_id if el_id and not el_id.startswith("el-id-") else ""
@@ -293,7 +293,7 @@ def collect_snapshot_items(
     *,
     profile: str = "locate",
 ) -> list[dict]:
-    """V3 遍历 + iframe + 下拉/option 专项 + normalize."""
+    """遍历 + iframe + 下拉/option 专项 + normalize."""
     if stable:
         wait_for_dom_stable(page)
     supplement_js = _build_component_supplement_js(selectors)

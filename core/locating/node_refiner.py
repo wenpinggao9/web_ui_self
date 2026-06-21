@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from .intent_route import is_ant_radio_option
 from .skill_invoke import invoke_skill
 
 
@@ -34,6 +35,11 @@ def refine_node_index(
             refined = invoke_skill("choose_best_checkbox_target", items, base_index, intent)
             if refined != base_index:
                 return refined, "choose_best_checkbox_target"
+
+        if is_ant_radio_option(intent):
+            refined = invoke_skill("choose_best_click_target", items, base_index, intent)
+            if refined != base_index:
+                return refined, "choose_best_click_target"
 
         if _should_refine_click(items[base_index], intent):
             refined = invoke_skill("choose_best_click_target", items, base_index, intent)

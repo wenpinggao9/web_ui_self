@@ -1,4 +1,4 @@
-"""HTML/JSON 测试报告生成 (V3 样式 + 水印 + 可观测性面板)."""
+"""HTML/JSON 测试报告生成 (水印 + 可观测性面板)."""
 from __future__ import annotations
 
 import json
@@ -48,7 +48,7 @@ def build_report_data(
     out_dir: Optional[Path] = None,
     feature_titles: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """组装与 V3 兼容的 report_data 结构."""
+    """组装 report_data 结构."""
     passed = sum(1 for r in results if r.status == "PASS")
     failed = sum(1 for r in results if r.status == "FAIL")
     report_dir = (out_dir / "报告") if out_dir else Path("报告")
@@ -211,7 +211,7 @@ def render_report(
 
 
 def generate_html_report(report_data: dict[str, Any], watermark_cfg: dict[str, Any]) -> str:
-    """生成 V3 风格 HTML 报告 (步骤详情 + 可观测性 Tab)."""
+    """生成 HTML 报告 (步骤详情 + 可观测性 Tab)."""
     steps_html = ""
     for idx, step in enumerate(report_data.get("details", []), start=1):
         status_class = (

@@ -24,8 +24,17 @@ def _looks_like_id(val: str) -> bool:
     return bool(s) and (s.isdigit() or (len(s) >= 4 and any(c.isdigit() for c in s)))
 
 
+def _is_entity_query_key(key: str) -> bool:
+    if key in _KNOWN_URL_ID_KEYS:
+        return True
+    if _ID_QUERY_KEY_RE.match(key):
+        return True
+    kl = key.lower()
+    return any(k.lower() == kl for k in _KNOWN_URL_ID_KEYS)
+
+
 def extract_url_entity_map(url: str) -> dict[str, str]:
-    """解析 URL 查询串中所有像资源主键的参数."""
+    """解析 URL 查询串中所有像资源主键的参数 (键名大小写不敏感)."""
     qs = parse_qs(urlparse(url or "").query)
     out: dict[str, str] = {}
     for key, vals in qs.items():
@@ -34,19 +43,38 @@ def extract_url_entity_map(url: str) -> dict[str, str]:
         val = str(vals[0]).strip()
         if not _looks_like_id(val):
             continue
-        if key in _KNOWN_URL_ID_KEYS or _ID_QUERY_KEY_RE.match(key):
+        if _is_entity_query_key(key):
             out[key] = val
-    if "uniqId" in out and "workId" not in out:
-        out["workId"] = out["uniqId"]
     return out
+
+
+def canonical_url_entity_map(url: str) -> dict[str, str]:
+    """实体参数 canonical 形式 (小写键), 便于跨键名比较."""
+    return {k.lower(): v for k, v in extract_url_entity_map(url).items()}
+
+
+def url_entity_maps_differ(url_before: str, url_now: str) -> bool:
+    """同路由下 URL 实体参数是否发生变化 (不假设具体字段名)."""
+    before = canonical_url_entity_map(url_before)
+    now = canonical_url_entity_map(url_now)
+    if not before or not now:
+        id_b, id_n = pick_primary_url_id(url_before)[0], pick_primary_url_id(url_now)[0]
+        return bool(id_b and id_n and id_b != id_n)
+    shared = set(before) & set(now)
+    if shared:
+        return any(before[k] != now[k] for k in shared)
+    id_b, id_n = pick_primary_url_id(url_before)[0], pick_primary_url_id(url_now)[0]
+    return bool(id_b and id_n and id_b != id_n)
 
 
 def pick_primary_url_id(url: str) -> tuple[str, str]:
     """返回 (id, 来源键名)."""
     url_map = extract_url_entity_map(url)
+    lower_index = {k.lower(): (k, v) for k, v in url_map.items()}
     for key in _KNOWN_URL_ID_KEYS:
-        if key in url_map:
-            return url_map[key], key
+        hit = lower_index.get(key.lower())
+        if hit:
+            return hit[1], hit[0]
     if url_map:
         k, v = next(iter(url_map.items()))
         return v, k

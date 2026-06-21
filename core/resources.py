@@ -22,7 +22,15 @@ class ResourceManager:
         self.root = Path(project_root)
         self.upload_dir = Path(upload_dir) if upload_dir else self.root / "uploads"
         # 兼容中文/英文资产目录命名, 降低项目接入成本.
-        self.asset_dirs = [self.root / "assets", self.root / "资产", self.root / "测试资源"]
+        self.asset_dirs = [
+            self.root / "assets",
+            self.root / "资产",
+            self.root / "测试资源",
+        ]
+        # 额外搜索 业务/*/测试资源 目录 (支持多项目结构)
+        for d in self.root.glob("业务/*/测试资源"):
+            if d.is_dir():
+                self.asset_dirs.append(d)
         self._temp_files: list[Path] = []
 
     def resolve(self, name_or_path: str, case_resources: Optional[dict[str, CaseResource]] = None) -> Optional[str]:

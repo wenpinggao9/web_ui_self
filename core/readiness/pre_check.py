@@ -22,7 +22,11 @@ from ..planning import PlannedAction, coerce_action
 
 _ALLOWED_RECOVERY = {"click", "hover", "fill", "goto", "wait"}
 _READINESS_ACTION_TYPES = frozenset({"click", "hover", "fill", "upload", "goto"})
-_SUBMIT_WORDS = ("提交", "保存", "确定", "确认", "登录", "下一步", "结算", "立即支付", "支付", "完成")
+_SUBMIT_WORDS = (
+    "提交", "保存", "确定", "确认", "发布", "完成", "新增", "创建",
+    "登录", "下一步", "结算", "立即支付", "支付",
+    "save", "submit", "confirm",
+)
 
 _DEFAULT_SYSTEM = """\
 你是"步骤前就绪检查器". 判断当前页面是否已准备好执行"下一步动作".
@@ -104,12 +108,38 @@ def is_submit(action: PlannedAction) -> bool:
 
 
 def should_run_readiness(action: PlannedAction) -> bool:
-    """门控: 仅对可能发生页面状态偏差的 UI 动作做就绪检查 (参考 V3 白名单)."""
+    """门控: 仅对可能发生页面状态偏差的 UI 动作做就绪检查."""
     if action.is_assert():
         return False
     if action.type in ("api_call", "bind_session", "wait", "press", "select"):
         return False
     return action.type in _READINESS_ACTION_TYPES
+
+
+def should_skip_readiness_after_post_ok(
+    action: PlannedAction,
+    last_post_ok: bool,
+    *,
+    must_force_pre: bool = False,
+) -> bool:
+    """上一步后校验已通过且非推进类 → 跳过就绪检查."""
+    if not last_post_ok:
+        return False
+    if must_force_pre:
+        return False
+    return should_run_readiness(action)
+
+
+_READINESS_GATE_SYSTEM = """\
+你是 UI 自动化步骤门控助手.
+判断当前动作是否属于必须在执行前再次做 pre-step readiness 的推进类动作.
+
+推进类动作: 成功后通常导致流程状态前进、阶段切换、表单页切换、提交落库、向导步进、弹窗确认提交等.
+这类动作在前置条件不足时常出现"点击了但未真正生效".
+
+若属于推进类动作, 输出 {"force_pre_readiness": true, "reason": "..."};
+否则输出 {"force_pre_readiness": false, "reason": "..."}.
+只输出 JSON."""
 
 
 class ReadinessChecker:
@@ -185,8 +215,8 @@ class ReadinessChecker:
 
         if is_submit(action) and any(r.type == "fill" for r in recovery):
             return ReadinessResult(
-                ready=False, recovery=[], skip_main=False,
-                note="提交保护: 真实值已输入, 跳过假值补填",
+                ready=True, recovery=[], skip_main=False,
+                note="提交保护: 跳过 fill recovery, 直接执行主动作",
             )
 
         if not required_missing and is_submit(action):
@@ -207,6 +237,22 @@ class ReadinessChecker:
 
         note = reason or "页面未就绪"
         return ReadinessResult(ready=False, recovery=recovery, note=note)
+
+    def llm_force_pre_readiness(self, action: PlannedAction) -> bool:
+        """门控: LLM 判断上一步后校验通过后是否仍需就绪检查."""
+        system = self.prompts.system("readiness_gate", _READINESS_GATE_SYSTEM)
+        user = (
+            f"type={action.type}\n"
+            f"intent={action.intent}\n"
+            f"value={action.value!r}\n"
+        )
+        try:
+            data = self.llm.complete_json("readiness_gate", system, user).data
+            if isinstance(data, dict):
+                return bool(data.get("force_pre_readiness") is True)
+        except Exception:
+            pass
+        return is_advancing(action)
 
     @staticmethod
     def _parse_recovery(raw) -> list[PlannedAction]:

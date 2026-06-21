@@ -1,4 +1,4 @@
-"""从后校验 resolve_hint 提取可强制执行的选择器 (对齐 V3 resolver_hint 落地)."""
+"""从后校验 resolve_hint 提取可强制执行的选择器."""
 from __future__ import annotations
 
 import re

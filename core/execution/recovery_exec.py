@@ -1,4 +1,4 @@
-"""就绪恢复动作执行: post_verify + skip_main 判定 (参考 V3)."""
+"""就绪恢复动作执行: post_verify + skip_main 判定."""
 from __future__ import annotations
 
 import re

@@ -115,6 +115,29 @@ def invoke_entrypoint(
     raise ValueError(f"invalid entrypoint config: {name}")
 
 
+def format_skills_for_decider(path: str | Path) -> str:
+    """将 skill.md entrypoints 格式化为 L3 元素决策 system prompt 片段."""
+    eps = load_entrypoints(path)
+    if not eps:
+        return ""
+    lines = [
+        "你可以请求以下技能 (输出 use_skill JSON, 由系统自动调用):",
+        "",
+        "**2A 节点纠偏**: choose_best_input_target, choose_best_click_target, "
+        "choose_best_checkbox_target, find_switch_in_row",
+        "**2B selector 构建**: build_dropdown_option_selector, build_el_select_trigger_selector, "
+        "build_checkbox_selector, build_radio_selector, build_tree_checkbox_selector, build_tree_node_selector, build_date_picker_selector",
+        "",
+        "能力说明:",
+    ]
+    for name, conf in eps.items():
+        desc = (conf.get("description") or name) if isinstance(conf, dict) else name
+        lines.append(f"- {name}: {desc}")
+    lines.append("")
+    lines.append("下拉选项/复选框/树节点等复杂组件优先用格式二B; 内层 span 误选时用格式二A.")
+    return "\n".join(lines)
+
+
 def load_skill_text(path: str | Path) -> str:
     """读取 skill.md 并整理成适合注入 LLM system prompt 的文本."""
     p = Path(path)
@@ -249,6 +272,68 @@ def get_framework_selectors(
         return None, None
     all_selectors = load_framework_selectors(path)
     return framework, all_selectors.get(framework)
+
+
+def load_component_structures(path: str | Path) -> dict[str, Any]:
+    """读取 skill.md frontmatter 中的 component_structures."""
+    meta = load_skill_frontmatter(path)
+    structs = meta.get("component_structures") or {}
+    return structs if isinstance(structs, dict) else {}
+
+
+def load_component_class_features(path: str | Path) -> dict[str, list[str]]:
+    """从 component_structures 提取各库 class_features 前缀."""
+    structs = load_component_structures(path)
+    result: dict[str, list[str]] = {}
+    for lib_name, lib_conf in structs.items():
+        if not isinstance(lib_conf, dict):
+            continue
+        feats = lib_conf.get("class_features") or []
+        if isinstance(feats, list):
+            result[str(lib_name)] = [str(f).lower() for f in feats if str(f).strip()]
+    return result
+
+
+def get_component_structure(
+    path: str | Path,
+    component_library: str,
+    component_type: str,
+) -> Optional[dict[str, str]]:
+    """从 skill.md component_structures 按需查找 html + click_target."""
+    lib_key = (component_library or "").strip().lower()
+    comp_key = (component_type or "").strip().lower()
+    if not lib_key or not comp_key:
+        return None
+    structs = load_component_structures(path)
+    lib_conf = structs.get(lib_key)
+    if not isinstance(lib_conf, dict):
+        for k, v in structs.items():
+            if lib_key in k.lower() or k.lower() in lib_key:
+                lib_conf = v
+                break
+    if not isinstance(lib_conf, dict):
+        if lib_key != "generic":
+            return get_component_structure(path, "generic", component_type)
+        return None
+    comp_keys = [comp_key]
+    if comp_key == "select_trigger":
+        comp_keys.append("el_select_trigger")
+    elif comp_key == "el_select_trigger":
+        comp_keys.append("select_trigger")
+    comp_conf = None
+    for ck in comp_keys:
+        comp_conf = lib_conf.get(ck)
+        if isinstance(comp_conf, dict):
+            break
+    if not isinstance(comp_conf, dict):
+        if lib_key != "generic":
+            return get_component_structure(path, "generic", component_type)
+        return None
+    html = (comp_conf.get("html") or "").strip()
+    click_target = (comp_conf.get("click_target") or "").strip()
+    if html or click_target:
+        return {"html": html, "click_target": click_target}
+    return None
 
 
 def _split_frontmatter(text: str) -> tuple[str, str]:

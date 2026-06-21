@@ -28,16 +28,6 @@
     "score": 1,
     "ts": 1781507203.678786
   },
-  "/video/detail\u0001click\u0001在详情页选择题目内容涉及不良导向/敏感信息": {
-    "method": "text",
-    "name": "题目内容涉及不良导向/敏感信息",
-    "exact": true,
-    "nth": 0,
-    "in_dialog": false,
-    "selector": "text:\"题目内容涉及不良导向/敏感信息\"",
-    "score": 4,
-    "ts": 1781957138.970579
-  },
   "/video/wait-preview\u0001click\u0001点击领取按钮": {
     "method": "role",
     "role": "button",
@@ -73,15 +63,6 @@
     "nth": 0,
     "score": 1,
     "ts": 1781517473.661025
-  },
-  "/video/all-question\u0001click\u0001在筛选区点击学段下拉框": {
-    "method": "label",
-    "name": "学段",
-    "exact": true,
-    "nth": 0,
-    "selector": "label:\"学段\"",
-    "score": 1,
-    "ts": 1781517481.913651
   },
   "/video/all-question\u0001click\u0001在下拉选项中点击大学": {
     "method": "css",
@@ -424,5 +405,102 @@
     "nth": 0,
     "score": 1,
     "ts": 1781926282.135861
+  },
+  "/video/wait-preview\u0001click\u0001点击领取题目按钮再次领取更多题目": {
+    "method": "role",
+    "role": "button",
+    "name": "领取题目",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"领取题目\"]",
+    "score": 1,
+    "ts": 1781964188.4153862
+  },
+  "/video/wait-preview\u0001click\u0001点击领取题目按钮再次领取任务以使待完成任务数量大于1": {
+    "method": "role",
+    "role": "button",
+    "name": "领取题目",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"领取题目\"]",
+    "score": 1,
+    "ts": 1781966028.2349892
+  },
+  "/video/all-question\u0001click\u0001在筛选区点击学段下拉框": {
+    "method": "css",
+    "selector": "#period",
+    "nth": 0,
+    "in_dialog": false,
+    "score": 1,
+    "ts": 1781973643.2771132
+  },
+  "/video/detail\u0001click\u0001点击侧栏菜单待前审进入待前审页面": {
+    "method": "role",
+    "role": "menuitem",
+    "name": "待前审",
+    "exact": true,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=menuitem[name=\"待前审\"]",
+    "score": 1,
+    "ts": 1781975531.839836
+  },
+  "/video/detail\u0001click\u0001点击提交按钮": {
+    "method": "role",
+    "role": "button",
+    "name": "提 交",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "role=button[name=\"提 交\"]",
+    "score": 1,
+    "ts": 1782005806.036065
+  },
+  "/video/all-question\u0001click\u0001点击筛选区来源下拉框": {
+    "method": "css",
+    "selector": "#source",
+    "nth": 0,
+    "in_dialog": false,
+    "score": 1,
+    "ts": 1782005981.488886
+  },
+  "/video/all-question\u0001click\u0001点击筛选区学段下拉框": {
+    "method": "css",
+    "selector": "#period",
+    "nth": 0,
+    "in_dialog": false,
+    "score": 1,
+    "ts": 1782006014.9941308
+  },
+  "/video/wait-preview\u0001click\u0001勾选我已阅读并同意遵守平台红线标准，并同意承担相应违反后果复选框": {
+    "method": "css",
+    "selector": "span",
+    "nth": 8,
+    "in_dialog": true,
+    "score": 1,
+    "ts": 1782007619.8370938
+  },
+  "/video/wait-preview\u0001click\u0001点击已知悉并确认按钮关闭红线标准弹窗": {
+    "method": "role",
+    "role": "button",
+    "name": "已知悉并确认",
+    "exact": false,
+    "nth": 0,
+    "in_dialog": true,
+    "selector": "role=button[name=\"已知悉并确认\"]",
+    "score": 1,
+    "ts": 1782007641.25317
+  },
+  "/video/detail\u0001click\u0001在详情页选择题目内容涉及不良导向/敏感信息": {
+    "nth": 0,
+    "in_dialog": false,
+    "selector": "label.ant-radio-wrapper:has-text(\"题目内容涉及不良导向/敏感信息\")",
+    "method": "text",
+    "name": "题目内容涉及不良导向/敏感信息",
+    "exact": false,
+    "score": 1,
+    "ts": 1782033708.642881
   }
 }

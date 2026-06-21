@@ -103,6 +103,27 @@ class ExecutionTrace:
                 c.print("[dim]  │   ✗ 三级均未命中 (含 L3 大模型)[/dim]")
             else:
                 c.print("[dim]  │   ✗ 三级均未命中 (未调用 L3)[/dim]")
+        elif phase == "locate_backfill":
+            if data.get("skipped"):
+                c.print(
+                    f"[dim]  │   L3回填: 跳过 ({data.get('reason')}) "
+                    f"selector={data.get('selector')!r}[/dim]"
+                )
+            else:
+                parts = []
+                if data.get("l1"):
+                    parts.append("L1缓存")
+                if data.get("l2"):
+                    score = data.get("l2_score")
+                    parts.append(
+                        f"L2记忆(score={score})" if score is not None else "L2记忆"
+                    )
+                targets = "+".join(parts) if parts else "无"
+                c.print(
+                    f"[cyan]  │   L3回填 → {targets}[/cyan] "
+                    f"[dim]key={data.get('cache_key')!r} "
+                    f"selector={data.get('selector')!r}[/dim]"
+                )
         elif phase == "locate":
             src = data.get("source", "?")
             if src == "失败":

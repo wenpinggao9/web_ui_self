@@ -18,9 +18,12 @@ from .business_loader import BusinessLoader
 from .execution import ActionDispatcher, PlaywrightRunner
 from .execution.script_helpers import (
     bring_page_to_front,
+    find_list_tab_anchor,
+    is_detail_submission_url,
     pick_role_handoff_page,
     recover_active_page,
     _page_usable,
+    _url_safe,
 )
 from .execution.trace import ExecutionTrace
 from .execution.post_check import PostStepChecker
@@ -45,7 +48,7 @@ from .profile import ProfileManager
 from .readiness import ReadinessCaseContext, ReadinessChecker
 from .resources import ResourceManager
 from .session import Navigator, login
-from .skill_loader import load_skill_text
+from .skill_loader import load_skill_text, format_skills_for_decider
 from .variable_substitution import substitute_in_list, format_session_context
 from .execution.session_ops import enrich_session_actions
 from .watermark import load_watermark_config
@@ -69,6 +72,7 @@ class UITestAgent:
         from .locating.skill_invoke import configure_skill_path
         configure_skill_path(skill_path)
         skill_text = load_skill_text(skill_path)
+        skill_decider_prompt = format_skills_for_decider(skill_path)
         self.precondition = PreconditionExpander(self.llm, self.prompts)
         self.planner = ActionPlanner(self.llm, self.prompts, skill_text=skill_text)
         self.navigator = Navigator(self.console)
@@ -92,7 +96,11 @@ class UITestAgent:
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
         self.cache = SelectorCache(ttl_s=l1_ttl)
         self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
-        self.decider = LLMElementDecider(self.llm, self.prompts)
+        self.decider = LLMElementDecider(
+            self.llm, self.prompts,
+            skill_prompt=skill_decider_prompt,
+            skill_path=skill_path,
+        )
         self.resolver = LocatorResolver(
             self.decider, cache=self.cache, memory=self.memory, console=self.console,
         )
@@ -284,6 +292,11 @@ class UITestAgent:
                 pg = pick_role_handoff_page(ctx, pg, primary_page=primary)
                 if not _page_usable(pg):
                     pg, _ = recover_active_page(pg, prefer=primary)
+                anchor = find_list_tab_anchor(pg, primary if primary is not pg else None)
+                if anchor is not None:
+                    cur_u = _url_safe(pg) if _page_usable(pg) else ""
+                    if not _page_usable(pg) or is_detail_submission_url(cur_u):
+                        pg = anchor
                 role_contexts[role] = (ctx, pg, primary)
                 bring_page_to_front(pg)
                 return pg
@@ -609,13 +622,6 @@ class UITestAgent:
         biz: BusinessLoader | None,
     ) -> ReadinessCaseContext:
         hints: list[str] = []
-        if biz:
-            kb = biz.get_knowledge()
-            session_ops = kb.get("session_ops") or {}
-            if session_ops.get("index_by"):
-                hints.append(f"bind_session 索引字段: {session_ops.get('index_by')}")
-            if session_ops.get("fields", {}).get("reason", {}).get("from") == "prev_click":
-                hints.append("审核原因 reason 来自前序 click; recovery 不得改选其它 radio")
         return ReadinessCaseContext(
             notes=list(case.notes),
             steps=list(case.steps),

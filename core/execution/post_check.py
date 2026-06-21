@@ -17,9 +17,10 @@ from ..dom import extract_items, compact_dom_lines, wait_for_dom_stable
 from .trace import print_captured_dom
 from ..llm import LLMAdapter, PromptLoader
 from ..planning import PlannedAction
+from .submit_post_verify import evaluate_submit_post_check, is_submit_intent
 
-# 需要后校验的动作类型 (断言/等待/跳转自身即结果, 不再二次校验)
-_POST_CHECK_TYPES = {"click", "fill", "press", "upload", "hover"}
+# 需要后校验的动作类型
+_POST_CHECK_TYPES = {"click", "fill", "press", "upload", "hover", "goto", "wait"}
 
 # 悬停类 intent 若含这些词, 认为目标是展开菜单/下拉, 需做可见性判断
 _MENU_HOVER_MARKERS = ("菜单", "下拉", "用户", "悬浮", "悬停", "hover")
@@ -38,17 +39,18 @@ _RETRY_FOCUS_MAP = {
 }
 
 _DEFAULT_SYSTEM = """\
-你是"步骤后校验器", 判断一个 UI 操作是否真的达成了意图 (而非"执行了但结果不对").
+你是 UI 自动化「单步结果校验」助手。只判断本步 intent 是否达成; 下一步前提由就绪检查负责.
 
 规则:
-1. 分发成功=false → 倾向 step_ok=false.
-2. 分发成功=true → 仍要判断是"真成功"还是"点错地方/输入了错值".
-3. 以 intent 业务目的是否达成为准, 非引号字面是否相同; 子串/语义等价 → true.
-4. 下拉选项: 成功=已选中; 点到 combobox 触发器而非 option → false.
-5. step_ok 与 reason 必须一致.
-6. 输入/上传: 值不符合占位符或格式说明 → step_ok=false.
-7. 悬停: 菜单/下拉类悬停后 menuitem 仍全部 hidden → step_ok=false.
-8. 失败时给出 retry_focus/suggested_value/resolve_hint.
+1. dispatch_success=false → 倾向 step_ok=false (页面已明显满足意图除外).
+2. dispatch_success=true → 仍须判断真成功还是点错/填错.
+3. 以 intent 业务目的是否达成为准; 子串/语义等价 → true.
+4. 筛选/下拉: 成功=对应 combobox 已显示选中值, 不能仅凭表格列文案.
+5. 展开下拉: 成功=该字段下拉面板已展开.
+6. 输入/上传: 值须满足 placeholder(ph=...) 及紧邻格式说明.
+7. 悬停: 菜单类悬停后 menuitem 仍全部 hidden → step_ok=false.
+8. navigation_outcome 为 returned_to_list/resource_id_changed 或 left_detail_context → 提交可判成功.
+9. 失败时给出 retry_focus/suggested_value/resolve_hint.
 只输出 JSON:
 {"step_ok": true/false, "reason": "...", "retry_focus": "无", "suggested_value": null, "resolve_hint": null}"""
 
@@ -76,11 +78,64 @@ class PostCheckResult:
     retry_focus: str = "无"          # 值 | 选择器 | 两者 | 无
     suggested_value: Optional[str] = None
     resolve_hint: Optional[str] = None
+    recovered_page: Any = None
+    updated_meta: Optional[dict[str, Any]] = None
+
+
+def _recovered_page_if_url_changed(before: Any, after: Any) -> Any:
+    """仅 tab/URL 实际变化时交给 sync 重抓 DOM, 避免同 tab 误 invalidate."""
+    if after is None:
+        return None
+    try:
+        b = (before.url or "").lower()
+        a = (after.url or "").lower()
+        if b and a and b != a:
+            return after
+        if not b and a:
+            return after
+    except Exception:
+        if before is not after:
+            return after
+    return None
 
 
 def should_post_check(action: PlannedAction) -> bool:
     """只对可能发生"执行成功但目标不对"的动作做后校验."""
     return action.type in _POST_CHECK_TYPES
+
+
+def should_inject_next_action(
+    current: PlannedAction,
+    next_action: Optional[Any],
+) -> bool:
+    """后校验不传 next_action; 仅保留硬链式依赖 (combobox→option, hover→menu)."""
+    if next_action is None:
+        return False
+    cur_type = (current.type or "").strip().lower()
+    nxt_type = getattr(next_action, "type", "") or ""
+    nxt_type = str(nxt_type).strip().lower()
+    cur_intent = current.intent or ""
+    nxt_intent = getattr(next_action, "intent", "") or ""
+
+    if cur_type == "hover" and nxt_type == "click":
+        if any(m in nxt_intent for m in ("菜单", "退出", "logout", "menuitem", "MenuItem")):
+            return True
+    if cur_type == "click" and nxt_type == "click":
+        if "下拉选项" in nxt_intent or "选项中" in nxt_intent:
+            return True
+        if "在" in nxt_intent and "点击" in nxt_intent:
+            if any(m in cur_intent for m in ("下拉", "combobox", "展开", "筛选项")):
+                return True
+    return False
+
+
+def _dom_summary_empty(dom: str) -> bool:
+    """语义 DOM 摘要为空时回退 dispatch 结果."""
+    s = (dom or "").strip()
+    if not s:
+        return True
+    lines = [ln.strip() for ln in s.split("\n") if ln.strip()]
+    return not lines
 
 
 def check_navigation_click_success(
@@ -90,7 +145,7 @@ def check_navigation_click_success(
     action_type: str,
     dispatch_meta: Optional[dict[str, Any]] = None,
 ) -> Optional[bool]:
-    """click 已成功且 URL/导航结局表明进入详情页时本地判成功 (对齐 V3, 省 LLM)."""
+    """click 已成功且 URL/导航结局表明进入详情页时本地判成功 (省 LLM)."""
     if not dispatch_ok or (action_type or "").strip().lower() != "click":
         return None
     if _is_detail_page_form_intent(intent):
@@ -126,28 +181,6 @@ def _is_nav_to_detail_intent(intent: str) -> bool:
     return False
 
 
-def _check_submit_navigation_failure(
-    intent: str,
-    dispatch_meta: Optional[dict[str, Any]],
-) -> Optional[PostCheckResult]:
-    """提交后页面未跳转 → 强制 retry_focus=选择器."""
-    if "提交" not in (intent or ""):
-        return None
-    meta = dispatch_meta or {}
-    outcome = str(meta.get("navigation_outcome") or "")
-    if outcome not in ("timeout", "settled", "submit_error"):
-        return None
-    return PostCheckResult(
-        step_ok=False,
-        reason=f"提交后 navigation_outcome={outcome}, 页面未跳转",
-        retry_focus="选择器",
-        resolve_hint=(
-            "先点击 label.ant-radio-wrapper 选中审核原因并确认 checked, "
-            "再点 type=submit 提交按钮"
-        ),
-    )
-
-
 def upgrade_submit_post_result(
     post: PostCheckResult,
     intent: str,
@@ -167,7 +200,7 @@ def upgrade_submit_post_result(
     if not failed:
         return post
     hint = post.resolve_hint or (
-        "先点击 label.ant-radio-wrapper 选中审核原因, 再点提交"
+        "确认前置必填项已选中后再点 type=submit 提交按钮"
     )
     focus = post.retry_focus if post.retry_focus != "无" else "选择器"
     return PostCheckResult(
@@ -200,8 +233,9 @@ class PostStepChecker:
         next_action: Optional[Any] = None,
         dom_summary: Optional[str] = None,
         dispatch_meta: Optional[dict[str, Any]] = None,
+        list_anchor: Any = None,
     ) -> PostCheckResult:
-        # 优先复用操作后已抓取的 indexed DOM; 无缓存时再读页 (V3 post_verify profile)
+        # 优先复用操作后已抓取的 indexed DOM; 无缓存时再读页 (post_verify profile)
         if dom_summary:
             dom = dom_summary
         else:
@@ -213,9 +247,12 @@ class PostStepChecker:
                 label="抓取", source="后校验 fallback post_verify",
             )
 
-        # 如果有下一步意图, 注入到 DOM 摘要中, 让 LLM 结合当前结果和下一步预期判断.
-        if next_action:
-            dom = dom + f"\n\n【下一步意图】type={next_action.type}, intent={next_action.intent}"
+        base_dom = dom
+        if next_action and should_inject_next_action(action, next_action):
+            dom = dom + (
+                f"\n\n【链式依赖-下一步】type={next_action.type}, "
+                f"intent={next_action.intent}"
+            )
 
         if action.type == "hover":
             code_result = _check_hover_visibility(action.intent, dispatch_ok, dispatch_msg, dom)
@@ -237,11 +274,60 @@ class PostStepChecker:
                 retry_focus="无",
             )
 
-        submit_fail = _check_submit_navigation_failure(
-            action.intent or "", dispatch_meta,
+        page_before_submit = page
+        submit_verdict = evaluate_submit_post_check(
+            action.intent or "",
+            dispatch_ok,
+            dispatch_meta,
+            page,
+            base_dom,
+            list_anchor=list_anchor,
         )
-        if submit_fail is not None:
-            return submit_fail
+        if submit_verdict.meta is not None:
+            dispatch_meta = submit_verdict.meta
+        if submit_verdict.page is not None:
+            page = submit_verdict.page
+        recovered = _recovered_page_if_url_changed(
+            page_before_submit, submit_verdict.page,
+        )
+        if submit_verdict.step_ok is True:
+            return PostCheckResult(
+                step_ok=True,
+                reason=submit_verdict.reason,
+                retry_focus="无",
+                recovered_page=recovered,
+                updated_meta=submit_verdict.meta,
+            )
+        if submit_verdict.step_ok is False:
+            return PostCheckResult(
+                step_ok=False,
+                reason=submit_verdict.reason,
+                retry_focus="选择器",
+                resolve_hint="确认前置必填项已选中后再点 type=submit 提交按钮",
+                recovered_page=recovered,
+                updated_meta=submit_verdict.meta,
+            )
+        if (
+            is_submit_intent(action.intent or "")
+            and dispatch_ok
+            and (dispatch_meta or {}).get("submit_click_ok")
+        ):
+            return PostCheckResult(
+                step_ok=True,
+                reason="提交 click 已成功 (跳过后校验 LLM)",
+                retry_focus="无",
+                recovered_page=recovered,
+                updated_meta=dispatch_meta,
+            )
+
+        if _dom_summary_empty(base_dom):
+            return PostCheckResult(
+                step_ok=dispatch_ok,
+                reason="语义 DOM 为空, 以 dispatch 结果为准",
+                retry_focus="无",
+                recovered_page=submit_verdict.page,
+                updated_meta=submit_verdict.meta,
+            )
 
         if action.type == "fill" and action.value:
             # 输入类动作通常只关心输入框附近 DOM, 截窗降低 prompt 噪声.
@@ -286,7 +372,7 @@ class PostStepChecker:
         failure_reason: str,
         dom_summary: Optional[str] = None,
     ) -> Optional[PostCheckResult]:
-        """V3 风格: 后校验失败后专用重试策略 LLM, 输出更可落地的 resolve_hint."""
+        """后校验失败后专用重试策略 LLM, 输出更可落地的 resolve_hint."""
         if action.type not in ("click", "fill", "upload", "hover", "press"):
             return None
         dom = dom_summary or ""

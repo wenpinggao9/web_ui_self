@@ -19,29 +19,73 @@ from ..dom.semantic_dom import (
     extract_semantic_items,
 )
 from .cache import SelectorCache
-from .intent_route import is_ant_radio_option
 from .llm_decider import LLMElementDecider
+from .intent_route import is_ant_radio_option, is_checkbox, is_tree_checkbox
 from .memory import SelectorMemory
 from .node_refiner import refine_node_index
-from .normalize import skip_locator_persistence, validate_selector
+from .normalize import normalize_intent, normalize_url, skip_locator_persistence, validate_selector
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
 from .self_heal import heal
+from .skill_resolver import (
+    build_selector_via_skill,
+    extract_target_text_from_intent,
+    info_from_recommended_selector,
+    try_auto_skill_selector,
+)
 
 
-def _is_weak_radio_memory(info: dict) -> bool:
-    """单选意图若记忆为裸 text/span 选择器, 易点中内层文案而未选中 radio."""
-    if info.get("role") == "radio":
+def _is_strong_checkbox_selector(sel: str) -> bool:
+    s = (sel or "").lower()
+    return any(
+        k in s
+        for k in (
+            "checkbox",
+            'type="checkbox"',
+            "type='checkbox'",
+            "[type=checkbox]",
+            "role=checkbox",
+            "menuitemcheckbox",
+            "ant-checkbox-wrapper",
+            "el-checkbox",
+        )
+    )
+
+
+def _needs_checkbox_selector_upgrade(info: dict, intent: str) -> bool:
+    """复选框 intent 且 selector 非 checkbox 控件, 需 build_*_checkbox_selector 升级."""
+    intent_s = intent or ""
+    if not is_tree_checkbox(intent_s) and not is_checkbox(intent_s):
         return False
-    sel = (info.get("selector") or "").lower()
-    if "radio" in sel or "ant-radio" in sel:
+    return not _is_strong_checkbox_selector(info.get("selector") or "")
+
+
+def _checkbox_upgrade_skill(intent: str) -> str:
+    if is_tree_checkbox(intent or ""):
+        return "build_tree_checkbox_selector"
+    return "build_checkbox_selector"
+
+
+def _is_strong_radio_selector(sel: str) -> bool:
+    s = (sel or "").lower()
+    return any(
+        k in s
+        for k in (
+            "ant-radio-wrapper",
+            "el-radio",
+            "role=radio",
+            'type="radio"',
+            "type='radio'",
+            "[type=radio]",
+        )
+    )
+
+
+def _needs_radio_selector_upgrade(info: dict, intent: str) -> bool:
+    """单选 intent 且 selector 非 wrapper/radio 控件, 需 build_radio_selector 升级."""
+    if not is_ant_radio_option(intent or ""):
         return False
-    method = (info.get("method") or "").lower()
-    if method == "text":
-        return True
-    if method == "css" and ":has-text" in sel and "radio" not in sel:
-        return True
-    return False
+    return not _is_strong_radio_selector(info.get("selector") or "")
 
 
 class LocatorResolver:
@@ -82,6 +126,8 @@ class LocatorResolver:
         semantic_items: Optional[list[dict]] = None,
         dom_source: str = "",
         skip_acceleration: bool = False,
+        feature_titles_menu_nav: bool = False,
+        feature_titles: Optional[list[str]] = None,
     ) -> Optional[dict]:
         url = _url(page)
         excl = set(exclude or [])
@@ -105,6 +151,13 @@ class LocatorResolver:
             elif info_key(info) in excl:
                 chain.add("L1缓存", "跳过(已排除)", info_key(info))
             elif validate_selector(page, info):
+                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                    page, intent, info, semantic_items,
+                )
+                if upgraded:
+                    chain.add("L1缓存", f"{upgrade_label}升级", info_key(info))
+                    if self.cache:
+                        self.cache.put(url, action_type, intent, info)
                 chain.mark_hit("L1缓存", info_key(info))
                 self._emit_chain(chain)
                 return self._tag(info, "L1缓存")
@@ -132,9 +185,14 @@ class LocatorResolver:
                 chain.add("L2记忆", "未命中")
             elif info_key(info) in excl:
                 chain.add("L2记忆", "跳过(已排除)", info_key(info))
-            elif is_ant_radio_option(intent) and _is_weak_radio_memory(info):
-                chain.add("L2记忆", "跳过(单选弱记忆)", info_key(info))
             elif validate_selector(page, info):
+                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                    page, intent, info, semantic_items,
+                )
+                if upgraded:
+                    chain.add("L2记忆", f"{upgrade_label}升级", info_key(info))
+                    if self.memory:
+                        self.memory.record_success(url, action_type, intent, info)
                 chain.mark_hit("L2记忆", info_key(info))
                 self._emit_chain(chain)
                 return self._tag(info, "L2记忆")
@@ -146,7 +204,7 @@ class LocatorResolver:
             else:
                 chain.add("L2记忆", "未启用")
 
-        # L3 大模型 — 优先复用已抽取的 semantic_items (V3 共用 DOM)
+        # L3 大模型 — 优先复用已抽取的 semantic_items (共用 DOM)
         if semantic_items:
             items = semantic_items[:dom_limit]
             dom = dom_index_from_items(items, limit=dom_limit)
@@ -175,16 +233,73 @@ class LocatorResolver:
                 self.console.print(f"  [dim]└─ DOM (L3, {len(dom)} items):[/dim]")
                 for line in dom.numbered_text.split("\n"):
                     self.console.print(f"  [dim]   {line}[/dim]")
-        info, llm_index = self.decider.decide(dom, intent, action_type, exclude=list(excl), hint=hint)
-        if info and llm_index is not None:
+        result = self.decider.decide(
+            dom, intent, action_type,
+            items=items,
+            exclude=list(excl),
+            hint=hint,
+            action_value=action_value,
+            feature_titles_menu_nav=feature_titles_menu_nav,
+            feature_titles=feature_titles,
+        )
+        if result.skip_navigation:
+            chain.add("L3大模型", "跳过导航", note=result.reason[:80] if result.reason else "")
+            chain.mark_hit("L3大模型", "__SKIP_NAV__")
+            self._emit_chain(chain)
+            return self._tag(
+                {"method": "css", "selector": "__SKIP_NAV__", "_skip_navigation": True},
+                "L3大模型",
+            )
+
+        info: Optional[dict] = None
+        llm_index = result.index
+        excl_set = set(excl)
+
+        if result.recommended_selector:
+            skill_info = info_from_recommended_selector(result.recommended_selector)
+            if info_key(skill_info) not in excl_set and validate_selector(page, skill_info):
+                chain.add(
+                    "L3Skill", "命中",
+                    info_key(skill_info),
+                    note=result.skill_name or "recommended_selector",
+                )
+                info = skill_info
+
+        if info is None and result.skill_name and result.skill_name.startswith("build_"):
+            sel = build_selector_via_skill(
+                result.skill_name, items, intent,
+                target_text=extract_target_text_from_intent(intent) or "",
+                page=page, exclude=excl_set,
+            )
+            if sel:
+                skill_info = info_from_recommended_selector(sel)
+                if info_key(skill_info) not in excl_set:
+                    chain.add("L3Skill", "命中", info_key(skill_info), note=result.skill_name)
+                    info = skill_info
+
+        if info is None and llm_index is not None and llm_index >= 0:
             refined_idx, skill_name = refine_node_index(
                 items, llm_index, intent, action_type, action_value=action_value,
             )
             if skill_name and refined_idx != llm_index:
                 chain.add("L3纠偏", "命中", f"{llm_index}->{refined_idx}", note=skill_name)
                 llm_index = refined_idx
-                info = build_locator_info(items[refined_idx])
-                info = dict(info)
+            if 0 <= llm_index < len(items):
+                auto_sel = try_auto_skill_selector(
+                    items, intent, action_type, llm_index,
+                    page=page, exclude=excl_set,
+                    skill_path=getattr(self.decider, "skill_path", None),
+                    llm_xpath_builder=self._llm_xpath_builder(),
+                )
+                if auto_sel:
+                    skill_info = info_from_recommended_selector(auto_sel)
+                    if info_key(skill_info) not in excl_set and validate_selector(page, skill_info):
+                        chain.add("L3Skill", "命中", info_key(skill_info), note="auto_skill")
+                        info = skill_info
+                if info is None:
+                    info = build_locator_info(items[llm_index])
+                    info = dict(info)
+
         if info:
             note = f"index={llm_index}" if llm_index is not None else ""
             chain.add("L3大模型", "命中", info["selector"], note)
@@ -195,6 +310,47 @@ class LocatorResolver:
         chain.add("L3大模型", "未命中", note="index=-1/排除/调用失败")
         self._emit_chain(chain)
         return None
+
+    def _maybe_upgrade_component_selector(
+        self,
+        page: Any,
+        intent: str,
+        info: dict,
+        semantic_items: Optional[list[dict]] = None,
+    ) -> tuple[dict, bool, str]:
+        """L1/L2 命中弱 selector 时, 用 build_* skill 升级为 wrapper/控件 selector."""
+        upgrade_plans: list[tuple[str, str]] = []
+        if _needs_radio_selector_upgrade(info, intent):
+            upgrade_plans.append(("build_radio_selector", "单选"))
+        if _needs_checkbox_selector_upgrade(info, intent):
+            upgrade_plans.append((_checkbox_upgrade_skill(intent), "复选框"))
+        if not upgrade_plans:
+            return info, False, ""
+
+        items = semantic_items
+        if not items:
+            items = extract_semantic_items(
+                page, dialog_first=True, stable=True,
+                selectors=self._framework_selectors, profile="locate",
+            )
+        if not items:
+            return info, False, ""
+
+        target_text = extract_target_text_from_intent(intent) or ""
+        for skill_name, label in upgrade_plans:
+            sel = build_selector_via_skill(
+                skill_name,
+                items,
+                intent,
+                target_text=target_text,
+                page=page,
+            )
+            if not sel:
+                continue
+            upgraded = info_from_recommended_selector(sel)
+            if validate_selector(page, upgraded):
+                return upgraded, True, label
+        return info, False, ""
 
     def _emit_chain(self, chain: ResolveChain) -> None:
         if self._trace is None:
@@ -219,11 +375,81 @@ class LocatorResolver:
         # 避免下次同意图直接复用导致点错元素.
         sel = info.get("selector", "")
         if sel.startswith("text=") and not sel.startswith('text="'):
+            self._emit_backfill(
+                url, action_type, intent, info,
+                skipped=True, reason="宽松 text= 匹配不回填",
+            )
             return
+        if _needs_radio_selector_upgrade(info, intent) or _needs_checkbox_selector_upgrade(info, intent):
+            self._emit_backfill(
+                url, action_type, intent, info,
+                skipped=True, reason="单选/复选框弱 selector 不回填",
+            )
+            return
+        wrote_l1 = bool(self.cache)
+        wrote_l2 = bool(self.memory)
+        l2_score: Optional[int] = None
         if self.cache:
             self.cache.put(url, action_type, intent, info)
         if self.memory:
             self.memory.record_success(url, action_type, intent, info)
+            k = self.memory._key(url, action_type, intent)
+            entry = self.memory._data.get(k)
+            if entry:
+                l2_score = int(entry.get("score") or 0)
+        self._emit_backfill(
+            url, action_type, intent, info,
+            wrote_l1=wrote_l1, wrote_l2=wrote_l2, l2_score=l2_score,
+        )
+
+    def _emit_backfill(
+        self,
+        url: str,
+        action_type: str,
+        intent: str,
+        info: dict,
+        *,
+        skipped: bool = False,
+        reason: str = "",
+        wrote_l1: bool = False,
+        wrote_l2: bool = False,
+        l2_score: Optional[int] = None,
+    ) -> None:
+        cache_key = (
+            f"{normalize_url(url)} | {action_type} | {normalize_intent(intent)}"
+        )
+        payload = {
+            "cache_key": cache_key,
+            "selector": info_key(info),
+            "skipped": skipped,
+            "reason": reason,
+            "l1": wrote_l1,
+            "l2": wrote_l2,
+            "l2_score": l2_score,
+        }
+        if self._trace is not None:
+            self._trace.emit("locate_backfill", **payload)
+        else:
+            self._print_backfill(payload)
+
+    def _print_backfill(self, data: dict[str, Any]) -> None:
+        if data.get("skipped"):
+            self.console.print(
+                f"[dim]  │   L3回填: 跳过 ({data.get('reason')}) "
+                f"selector={data.get('selector')!r}[/dim]"
+            )
+            return
+        parts = []
+        if data.get("l1"):
+            parts.append("L1缓存")
+        if data.get("l2"):
+            score = data.get("l2_score")
+            parts.append(f"L2记忆(score={score})" if score is not None else "L2记忆")
+        targets = "+".join(parts) if parts else "无"
+        self.console.print(
+            f"[cyan]  │   L3回填 → {targets}[/cyan] "
+            f"[dim]key={data.get('cache_key')!r} selector={data.get('selector')!r}[/dim]"
+        )
 
     # ---------- 步骤⑬ 失败连锁清理 ----------
     def evict(self, page: Any, intent: str, action_type: str, selector: Optional[str]) -> None:
@@ -241,6 +467,19 @@ class LocatorResolver:
         out = dict(info)
         out["_source"] = source
         return out
+
+    def _llm_xpath_builder(self):
+        decider = self.decider
+        if not getattr(decider, "skill_path", None):
+            return None
+
+        def _build(skill_name: str, target_text: str, component_library: str) -> Optional[str]:
+            fn = getattr(decider, "try_llm_component_selector", None)
+            if not callable(fn):
+                return None
+            return fn(skill_name, target_text, component_library)
+
+        return _build
 
 
 def _url(page: Any) -> str:

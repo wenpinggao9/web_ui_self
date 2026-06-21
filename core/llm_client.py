@@ -24,6 +24,17 @@ class BaseLLMClient(ABC):
     def provider(self) -> str: ...
 
 
+def _salvage_ok_json(text: str) -> dict[str, Any] | None:
+    """reason 内未转义引号导致 JSON 非法时, 仅 salvage ok/reason."""
+    ok_m = re.search(r'"ok"\s*:\s*(true|false)', text, re.IGNORECASE)
+    if not ok_m:
+        return None
+    ok = ok_m.group(1).lower() == "true"
+    reason_m = re.search(r'"reason"\s*:\s*"(.+)"\s*\}?\s*$', text, re.DOTALL)
+    reason = reason_m.group(1) if reason_m else ""
+    return {"ok": ok, "reason": reason or "(JSON 已修复解析)"}
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     """从 LLM 回复里提取第一个 JSON 对象, 容忍 ```json 包裹 / 思考标签 / 多余文本."""
     text = (text or "").strip()
@@ -61,11 +72,23 @@ def _extract_json(text: str) -> dict[str, Any]:
             elif ch == "}":
                 depth -= 1
                 if depth == 0:
-                    return json.loads(text[start : i + 1])
+                    try:
+                        return json.loads(text[start : i + 1])
+                    except json.JSONDecodeError:
+                        break
+        salvaged = _salvage_ok_json(text)
+        if salvaged is not None:
+            return salvaged
         # 兜底: 简单取首尾
         end = text.rfind("}")
         if end > start:
-            return json.loads(text[start : end + 1])
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                pass
+        salvaged = _salvage_ok_json(text)
+        if salvaged is not None:
+            return salvaged
         raise
 
 

@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from ..dom import extract_items, compact_dom_lines, wait_for_dom_stable
 from ..locating import LocatorResolver
+from ..locating.intent_align import detect_feature_titles_menu_nav
 from ..locating.playwright_api import info_key, infer_from_selector, normalize_info, resolve_locator
 from ..planning import PlannedAction
 from ..variable_substitution import substitute_variables
@@ -20,6 +21,7 @@ from .session_ops import (
 from .trace import ExecutionTrace, print_captured_dom
 from .assert_or import combined_or_intent, is_or_assert, try_or_branches, try_or_heuristic
 from .post_submit_eval import SubmitSnapshot, build_submit_snapshot, try_post_submit_eval
+from .submit_post_verify import submit_dispatch_should_succeed
 from .assert_scope import (
     _text_contains,
     build_semantic_text_summary_from_items,
@@ -40,17 +42,28 @@ from .script_helpers import (
     parse_table_row_click,
     FIRST_TABLE_ROW_KEY,
     recover_active_page,
+    find_list_tab_anchor,
+    pick_surviving_tab_after_detail_close,
+    recover_after_submit_tab_close,
     wait_after_detail_submit,
     wait_and_recover_active_page,
     wait_before_assert,
     wait_for_list_count_at_least,
+    find_sibling_tab_anchor,
+    is_detail_submission_url,
+    submit_left_detail_context,
+    url_matches_anchor,
+    _reload_list_page,
     _context_from_any,
     _page_alive,
     _page_usable,
+    _button_label_variants,
     _url_query_id,
+    _url_safe,
 )
 from .assert_codegen import (
     record_assert_count,
+    record_button_state,
     record_control_mode,
     record_literal,
     record_or_branch,
@@ -107,6 +120,7 @@ class ActionDispatcher:
         self._prompts = prompts
         self._list_tab_anchor: Optional[Any] = None
         self.popup_recovery_steps: list[PlannedAction] = []
+        self.feature_titles: list[str] = []
         self._popup_dismiss_used = False
         self.popup_dismiss_before_intents: list[str] = []
         self.idempotent_skip_intents: list[str] = []
@@ -129,16 +143,86 @@ class ActionDispatcher:
     def invalidate_page_state(self) -> None:
         self._page_state = None
 
+    def sync_page_after_post_check(
+        self,
+        recovered_page: Any = None,
+        meta: Optional[dict[str, Any]] = None,
+        *,
+        recapture: bool = True,
+    ) -> None:
+        """后校验切 tab 后同步 page/list_anchor, 并在存活 tab 上重抓 DOM 供下一步断言/定位."""
+        if meta:
+            self.last_dispatch_meta = dict(meta)
+        if recovered_page is not None:
+            self.page = recovered_page
+            bring_page_to_front(recovered_page)
+            if self._list_tab_anchor is None or not _page_usable(self._list_tab_anchor):
+                self._list_tab_anchor = recovered_page
+        merged = self.last_dispatch_meta or {}
+        if not self._should_recapture_dom_after_post_check(merged, recapture):
+            return
+        self.invalidate_page_state()
+        if not _page_usable(self.page):
+            self._ensure_list_anchor()
+            self.page, _ = wait_and_recover_active_page(
+                self.page, max_polls=30, prefer=self._list_tab_anchor,
+            )
+        if _page_usable(self.page):
+            if self._should_reload_after_tab_handoff(merged, recovered_page):
+                _reload_list_page(self.page)
+            nav = str(merged.get("navigation_outcome") or "returned_to_list")
+            self.capture_page_state_after_operation(nav_outcome=nav)
+
+    def _should_recapture_dom_after_post_check(
+        self,
+        meta: dict[str, Any],
+        recapture: bool,
+    ) -> bool:
+        """仅 tab 关闭/回列表或 URL 与缓存不一致时重抓 DOM (dispatch 已抓过则跳过)."""
+        if not recapture:
+            return False
+        if meta.get("detail_tab_closed") or meta.get("left_detail_context"):
+            return True
+        cur_key = self._page_state_key()
+        cached_key = str((self._page_state or {}).get("key") or "")
+        if cur_key and cached_key and cur_key != cached_key:
+            return True
+        if self._has_cached_page_state() and cur_key and cached_key == cur_key:
+            return False
+        return not self._has_cached_page_state() and _page_usable(self.page)
+
+    @staticmethod
+    def _should_reload_after_tab_handoff(
+        meta: dict[str, Any],
+        recovered_page: Any,
+    ) -> bool:
+        """详情 tab 关闭并切到兄弟 tab 后刷新, 避免 stale DOM / 半加载状态."""
+        if meta.get("detail_tab_closed") or meta.get("left_detail_context"):
+            return True
+        if recovered_page is None:
+            return False
+        url_before = str(meta.get("url_before") or "")
+        if not is_detail_submission_url(url_before):
+            return False
+        outcome = str(meta.get("navigation_outcome") or "")
+        return outcome in ("timeout", "settled", "returned_to_list", "resource_id_changed")
+
     def _page_state_key(self) -> str:
         try:
             return (self.page.url or "").lower()
         except Exception:
             return ""
 
-    def capture_page_state_after_operation(self) -> None:
-        """UI 动作执行后抓取 semantic_items (V3 post_verify profile), 供后校验/断言/下一步定位共用."""
-        nav = (self.last_dispatch_meta or {}).get("navigation_outcome")
-        self._ensure_live_page(poll=bool(nav))
+    def capture_page_state_after_operation(
+        self, *, nav_outcome: str = "",
+    ) -> None:
+        """UI 动作执行后抓取 semantic_items (post_verify profile), 供后校验/断言/下一步定位共用."""
+        nav = nav_outcome or (self.last_dispatch_meta or {}).get("navigation_outcome")
+        need_poll = nav in (
+            "returned_to_list", "resource_id_changed", "route_changed",
+            "timeout", "settled",
+        )
+        self._ensure_live_page(poll=need_poll)
         bring_page_to_front(self.page)
         self.page, _ = recover_active_page(self.page, prefer=self._list_tab_anchor)
         if not _page_alive(self.page):
@@ -223,14 +307,71 @@ class ActionDispatcher:
         key = self._page_state_key()
         if not key or self._page_state.get("key") != key:
             return False
-        return _page_alive(self.page)
+        return _page_usable(self.page, timeout_ms=800)
 
-    def _prepare_page_for_assert(self) -> None:
-        """断言前切 tab; 有有效缓存时只做轻量校验, 避免连续断言重复等待."""
+    def _cached_assert_url(self) -> str:
+        """断言/或分支用的 URL: 优先操作后 DOM 缓存 key, 再 dispatch meta."""
+        st_key = str((self._page_state or {}).get("key") or "")
+        meta = self.last_dispatch_meta or {}
+        for cand in (st_key, str(meta.get("url_after") or ""), _url_safe(self.page)):
+            if cand:
+                return cand
+        return ""
+
+    def _recover_page_pointer_best_effort(self, *, poll: bool = True) -> None:
+        """尽量把 page 指到存活 tab, 供断言后后续 click 使用; 不 invalidate DOM 缓存."""
+        if _page_usable(self.page, timeout_ms=800):
+            bring_page_to_front(self.page)
+            return
+        self._ensure_list_anchor()
+        polls = 30 if poll else 15
+        self.page, _ = wait_and_recover_active_page(
+            self.page, max_polls=polls, prefer=self._list_tab_anchor,
+        )
+        if not _page_usable(self.page, timeout_ms=800):
+            ctx = _context_from_any(self.page, self._list_tab_anchor)
+            if ctx is not None:
+                for p in reversed(ctx.pages):
+                    if _page_usable(p, timeout_ms=800):
+                        self.page = p
+                        break
+        if _page_usable(self.page, timeout_ms=800):
+            bring_page_to_front(self.page)
+
+    def _assert_needs_live_page(self, action: PlannedAction) -> bool:
+        """仅控件类断言需要 page.evaluate; 区域/字面断言可读缓存 DOM."""
+        intent = action.intent or ""
+        return bool(re.search(r"单选|多选|互斥|radio|checkbox", intent, re.I))
+
+    def _prepare_page_for_assert(self, action: Optional[PlannedAction] = None) -> None:
+        """断言前切 tab; 有 DOM 缓存且只读断言时不 poll tab."""
+        if self._has_cached_page_state():
+            if action is not None and not self._assert_needs_live_page(action):
+                if _page_usable(self.page, timeout_ms=300):
+                    try:
+                        bring_page_to_front(self.page)
+                    except Exception:
+                        pass
+                return
+            if _page_usable(self.page, timeout_ms=300):
+                bring_page_to_front(self.page)
+                return
+            self._recover_page_pointer_best_effort(poll=False)
+            return
+        if not _page_usable(self.page, timeout_ms=800):
+            self._ensure_live_page(poll=True)
         if self._can_fast_assert():
             bring_page_to_front(self.page)
             return
         self._ensure_list_anchor()
+        if not _page_usable(self.page):
+            self.page, _, _, left = pick_surviving_tab_after_detail_close(
+                self.page,
+                url_before="",
+                list_anchor=self._list_tab_anchor,
+            )
+            if left:
+                self._list_tab_anchor = self.page
         self.page, _ = wait_and_recover_active_page(
             self.page, max_polls=30, prefer=self._list_tab_anchor,
         )
@@ -272,6 +413,20 @@ class ActionDispatcher:
         self,
     ) -> tuple[bool, list[dict], str, str]:
         """复用上一 UI 操作后的 semantic_items; 有缓存时优先用缓存, 避免页面繁忙误判 tab 失效."""
+        if self._has_cached_page_state():
+            st = self._page_state or {}
+            items = list(st.get("semantic_items") or [])
+            key = str(st.get("key") or "")
+            if self.trace:
+                self.trace.emit(
+                    "assert_use_state",
+                    url=key,
+                    shared=True,
+                    cached_only=True,
+                    fast=True,
+                )
+            return True, items, st.get("dom_summary") or "", ""
+
         if self._can_fast_assert():
             st = self._page_state or {}
             items = list(st.get("semantic_items") or [])
@@ -385,7 +540,7 @@ class ActionDispatcher:
         self._substitute_action(action)
         t = action.type
         if action.is_assert():
-            self._prepare_page_for_assert()
+            self._prepare_page_for_assert(action)
         else:
             self._ensure_live_page()
         try:
@@ -410,7 +565,9 @@ class ActionDispatcher:
             elif action.needs_locating():
                 loc, target_html = self._resolve(action)
                 if loc is None:
-                    if self.trace:
+                    if (action.extras or {}).get("skip_navigation"):
+                        ok, msg = True, f"已在目标页, 跳过: {action.intent}"
+                    elif self.trace:
                         self.trace.emit(
                             "locate",
                             source="失败",
@@ -419,7 +576,9 @@ class ActionDispatcher:
                             hint=action.resolve_hint,
                             exclude=action.exclude_selectors,
                         )
-                    ok, msg = False, f"找不到元素: {action.intent}"
+                        ok, msg = False, f"找不到元素: {action.intent}"
+                    else:
+                        ok, msg = False, f"找不到元素: {action.intent}"
                 else:
                     ok, msg = self._run_located(t, loc, action, target_html)
             else:
@@ -456,7 +615,7 @@ class ActionDispatcher:
 
     # ---------- 定位 ----------
     def _wait_for_dropdown_visible(self, timeout: Optional[int] = None) -> bool:
-        """等待下拉面板可见 (V3/Playwright 语义等待, 替代固定 sleep)."""
+        """等待下拉面板可见 (Playwright 语义等待, 替代固定 sleep)."""
         ms = timeout if timeout is not None else self.default_timeout
         try:
             self.page.wait_for_selector(_DROPDOWN_VISIBLE_SEL, timeout=ms)
@@ -572,8 +731,13 @@ class ActionDispatcher:
                     hit_selector=action.force_selector,
                 )
         else:
-            # 正常路径交给三级定位链; 优先复用操作后 semantic_items (V3 共用 DOM).
+            # 正常路径交给三级定位链; 优先复用操作后 semantic_items (共用 DOM).
             semantic_items, dom_source = self.get_semantic_items_for_resolve()
+            menu_nav = detect_feature_titles_menu_nav(
+                action.intent or "",
+                extras=action.extras,
+                feature_titles=self.feature_titles,
+            )
             info = self.resolver.resolve(
                 self.page, action.intent, action.type,
                 exclude=action.exclude_selectors, hint=action.resolve_hint,
@@ -581,8 +745,23 @@ class ActionDispatcher:
                 semantic_items=semantic_items,
                 dom_source=dom_source,
                 skip_acceleration=bool(getattr(action, "skip_acceleration", False)),
+                feature_titles_menu_nav=menu_nav,
+                feature_titles=self.feature_titles,
             )
         if not info:
+            return None, None
+        if info.get("_skip_navigation"):
+            action.locator_info = normalize_info(info)
+            action.selector = "__SKIP_NAV__"
+            action.extras = {**(action.extras or {}), "skip_navigation": True}
+            if self.trace:
+                self.trace.emit(
+                    "locate",
+                    source=info.get("_source", "L3大模型"),
+                    selector="__SKIP_NAV__",
+                    target_html=None,
+                    hint=action.resolve_hint,
+                )
             return None, None
         info = normalize_info(info)
         loc = resolve_locator(self.page, info)
@@ -667,10 +846,21 @@ class ActionDispatcher:
                     if self.trace:
                         self.trace.emit("page_switch", url=url_after, intent=action.intent)
                     return ok_submit, submit_msg
-                self.page = wait_before_assert(
-                    self.page, quiet_ms=300, timeout_ms=6000,
-                    list_anchor=self._list_tab_anchor,
+                nav_outcome = str(
+                    (self.last_dispatch_meta or {}).get("navigation_outcome") or "",
                 )
+                if nav_outcome not in ("resource_id_changed", "route_changed"):
+                    self.page = wait_before_assert(
+                        self.page, quiet_ms=300, timeout_ms=6000,
+                        list_anchor=self._list_tab_anchor,
+                    )
+                else:
+                    try:
+                        self.page.wait_for_load_state(
+                            "domcontentloaded", timeout=2000,
+                        )
+                    except Exception:
+                        pass
                 suffix = f"{suffix} | {submit_msg}"
             if self.trace:
                 self.trace.emit("page_switch", url=url_after, intent=action.intent)
@@ -719,29 +909,68 @@ class ActionDispatcher:
             return False
 
     def _ensure_list_anchor(self) -> None:
-        """从 context 中查找仍存活的列表 Tab (待领取 / 全部题目等)."""
-        if self._list_tab_anchor is not None and _page_usable(self._list_tab_anchor):
-            return
-        ctx = None
-        try:
-            ctx = self.page.context
-        except Exception:
-            pass
-        if ctx is None:
-            return
-        try:
-            for p in ctx.pages:
-                if not _page_usable(p):
-                    continue
-                url = (p.url or "").lower()
-                if "/wait-preview" in url or "/all-question" in url:
-                    self._list_tab_anchor = p
-                    return
-                if count_real_table_rows(p) > 0:
-                    self._list_tab_anchor = p
-                    return
-        except Exception:
-            pass
+        """记录兄弟 tab 锚点: 多 tab 时取非当前详情页的那个, 纯运行时、无业务 URL 配置."""
+        anchor = find_list_tab_anchor(self.page, self._list_tab_anchor)
+        if anchor is not None:
+            self._list_tab_anchor = anchor
+
+    def _finalize_detail_submit_dom(
+        self,
+        url_before: str,
+        outcome: str,
+        recovered: bool,
+        left_detail: bool,
+        url_after: str,
+        *,
+        skip_list_reload: bool = False,
+    ) -> tuple[str, bool, str, bool]:
+        """详情提交后: 切存活 tab 并在其上抓 DOM, 供下一步断言/定位."""
+        if not is_detail_submission_url(url_before):
+            if _page_usable(self.page):
+                self.capture_page_state_after_operation(nav_outcome=outcome)
+            return outcome, left_detail, url_after, recovered
+
+        if not _page_usable(self.page):
+            self._ensure_list_anchor()
+            self.page, tab_recovered, url_after, tab_left = (
+                pick_surviving_tab_after_detail_close(
+                    self.page,
+                    url_before=url_before,
+                    list_anchor=self._list_tab_anchor,
+                )
+            )
+            recovered = recovered or tab_recovered
+            left_detail = left_detail or tab_left
+
+        if not _page_usable(self.page):
+            recover_cap = 5 if skip_list_reload else 30
+            self.page, live_recovered = wait_and_recover_active_page(
+                self.page, max_polls=recover_cap, prefer=self._list_tab_anchor,
+            )
+            recovered = recovered or live_recovered
+
+        url_after = _url_safe(self.page) or url_after
+        if is_detail_submission_url(url_before) and not is_detail_submission_url(url_after):
+            left_detail = True
+            if outcome in ("timeout", "settled", "submit_error"):
+                outcome = "returned_to_list"
+
+        if not _page_alive(self.page) and is_detail_submission_url(url_before):
+            left_detail = True
+
+        if _page_usable(self.page):
+            if left_detail and not is_detail_submission_url(url_after):
+                self._list_tab_anchor = self.page
+                if (
+                    not skip_list_reload
+                    and outcome in ("timeout", "settled", "returned_to_list")
+                ):
+                    _reload_list_page(self.page)
+            self.invalidate_page_state()
+            self.capture_page_state_after_operation(nav_outcome=outcome)
+            url_after = _url_safe(self.page) or url_after
+
+        return outcome, left_detail, url_after, recovered
 
     def _wait_after_detail_submit(self, url_before: str) -> tuple[bool, str]:
         self._ensure_list_anchor()
@@ -752,16 +981,34 @@ class ActionDispatcher:
             url_before=url_before,
             max_polls=max_polls,
         )
-        if outcome in ("returned_to_list", "resource_id_changed", "route_changed") and _page_usable(self.page):
-            if outcome == "returned_to_list":
-                self._list_tab_anchor = self.page
-            self.invalidate_page_state()
-        if _page_usable(self.page):
-            self.capture_page_state_after_operation()
-        try:
-            url_after = self.page.url or ""
-        except Exception:
-            url_after = ""
+        recover_polls = (
+            3 if outcome in ("resource_id_changed", "route_changed") else 20
+        )
+        self.page, live_recovered = wait_and_recover_active_page(
+            self.page, prefer=self._list_tab_anchor, max_polls=recover_polls,
+        )
+        recovered = recovered or live_recovered
+        url_after = _url_safe(self.page)
+        left_detail = False
+        if outcome == "submit_error":
+            self.page, tab_recovered, url_after = recover_after_submit_tab_close(
+                self.page,
+                url_before=url_before,
+                list_anchor=self._list_tab_anchor,
+            )
+            recovered = recovered or tab_recovered
+        elif outcome in ("returned_to_list", "resource_id_changed", "route_changed"):
+            left_detail = outcome == "returned_to_list" or (
+                is_detail_submission_url(url_before)
+                and not is_detail_submission_url(url_after)
+            )
+        light_finalize = outcome in ("resource_id_changed", "route_changed")
+        outcome, left_detail, url_after, recovered = self._finalize_detail_submit_dom(
+            url_before, outcome, recovered, left_detail, url_after,
+            skip_list_reload=light_finalize,
+        )
+        if not url_after:
+            url_after = _url_safe(self.page)
         items_after = None
         flat_after = ""
         if self._page_state and self._page_state.get("semantic_items"):
@@ -783,10 +1030,14 @@ class ActionDispatcher:
             "url_before": url_before,
             "url_after": url_after,
             "recovered": recovered,
+            "left_detail_context": left_detail,
+            "submit_click_ok": True,
             "entity_id_before": self.last_submit_snapshot.entity_id_before,
             "entity_id_after": self.last_submit_snapshot.entity_id_after,
             "entity_field": self.last_submit_snapshot.entity_field,
         }
+        if not _page_alive(self.page) and is_detail_submission_url(url_before):
+            self.last_dispatch_meta["detail_tab_closed"] = True
         if self.trace:
             try:
                 url = self.page.url or ""
@@ -800,9 +1051,11 @@ class ActionDispatcher:
                 entity_id_before=self.last_submit_snapshot.entity_id_before,
                 entity_id_after=self.last_submit_snapshot.entity_id_after,
             )
-        if outcome in ("submit_error", "timeout", "settled"):
+        if submit_dispatch_should_succeed(self.last_dispatch_meta):
+            return True, f"navigation_outcome={outcome}"
+        if outcome == "submit_error":
             return False, f"navigation_outcome={outcome}"
-        return True, f"navigation_outcome={outcome}"
+        return False, f"navigation_outcome={outcome}"
 
     def _should_follow_new_tab(self, action: PlannedAction, loc: Any) -> bool:
         """仅「查看」等会新开标签页的点击才跟随 popup, 避免普通按钮误切 tab."""
@@ -1030,13 +1283,14 @@ class ActionDispatcher:
         if not ok_st:
             return False, err
         flat_text = items_flat_text(items)
+        assert_url = self._cached_assert_url()
 
         snap = self.last_submit_snapshot
         post_hit = try_post_submit_eval(
             intent=intent,
             extras=action.extras,
             snap=snap,
-            page_url=self.page.url or "",
+            page_url=assert_url,
             branches=(action.extras or {}).get("branches"),
         )
         if post_hit is not None:
@@ -1058,30 +1312,9 @@ class ActionDispatcher:
         elif self.last_dispatch_meta:
             submit_ctx = self.last_dispatch_meta
 
-        if is_or_assert(action) and not action.negate:
-            branches = (action.extras or {}).get("branches") or []
-            if branches:
-                hit = try_or_branches(
-                    self.page, branches, flat_text, dispatch_meta=submit_ctx,
-                )
-                if hit is not None:
-                    if hit[0]:
-                        record_or_branch(action, self.page, branches, flat_text)
-                    return hit
-            else:
-                hit = try_or_heuristic(
-                    self.page, combined_or_intent(action), dispatch_meta=submit_ctx,
-                )
-                if hit is not None:
-                    if hit[0]:
-                        record_or_heuristic(action, self.page, combined_or_intent(action))
-                    return hit
-            ok, msg = self._semantic_assert(
-                action, items, scope=scope, any_of=True, dom_summary=dom_summary,
-            )
-            if ok:
-                record_semantic_pass(action, self.page, flat_text)
-            return ok, msg
+        btn_state = self._try_assert_button_state(action, target)
+        if btn_state is not None:
+            return btn_state
 
         if scope.field_hint and not action.negate:
             field_hit = try_field_value_assert_items(
@@ -1131,6 +1364,35 @@ class ActionDispatcher:
                     want_single = bool(re.search(r"单选|不能多选|互斥", action.intent or ""))
                     record_control_mode(action, stats, want_single=want_single)
             return control
+        if is_or_assert(action) and not action.negate:
+            branches = (action.extras or {}).get("branches") or []
+            if branches:
+                hit = try_or_branches(
+                    self.page, branches, flat_text,
+                    dispatch_meta=submit_ctx,
+                    page_url=assert_url,
+                )
+                if hit is not None:
+                    if hit[0]:
+                        record_or_branch(action, self.page, branches, flat_text)
+                    return hit
+            else:
+                hit = try_or_heuristic(
+                    self.page, combined_or_intent(action),
+                    dispatch_meta=submit_ctx,
+                    page_url=assert_url,
+                    body_text=flat_text,
+                )
+                if hit is not None:
+                    if hit[0]:
+                        record_or_heuristic(action, self.page, combined_or_intent(action))
+                    return hit
+            ok, msg = self._semantic_assert(
+                action, items, scope=scope, any_of=True, dom_summary=dom_summary,
+            )
+            if ok:
+                record_semantic_pass(action, self.page, flat_text)
+            return ok, msg
         if not self._should_semantic_fallback(scope):
             return False, f"断言未通过: {action.intent!r} (目标文本 {target!r})"
         ok, msg = self._semantic_assert(
@@ -1139,6 +1401,68 @@ class ActionDispatcher:
         if ok:
             record_semantic_pass(action, self.page, flat_text)
         return ok, msg
+
+    def _try_assert_button_state(
+        self, action: PlannedAction, target: str,
+    ) -> Optional[tuple[bool, str]]:
+        """按钮置灰/可点: 校验 disabled 状态, 不能仅用页面含文案糊弄."""
+        intent = action.intent or ""
+        extras = action.extras or {}
+        state = str(extras.get("state") or "").strip().lower()
+        want_disabled = state in ("disabled", "置灰", "不可点", "不可用") or bool(
+            re.search(r"置灰|不可点|不可用|disabled", intent, re.I)
+        )
+        want_enabled = state in ("enabled", "可点", "高亮", "可用") or bool(
+            re.search(r"高亮|可点击|enabled", intent, re.I)
+        )
+        if not want_disabled and not want_enabled:
+            return None
+        if want_disabled and want_enabled:
+            want_enabled = False
+
+        label = (target or extras.get("button") or "").strip()
+        if not label:
+            m = re.search(r"[「'\"']([^」'\"]+)[」'\"']", intent)
+            label = (m.group(1) if m else "").strip()
+        if not label:
+            return False, "控件断言: 缺少按钮文案 (value 或 intent 引号内)"
+
+        for variant in _button_label_variants(label):
+            for role in ("button", "link"):
+                loc = self.page.get_by_role(role, name=variant)
+                try:
+                    cnt = loc.count()
+                except Exception:
+                    continue
+                if cnt == 0:
+                    continue
+                btn = loc.first if cnt == 1 else loc.last
+                try:
+                    is_dis = btn.is_disabled()
+                except Exception:
+                    try:
+                        is_dis = btn.evaluate(
+                            """el => !!(el.disabled || el.getAttribute('aria-disabled') === 'true'
+                                || el.classList.contains('ant-btn-disabled')
+                                || el.closest('.ant-btn-disabled, [disabled]'))"""
+                        )
+                    except Exception:
+                        continue
+                if want_disabled:
+                    ok = bool(is_dis)
+                    msg = (
+                        f"控件断言(置灰): {variant!r} disabled={is_dis} → "
+                        f"{'通过' if ok else '未通过(仍可点)'}"
+                    )
+                else:
+                    ok = not bool(is_dis)
+                    msg = (
+                        f"控件断言(可点): {variant!r} disabled={is_dis} → "
+                        f"{'通过' if ok else '未通过(仍置灰)'}"
+                    )
+                record_button_state(action, variant, disabled=bool(is_dis))
+                return ok, msg
+        return False, f"控件断言: 未找到按钮 {label!r}"
 
     def _read_control_stats(self) -> dict[str, Any] | None:
         try:
@@ -1256,7 +1580,9 @@ class ActionDispatcher:
                 self.console.print(f"  [dim]④ LLM 返回: ok={ok}, reason={reason}[/dim]")
             return ok, f"语义断言: {'满足' if ok else '不满足'} ({reason})"
         except Exception:
-            return False, f"语义断言 LLM 调用失败, 精确匹配也未找到 {action.intent!r}"
+            target = (action.value or "").strip()
+            hint = target or action.intent or ""
+            return False, f"语义断言 LLM 调用失败, 精确匹配也未找到 {hint!r}"
 
     @property
     def _llm(self):
