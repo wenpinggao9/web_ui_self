@@ -31,37 +31,52 @@ V3_LOCATE_SCRIPT = """
             }
         }
     }
-    
-    // 检查元素是否对 UI 自动化有意义
+
+    /**
+     * 检查元素是否对 UI 自动化有意义.
+     *
+     * 可见性规则 (关键):
+     * - UI 自动化的目标是模拟用户操作, 用户只能看到和操作可见元素.
+     * - 弹窗遮挡下的背景页元素、display:none 的隐藏菜单等都不应出现在快照中,
+     *   否则 LLM 可能会选到不可操作的元素导致失败.
+     * - 例外: 下拉选项(option)在收起时不可见, 但它们由专项脚本补充提取,
+     *   不在本函数中处理.
+     */
     function isRelevantElement(element) {
         // 跳过 script, style, meta 等无意义元素
         const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'NOSCRIPT', 'HEAD'];
         if (skipTags.includes(element.tagName)) {
             return false;
         }
-        
+
+        // 可见性检查: 过滤不可见元素 (弹窗遮挡下的背景元素、隐藏菜单等)
+        // 注意: 这里只检查元素自身, 不检查祖先, 因为祖先不可见时子元素也不会被遍历到
+        if (!isVisible(element)) {
+            return false;
+        }
+
         // 可交互元素
         const interactiveTags = [
-            'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 
-            'LABEL', 'SUMMARY', 'DETAILS', 'MENU', 'MENUITEM', 'SPAN', 
+            'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A',
+            'LABEL', 'SUMMARY', 'DETAILS', 'MENU', 'MENUITEM', 'SPAN',
             'EL-CHECKBOX__INNER'
         ];
         if (interactiveTags.includes(element.tagName)) {
             return true;
         }
-        
+
         // 表格及表格容器（Element UI el-table / Ant Design ant-table 等）
         if (element.tagName === 'TABLE' || element.tagName === 'TH') return true;
         if (element.tagName === 'DIV') {
             const cn = (element.className && typeof element.className === 'string') ? element.className : '';
             if (/el-table|ant-table|\\btable\\b/i.test(cn)) return true;
         }
-        
+
         // 有 data-testid 的元素
         if (element.hasAttribute('data-testid')) {
             return true;
         }
-        
+
         // 有 ARIA 属性的元素
         const ariaAttrs = ['aria-label', 'aria-labelledby', 'aria-describedby', 'role'];
         for (const attr of ariaAttrs) {
@@ -78,7 +93,7 @@ V3_LOCATE_SCRIPT = """
                 return true;
             }
         }
-        
+
         // 有可见文本的元素（排除空白文本和过长文本）
         const text = element.innerText || element.textContent || '';
         const trimmedText = text.trim();
@@ -100,10 +115,37 @@ V3_LOCATE_SCRIPT = """
             }
             return true;
         }
-        
+
         return false;
     }
-    
+
+    /**
+     * 检查元素是否可见 (用户能看到的).
+     *
+     * 判断标准:
+     * 1. offsetParent === null → display:none 或被脱离布局流隐藏
+     * 2. getComputedStyle display === 'none'
+     * 3. getComputedStyle visibility === 'hidden'
+     * 4. opacity === 0 → 完全透明, 用户看不到
+     * 5. getBoundingClientRect 宽高为 0 → 不占空间
+     */
+    function isVisible(element) {
+        if (element.offsetParent === null && element.tagName !== 'BODY') {
+            return false;
+        }
+        try {
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none') return false;
+            if (style.visibility === 'hidden') return false;
+            if (parseFloat(style.opacity) === 0) return false;
+        } catch (e) {}
+        try {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return false;
+        } catch (e) {}
+        return true;
+    }
+
     // 提取元素的文本（截断）
     function extractText(element) {
         let text = element.innerText || element.textContent || '';
@@ -320,37 +362,52 @@ V3_POST_VERIFY_SCRIPT = """
             }
         }
     }
-    
-    // 检查元素是否对 UI 自动化有意义
+
+    /**
+     * 检查元素是否对 UI 自动化有意义.
+     *
+     * 可见性规则 (关键):
+     * - UI 自动化的目标是模拟用户操作, 用户只能看到和操作可见元素.
+     * - 弹窗遮挡下的背景页元素、display:none 的隐藏菜单等都不应出现在快照中,
+     *   否则 LLM 可能会选到不可操作的元素导致失败.
+     * - 例外: 下拉选项(option)在收起时不可见, 但它们由专项脚本补充提取,
+     *   不在本函数中处理.
+     */
     function isRelevantElement(element) {
         // 跳过 script, style, meta 等无意义元素
         const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'NOSCRIPT', 'HEAD'];
         if (skipTags.includes(element.tagName)) {
             return false;
         }
-        
+
+        // 可见性检查: 过滤不可见元素 (弹窗遮挡下的背景元素、隐藏菜单等)
+        // 注意: 这里只检查元素自身, 不检查祖先, 因为祖先不可见时子元素也不会被遍历到
+        if (!isVisible(element)) {
+            return false;
+        }
+
         // 可交互元素
         const interactiveTags = [
-            'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 
-            'LABEL', 'SUMMARY', 'DETAILS', 'MENU', 'MENUITEM', 'SPAN', 
+            'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A',
+            'LABEL', 'SUMMARY', 'DETAILS', 'MENU', 'MENUITEM', 'SPAN',
             'EL-CHECKBOX__INNER'
         ];
         if (interactiveTags.includes(element.tagName)) {
             return true;
         }
-        
+
         // 表格及表格容器（Element UI el-table / Ant Design ant-table 等）
         if (element.tagName === 'TABLE' || element.tagName === 'TH') return true;
         if (element.tagName === 'DIV') {
             const cn = (element.className && typeof element.className === 'string') ? element.className : '';
             if (/el-table|ant-table|\\btable\\b/i.test(cn)) return true;
         }
-        
+
         // 有 data-testid 的元素
         if (element.hasAttribute('data-testid')) {
             return true;
         }
-        
+
         // 有 ARIA 属性的元素
         const ariaAttrs = ['aria-label', 'aria-labelledby', 'aria-describedby', 'role'];
         for (const attr of ariaAttrs) {
@@ -367,7 +424,7 @@ V3_POST_VERIFY_SCRIPT = """
                 return true;
             }
         }
-        
+
         // 有可见文本的元素（排除空白文本和过长文本）
         const text = element.innerText || element.textContent || '';
         const trimmedText = text.trim();
@@ -389,10 +446,37 @@ V3_POST_VERIFY_SCRIPT = """
             }
             return true;
         }
-        
+
         return false;
     }
-    
+
+    /**
+     * 检查元素是否可见 (用户能看到的).
+     *
+     * 判断标准:
+     * 1. offsetParent === null → display:none 或被脱离布局流隐藏
+     * 2. getComputedStyle display === 'none'
+     * 3. getComputedStyle visibility === 'hidden'
+     * 4. opacity === 0 → 完全透明, 用户看不到
+     * 5. getBoundingClientRect 宽高为 0 → 不占空间
+     */
+    function isVisible(element) {
+        if (element.offsetParent === null && element.tagName !== 'BODY') {
+            return false;
+        }
+        try {
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none') return false;
+            if (style.visibility === 'hidden') return false;
+            if (parseFloat(style.opacity) === 0) return false;
+        } catch (e) {}
+        try {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return false;
+        } catch (e) {}
+        return true;
+    }
+
     // 提取元素的文本（截断）
     function extractText(element) {
         let text = element.innerText || element.textContent || '';

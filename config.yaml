@@ -91,5 +91,5 @@ acceleration:
 
 # 步骤⑨ L5 元素决策 — DOM 窗口 (L5大模型 子步骤, 在 L3规则/L4学习 之后)
 locating:
-  dom_limit: 80          # 喂给 L3 element_decide LLM 的候选节点上限 (大上下文模型可调 120~150)
+  dom_limit: 120          # 喂给 L3 element_decide LLM 的候选节点上限 (大上下文模型可调 120~150)
   intent_window: true    # true: 从完整 DOM 按 intent 抽相关节点; false: 取前 dom_limit 条
