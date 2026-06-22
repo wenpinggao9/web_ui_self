@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>详情</title>
+</head>
+<body>
+  <h1>详情</h1>
+  <p>审核原因</p>
+  <button type="submit" id="submit-btn">提交</button>
+  <script>
+    document.getElementById('submit-btn').addEventListener('click', function (e) {
+      e.preventDefault();
+      // 模拟 VIP 视频: 提交成功后关闭详情 tab, 焦点回到列表 tab
+      setTimeout(function () { window.close(); }, 150);
+    });
+  </script>
+</body>
+</html>

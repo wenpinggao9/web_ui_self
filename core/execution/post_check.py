@@ -109,6 +109,20 @@ def _submit_handoff_page(
     meta = meta or {}
     if after is None:
         return None
+    # 调试: 打印 before/after page 状态
+    from .script_helpers import _page_alive as _sh_alive, _url_safe as _sh_url
+    _dbg_before_url = ""
+    _dbg_after_url = ""
+    try:
+        _dbg_before_url = _sh_url(before)
+    except Exception:
+        pass
+    try:
+        _dbg_after_url = _sh_url(after)
+    except Exception:
+        pass
+    print(f"  [magenta]SubmitHandoff: before={_dbg_before_url[:80]} after={_dbg_after_url[:80]} meta_keys={sorted(meta.keys())}[/magenta]")
+
     if (
         meta.get("detail_tab_closed")
         or meta.get("recovered")

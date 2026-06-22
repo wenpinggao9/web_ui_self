@@ -496,12 +496,10 @@
   "/video/detail\u0001click\u0001在详情页选择题目内容涉及不良导向/敏感信息": {
     "nth": 0,
     "in_dialog": false,
-    "selector": "label.ant-radio-wrapper:has-text(\"题目内容涉及不良导向/敏感信息\")",
-    "method": "text",
-    "name": "题目内容涉及不良导向/敏感信息",
-    "exact": false,
+    "selector": "input[type=\"radio\"][value=\"31\"]",
+    "method": "css",
     "score": 1,
-    "ts": 1782033708.642881
+    "ts": 1782109079.045355
   },
   "/video/all-question\u0001click\u0001在筛选区点击工单ID作为搜索类型": {
     "nth": 0,

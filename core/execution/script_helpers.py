@@ -327,24 +327,47 @@ def find_usable_context_pages(*pages: Any) -> list[Any]:
                 out.append(p)
         return out
     try:
-        return [p for p in ctx.pages if _page_usable(p)]
+        all_pages = list(ctx.pages)
     except Exception:
         return []
+
+    # 优先返回 evaluate 可用的 tab
+    usable = [p for p in all_pages if _page_usable(p)]
+    if usable:
+        return usable
+
+    # evaluate 全部超时 → fallback 到 is_closed=False 的 tab
+    alive = [p for p in all_pages if _page_alive(p)]
+    return alive
 
 
 def find_list_tab_anchor(page: Any, list_anchor: Any = None) -> Any:
     """找列表/非详情兄弟 tab, 供提交后恢复与跨用例 handoff."""
+    _dbg1 = f"page_alive={_page_alive(page)} list_anchor={'None' if list_anchor is None else ('alive=' + str(_page_alive(list_anchor)))}"
     if list_anchor is not None and _page_usable(list_anchor):
         return list_anchor
     if _page_usable(page):
         sib = find_sibling_tab_anchor(page)
         if sib is not None:
             return sib
+
+    # 尝试获取 context
+    ctx = _context_from_any(page, list_anchor)
+    _dbg_ctx = f"context={'found' if ctx else 'None'}"
+    if ctx is not None:
+        try:
+            _dbg_ctx += f" tabs={len(ctx.pages)}"
+        except Exception as e:
+            _dbg_ctx += f" tabs_err={e}"
+
     for p in find_usable_context_pages(page, list_anchor):
         if not is_detail_submission_url(_url_safe(p)):
             return p
     usable = find_usable_context_pages(page, list_anchor)
-    return usable[0] if usable else None
+    _dbg_usable = f"usable_count={len(usable)}"
+    result = usable[0] if usable else None
+    print(f"  [cyan]find_list_tab_anchor: [{_dbg1}] {_dbg_ctx} {_dbg_usable} → {'found' if result else 'None'}[/cyan]")
+    return result
 
 
 def pick_surviving_tab_after_detail_close(
@@ -355,6 +378,8 @@ def pick_surviving_tab_after_detail_close(
 ) -> tuple[Any, bool, str, bool]:
     """详情 tab 关闭后选存活 tab. 返回 (page, recovered, url, left_detail)."""
     url_now = _url_safe(page) if _page_usable(page) else ""
+    _dbg_pick1 = f"page_alive={_page_alive(page)} page_usable={_page_usable(page)} url_now={url_now[:80] if url_now else '<empty>'}"
+
     if (
         is_detail_submission_url(url_before)
         and still_on_same_detail_after_submit(url_before, url_now)
@@ -363,18 +388,28 @@ def pick_surviving_tab_after_detail_close(
         return page, False, url_now, False
 
     anchor = find_list_tab_anchor(page, list_anchor)
+    _dbg_anchor_url = ""
+    try:
+        _dbg_anchor_url = _url_safe(anchor) if anchor else "<None>"
+    except Exception:
+        _dbg_anchor_url = "<err>"
+
     page, recovered, url = recover_after_submit_tab_close(
         page,
         url_before=url_before,
         list_anchor=anchor,
         max_polls=25,
     )
+    _dbg_recover = f"after_recover: page_alive={_page_alive(page)} page_usable={_page_usable(page)} url={(_url_safe(page) or '<none>')[:80]} recovered={recovered}"
+    print(f"  [cyan]pick_surviving: [{_dbg_pick1}] anchor={_dbg_anchor_url[:80]} → {_dbg_recover}[/cyan]")
+
     left = False
     if not is_detail_submission_url(url_before):
         return page, recovered, url, left
 
     if not _page_alive(page):
         usable = find_usable_context_pages(page, anchor)
+        _dbg_usable = len(usable)
         if usable:
             p = usable[0]
             for cand in usable:

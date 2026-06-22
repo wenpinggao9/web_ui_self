@@ -384,8 +384,30 @@ class ActionDispatcher:
     def _can_fast_assert(self) -> bool:
         """同一 URL 下连续断言可复用操作后缓存, 不必重复等 DOM."""
         if not self._has_cached_page_state():
+            print(f"  [yellow]FastAssert: 无缓存 → force_live[/yellow]")
             return False
-        return self._session.cache_matches_active() and _page_usable(self.page, timeout_ms=800)
+        if not self._session.cache_matches_active():
+            ck = ""
+            try:
+                ck = str((self._page_state or {}).get("key") or "")[:80]
+            except Exception:
+                ck = "<err>"
+            ak = ""
+            try:
+                ak = self._session.page_key()[:80]
+            except Exception:
+                ak = "<err>"
+            print(f"  [yellow]FastAssert: cache不匹配 cache_key={ck} active_key={ak} → force_live[/yellow]")
+            return False
+        # 只做轻量存活探测, 不用 evaluate (超时 ≠ 不可用).
+        try:
+            alive = self.page is not None and not self.page.is_closed()
+            if not alive:
+                print(f"  [yellow]FastAssert: page已死 → force_live[/yellow]")
+            return alive
+        except Exception:
+            print(f"  [yellow]FastAssert: page探测异常 → force_live[/yellow]")
+            return False
 
     def _cached_assert_url(self) -> str:
         """断言 URL: 始终读当前 tab 实时 URL."""

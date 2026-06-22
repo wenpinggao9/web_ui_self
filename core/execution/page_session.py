@@ -148,11 +148,42 @@ class PageSession:
         url_before: str,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[Any, str, bool]:
+        # 调试: 打印 context 内所有 tab 状态
+        try:
+            ctx = None
+            try:
+                if self.active is not None:
+                    ctx = self.active.context
+            except Exception:
+                pass
+            if ctx is None and self.list_anchor is not None:
+                try:
+                    ctx = self.list_anchor.context
+                except Exception:
+                    pass
+            if ctx is not None:
+                tabs_info = []
+                for p in ctx.pages:
+                    try:
+                        t_url = p.url or "<no-url>"
+                        t_closed = p.is_closed()
+                    except Exception:
+                        t_url = "<err>"
+                        t_closed = True
+                    tabs_info.append(f"url={t_url[:60]} closed={t_closed}")
+                print(f"  [cyan]Context内tabs({len(tabs_info)}): {tabs_info}[/cyan]")
+            else:
+                print(f"  [cyan]Context: None[/cyan]")
+        except Exception as e:
+            print(f"  [cyan]Context调试异常: {e}[/cyan]")
+
         page, recovered, url, left = pick_surviving_tab_after_detail_close(
             self.active,
             url_before=url_before,
             list_anchor=self.list_anchor,
         )
+        # 调试: 恢复结果
+        print(f"  [cyan]Tab恢复: url_before={url_before[:80]} → recovered_page_url={(_url_safe(page) or '<none>')[:80]} recovered={recovered} left={left}[/cyan]")
         self.active = page
         if url and not is_detail_submission_url(url):
             self.list_anchor = page
@@ -190,11 +221,31 @@ class PageSession:
                     self.list_anchor = recovered_page
 
         url_before = str(merged.get("url_before") or "")
+
+        # 调试: handoff 前 active tab 状态
+        _dbg_url_before_handoff = ""
+        _dbg_alive_before_handoff = False
+        try:
+            _dbg_url_before_handoff = _url_safe(self.active)
+            _dbg_alive_before_handoff = _page_alive(self.active)
+        except Exception:
+            pass
+
         if PageSession.needs_list_tab_handoff(merged):
             if is_detail_submission_url(url_before):
                 self.recover_after_detail_close(url_before, merged)
 
         self.ensure_alive(max_polls=30)
+
+        # 调试: handoff 后 active tab 状态
+        _dbg_url_after_handoff = ""
+        _dbg_alive_after_handoff = False
+        try:
+            _dbg_url_after_handoff = _url_safe(self.active)
+            _dbg_alive_after_handoff = _page_alive(self.active)
+        except Exception:
+            pass
+        print(f"  [yellow]Handoff调试: before={_dbg_url_before_handoff[:80]} alive={_dbg_alive_before_handoff} → after={_dbg_url_after_handoff[:80]} alive={_dbg_alive_after_handoff}[/yellow]")
 
         if not recapture or capture_fn is None:
             return merged
@@ -221,6 +272,13 @@ class PageSession:
             )
             nav = str(merged.get("navigation_outcome") or "returned_to_list")
             capture_fn(nav_outcome=nav)
+        elif _page_alive(self.active):
+            # evaluate 超时但 tab 仍存活 → 也尝试抓 DOM
+            try:
+                nav = str(merged.get("navigation_outcome") or "returned_to_list")
+                capture_fn(nav_outcome=nav)
+            except Exception:
+                pass
         return merged
 
     def context_for_assert(
@@ -299,6 +357,7 @@ class PageSession:
             st = self.page_state or {}
             items = list(st.get("semantic_items") or [])
             key = str(st.get("key") or "")
+            print(f"  [green]Assert缓存命中: url={key[:80]} items={len(items)}[/green]")
             if trace:
                 trace.emit(
                     "assert_use_state",
@@ -310,6 +369,21 @@ class PageSession:
             if _page_usable(self.active, timeout_ms=300):
                 bring_page_to_front(self.active)
             return True, items, st.get("dom_summary") or "", ""
+
+        _dbg_has_cache = self.has_dom_cache()
+        _dbg_cache_matches = self.cache_matches_active()
+        _dbg_force_live = force_live
+        _dbg_cache_key = ""
+        try:
+            _dbg_cache_key = str((self.page_state or {}).get("key") or "")[:80]
+        except Exception:
+            pass
+        _dbg_active_url = ""
+        try:
+            _dbg_active_url = self.page_key()[:80]
+        except Exception:
+            pass
+        print(f"  [yellow]Assert非缓存路径: force_live={_dbg_force_live} has_cache={_dbg_has_cache} matches={_dbg_cache_matches} cache_key={_dbg_cache_key} active_url={_dbg_active_url}[/yellow]")
 
         self.ensure_alive(max_polls=30)
         tab_ok = ensure_tab_fn(quick=True)
@@ -333,12 +407,26 @@ class PageSession:
                     str(self.page_state.get("key") or ""), key,
                 )
             )
-            if stale and _page_usable(self.active, timeout_ms=800):
-                capture_fn()
+            if stale:
+                if _page_usable(self.active, timeout_ms=800):
+                    capture_fn()
+                elif _page_alive(self.active):
+                    # evaluate 超时但 tab 仍存活 → 用 wait_for_dom_stable 方式抓 DOM
+                    try:
+                        capture_fn()
+                    except Exception:
+                        pass
                 key = self.page_key()
 
-        if not self.page_state and _page_usable(self.active, timeout_ms=2000):
-            capture_fn()
+        if not self.page_state:
+            if _page_usable(self.active, timeout_ms=2000):
+                capture_fn()
+            elif _page_alive(self.active):
+                # evaluate 超时但 tab 仍存活 → 尝试抓 DOM
+                try:
+                    capture_fn()
+                except Exception:
+                    pass
 
         if not self.page_state:
             return (

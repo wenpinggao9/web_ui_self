@@ -31,6 +31,7 @@ from .execution.retry import RetryController
 from .llm import LLMAdapter, PromptLoader
 from .locating import (
     LLMElementDecider, LocatorResolver, SelectorCache, SelectorMemory,
+    StructureLearner,
 )
 from .observability import ObservabilityCollector
 from .output import FileManager
@@ -96,13 +97,15 @@ class UITestAgent:
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
         self.cache = SelectorCache(ttl_s=l1_ttl)
         self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
+        self.learner = StructureLearner(accel / "结构学习.json")
         self.decider = LLMElementDecider(
             self.llm, self.prompts,
             skill_prompt=skill_decider_prompt,
             skill_path=skill_path,
         )
         self.resolver = LocatorResolver(
-            self.decider, cache=self.cache, memory=self.memory, console=self.console,
+            self.decider, cache=self.cache, memory=self.memory,
+            console=self.console,
             dom_limit=int(config.get("locating", {}).get("dom_limit", 80)),
             intent_window=bool(config.get("locating", {}).get("intent_window", True)),
         )
@@ -170,6 +173,7 @@ class UITestAgent:
                         session_vars=session_vars, role_contexts=role_contexts,
                     ))
                     self.memory.save()
+                    self.learner.save()
             finally:
                 if cross_session:
                     # 跨用例会话: 最终关闭残留上下文
@@ -184,8 +188,9 @@ class UITestAgent:
                             pass
                 browser.close()
 
-        # 持久化智能加速层 (L1 纯内存, 仅 L2 记忆落盘)
+        # 持久化智能加速层 (L1 内存, L2记忆+L4学习落盘)
         self.memory.save()
+        self.learner.save()
 
         passed = sum(1 for r in case_results if r["passed"])
         failed = len(case_results) - passed

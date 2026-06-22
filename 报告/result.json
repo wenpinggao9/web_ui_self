@@ -1,58 +1,58 @@
 {
-  "case_id": "vip_前审_006",
+  "case_id": "vip_前审_005",
   "feature_titles": [
     "大学增加前审",
     "前审功能",
-    "Case 6"
+    "Case 5"
   ],
-  "total_steps": 7,
-  "passed": 7,
+  "total_steps": 5,
+  "passed": 5,
   "failed": 0,
   "summary": "通过",
-  "execution_time": "1分6秒",
-  "generated_time": "2026-06-21 23:25:46",
+  "execution_time": "1分13秒",
+  "generated_time": "2026-06-22 14:27:00",
   "details": [
     {
       "step": "步骤1: click",
       "action": {
         "type": "click",
-        "intent": "点击'全部题目'",
-        "selector": "role=link[name=\"全部题目\"]"
+        "intent": "[恢复] 点击任务列表中任务146526315对应的'查看'按钮进入详情页",
+        "selector": "ant_table_row[first:1].查看 (first_table_row)"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c",
+      "message": "点击 点击任务列表中任务146526315对应的'查看'按钮进入详情页 | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\" ant-click-animating-without-extra-node=\"false\"><span>查 看</span></button>",
       "error": "",
-      "selector": "role=link[name=\"全部题目\"]",
-      "resolved_html": "点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"dis"
+      "selector": "ant_table_row[first:1].查看 (first_table_row)",
+      "resolved_html": ""
     },
     {
       "step": "步骤2: click",
       "action": {
         "type": "click",
-        "intent": "点击'工单ID'作为搜索类型",
-        "selector": "label:has-text(\"工单ID\")"
+        "intent": "在详情页选择'题目内容涉及不良导向/敏感信息'",
+        "selector": "input[type=\"radio\"][value=\"31\"]"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>",
+      "message": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <input class=\"ant-radio-input\" type=\"radio\" value=\"31\">",
       "error": "",
-      "selector": "label:has-text(\"工单ID\")",
-      "resolved_html": "点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>"
+      "selector": "input[type=\"radio\"][value=\"31\"]",
+      "resolved_html": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <input class=\"ant-radio-input\" type=\"radio\" value=\"31\">"
     },
     {
-      "step": "步骤3: fill",
+      "step": "步骤3: api_call",
       "action": {
-        "type": "fill",
-        "intent": "在筛选区搜索框输入工单ID",
-        "selector": "input#searchText"
+        "type": "api_call",
+        "intent": "根据当前任务ID查询对应工单ID，记录为orderId1001",
+        "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">",
+      "message": "API 调用成功: orderId1001=146526296, orderId=146526296",
       "error": "",
-      "selector": "input#searchText",
-      "resolved_html": "输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">"
+      "selector": null,
+      "resolved_html": "API 调用成功: orderId1001=146526296, orderId=146526296"
     },
     {
       "step": "步骤4: click",
@@ -63,52 +63,24 @@
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>",
+      "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=returned_to_list",
       "error": "",
       "selector": "role=button[name=\"提 交\"]",
-      "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>"
+      "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=returned_to_list"
     },
     {
-      "step": "步骤5: click",
-      "action": {
-        "type": "click",
-        "intent": "点击工单ID为146487944的'日志'",
-        "selector": "ant_table_row[146487944].日志 (extras.row_key)"
-      },
-      "success": true,
-      "status": "passed",
-      "message": "点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>",
-      "error": "",
-      "selector": "ant_table_row[146487944].日志 (extras.row_key)",
-      "resolved_html": "点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>"
-    },
-    {
-      "step": "步骤6: assert_text",
+      "step": "步骤5: assert_text",
       "action": {
         "type": "assert_text",
-        "intent": "验证日志末尾包含行为'前审领取'",
+        "intent": "验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "断言: 页面含 '前审领取'",
+      "message": "或断言(启发式): 当前在待领取/待前审页面",
       "error": "",
       "selector": null,
-      "resolved_html": "断言: 页面含 '前审领取'"
-    },
-    {
-      "step": "步骤7: assert_text",
-      "action": {
-        "type": "assert_text",
-        "intent": "验证日志末尾包含行为'前审举报'",
-        "selector": null
-      },
-      "success": true,
-      "status": "passed",
-      "message": "断言: 页面含 '前审举报'",
-      "error": "",
-      "selector": null,
-      "resolved_html": "断言: 页面含 '前审举报'"
+      "resolved_html": "或断言(启发式): 当前在待领取/待前审页面"
     }
   ],
   "screenshot_timeline": [],
@@ -117,86 +89,22 @@
     "failures": []
   },
   "llm_call_summary": {
-    "total_calls": 12
+    "total_calls": 6
   },
   "llm_call_details": [
-    {
-      "step_idx": 1,
-      "success": true,
-      "action": {
-        "type": "click",
-        "intent": "点击'全部题目'"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'全部题目'\n输入值: \n分发成功: true\n分发消息: 点击 点击'全部题目' | 实际目标: <a href=\"/video/all-question\"><div class=\"ant-pro-base-menu-inline-item-title pro-5612811137471852\"><span class=\"ant-pro-base-menu-inline-item-icon pro-5612811137471852\" style=\"display: none;\"><span c\n当前页面 URL: https://www-gwp11-b",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击'全部题目'成功，当前页面URL为 /video/all-question，左侧菜单中'全部题目'菜单项处于选中状态，页面已加载全部题目列表（显示当前总数为9629，表格含题目数据及分页），符合intent预期。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
     {
       "step_idx": 2,
       "success": true,
       "action": {
         "type": "click",
-        "intent": "点击'工单ID'作为搜索类型"
+        "intent": "在详情页选择'题目内容涉及不良导向/敏感信息'"
       },
       "llm_calls": [
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'工单ID'作为搜索类型\n输入值: \n分发成功: true\n分发消息: 点击 点击'工单ID'作为搜索类型 | 实际目标: <span> 工单ID</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 状态\n切分状态\n供应商\n学段\n学科\n来源\n标签\n优先级\n审核模式\n录制老师等级\n奖励原因\n寸功结果\n投放时间\n分发时间\n上传时间\n首次上线时间\n退回时间\n题目ID\n工单ID\n教师UID\n重 置",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"DOM中可见搜索类型区域（[159]-[179]）包含三个radio选项：题目ID、工单ID、教师UID。分发消息确认点击了'工单ID'对应的span（[174]），对应radio input value='orderId'（[172]）。虽然DOM摘要未明确显示哪个radio被选中（checked状态），但dispatch_success为true且点击目标正确匹配'工单ID'选项，操作已成功执行。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
-    {
-      "step_idx": 3,
-      "success": true,
-      "action": {
-        "type": "fill",
-        "intent": "在筛选区搜索框输入工单ID"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: fill\n操作意图: 在筛选区搜索框输入工单ID\n输入值: 146487944\n分发成功: true\n分发消息: 输入 '146487944' | 实际目标: <input id=\"searchText\" class=\"ant-input\" type=\"text\" value=\"\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[134] <span name=\"to\" #58>  [表单]\n[135] <span role=\"img\" nam",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"输入框 [182] id=searchText 的 value 已为 '146487944'，与意图一致，填写成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
-    {
-      "step_idx": 4,
-      "success": true,
-      "action": {
-        "type": "click",
-        "intent": "点击'提交'按钮"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'提交'按钮\n输入值: \n分发成功: true\n分发消息: 点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary mr-4\"><span>提 交</span></button>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 状态\n切分状态\n供应商\n学段\n学科\n来源\n标签\n优先级\n审核模式\n录制老师等级\n奖励",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"提交按钮点击成功，页面已返回查询结果，显示'当前总数为:1'，表格中有一条记录（题目ID 69619875，工单ID 146487944），说明表单提交查询已生效。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
-        }
-      ]
-    },
-    {
-      "step_idx": 5,
-      "success": true,
-      "action": {
-        "type": "click",
-        "intent": "点击工单ID为146487944的'日志'"
-      },
-      "llm_calls": [
-        {
-          "model": "post_check",
-          "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击工单ID为146487944的'日志'\n输入值: \n分发成功: true\n分发消息: 点击 点击工单ID为146487944的'日志' | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\"><span>日 志</span></button>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/all-question\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <div role=\"dialog\"> 日志\n来源\t工单",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击工单ID 146487944 的'日志'按钮后，已成功弹出日志对话框（role=dialog），其中包含工单ID 146487944 的多条日志记录（如初始化、初始化决策、前审领取、前审超时、前审举报等），符合 intent 预期。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'题目内容涉及不良导向/敏感信息'\n输入值: \n分发成功: true\n分发消息: 点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <input class=\"ant-radio-input\" type=\"radio\" value=\"31\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146526315\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 请选择审核原因:\n题目内容涉及不良导向/敏感信息\n非大学题",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"dispatch_success 为 true，点击了 value='31' 的 radio input，对应'题目内容涉及不良导向/敏感信息'选项。页面 DOM 中该 radio 按钮存在于表单中（索引[10]），点击操作已成功执行。虽然 DOM 摘要未显示 checked 属性，但 Playwright 成功点击了正确的 radio input 元素，intent 已达成。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     }
