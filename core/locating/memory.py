@@ -54,12 +54,15 @@ class SelectorMemory:
         spec = normalize_info(info)
         now = time.time()
         e = self._data.get(k)
-        if e and info_key(e) != info_key(spec):
-            e = None
+        # 存在旧记录但 selector 不同 → 仍保留旧分数, 只更新 selector 和时间
+        # (避免因 selector 微小变化导致分数清零)
         if not e:
             e = {**spec, "score": 0, "ts": now}
         e["score"] = min(e.get("score", 0) + 1, 100)
         e["ts"] = now
+        # 更新 selector 为最新的
+        e["selector"] = spec.get("selector", e.get("selector"))
+        e["method"] = spec.get("method", e.get("method"))
         self._data[k] = e
 
     def record_failure(self, url: str, action_type: str, intent: str, selector: Optional[str]) -> None:

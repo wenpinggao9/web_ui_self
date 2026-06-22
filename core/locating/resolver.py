@@ -1,9 +1,11 @@
-"""步骤⑨ 元素定位三级降级链编排器.
+"""步骤⑨ 元素定位五级降级链编排器.
 
-顺序: L1缓存 → L2记忆 → L3大模型. 逐级降级, 命中即返回.
+顺序: L1缓存 → L2记忆 → L3规则 → L4学习 → L5大模型. 逐级降级, 命中即返回.
 - L1/L2 命中后校验可用; 失效则自愈, 自愈失败清除条目降级.
-- L3 成功后回填 L1+L2, 下次同页面不再需要大模型.
-- 步骤⑬ 失败连锁清理: evict(缓存) + penalize(记忆).
+- L3 规则: 组件类型推断 → build_* skill, 不经 LLM.
+- L4 学习: 相似意图 Jaccard 匹配, 跨批次持久化.
+- L5 成功后回填 L1+L2+L4, 下次同页面不再需要大模型.
+- 步骤⑬ 失败连锁清理: evict(缓存) + penalize(记忆+学习).
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ from .normalize import normalize_intent, normalize_url, skip_locator_persistence
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
 from .self_heal import heal
+from .structure_learner import StructureLearner
 from .intent_window import pick_intent_window_indices
 from .skill_resolver import (
     build_selector_via_skill,
@@ -110,6 +113,7 @@ class LocatorResolver:
         decider: LLMElementDecider,
         cache: Optional[SelectorCache] = None,
         memory: Optional[SelectorMemory] = None,
+        learner: Optional[StructureLearner] = None,
         console: Optional[Console] = None,
         *,
         dom_limit: int = 80,
@@ -118,6 +122,7 @@ class LocatorResolver:
         self.decider = decider
         self.cache = cache
         self.memory = memory
+        self.learner = learner
         self.console = console or Console()
         self.dom_limit = max(1, int(dom_limit))
         self.intent_window = bool(intent_window)
@@ -126,7 +131,7 @@ class LocatorResolver:
         self.last_chain: Optional[ResolveChain] = None
 
     def set_trace(self, trace: Optional[Any]) -> None:
-        """注入 ExecutionTrace, 用于打印三级定位链路."""
+        """注入 ExecutionTrace, 用于打印五级定位链路."""
         self._trace = trace
 
     def set_framework_selectors(self, selectors: Optional[dict[str, str]]) -> None:
@@ -246,6 +251,18 @@ class LocatorResolver:
             self._emit_chain(chain)
             return self._tag(rule_info, "L3规则")
 
+        # L4 学习: 相似意图 Jaccard 匹配 (跨批次持久化)
+        if self.learner and not skip_acceleration:
+            learn_info = self.learner.resolve(page, url, action_type, intent)
+            if learn_info is not None:
+                chain.mark_hit("L4学习", learn_info.get("selector") or "")
+                self._emit_chain(chain)
+                return self._tag(learn_info, "L4学习")
+        elif self.learner and skip_acceleration:
+            chain.add("L4学习", "跳过(重试)")
+        elif not self.learner:
+            chain.add("L4学习", "未启用")
+
         llm_items: list[dict]
         if (
             self.intent_window
@@ -270,7 +287,7 @@ class LocatorResolver:
             )
 
         chain.llm_called = True
-        chain.add("L3大模型", "已调用", note=dom_note)
+        chain.add("L5大模型", "已调用", note=dom_note)
 
         if dom_console_print_enabled():
             if semantic_items:
@@ -293,12 +310,12 @@ class LocatorResolver:
             feature_titles=feature_titles,
         )
         if result.skip_navigation:
-            chain.add("L3大模型", "跳过导航", note=result.reason[:80] if result.reason else "")
-            chain.mark_hit("L3大模型", "__SKIP_NAV__")
+            chain.add("L5大模型", "跳过导航", note=result.reason[:80] if result.reason else "")
+            chain.mark_hit("L5大模型", "__SKIP_NAV__")
             self._emit_chain(chain)
             return self._tag(
                 {"method": "css", "selector": "__SKIP_NAV__", "_skip_navigation": True},
-                "L3大模型",
+                "L5大模型",
             )
 
         info: Optional[dict] = None
@@ -352,12 +369,12 @@ class LocatorResolver:
 
         if info:
             note = f"index={llm_index}" if llm_index is not None else ""
-            chain.add("L3大模型", "命中", info["selector"], note)
+            chain.add("L5大模型", "命中", info["selector"], note)
             self._backfill(url, action_type, intent, info)
-            chain.mark_hit("L3大模型", info["selector"])
+            chain.mark_hit("L5大模型", info["selector"])
             self._emit_chain(chain)
-            return self._tag(info, "L3大模型")
-        chain.add("L3大模型", "未命中", note="index=-1/排除/调用失败")
+            return self._tag(info, "L5大模型")
+        chain.add("L5大模型", "未命中", note="index=-1/排除/调用失败")
         self._emit_chain(chain)
         return None
 
@@ -469,6 +486,7 @@ class LocatorResolver:
             return
         wrote_l1 = bool(self.cache)
         wrote_l2 = bool(self.memory)
+        wrote_l4 = bool(self.learner)
         l2_score: Optional[int] = None
         if self.cache:
             self.cache.put(url, action_type, intent, info)
@@ -478,9 +496,11 @@ class LocatorResolver:
             entry = self.memory._data.get(k)
             if entry:
                 l2_score = int(entry.get("score") or 0)
+        if self.learner:
+            self.learner.learn(url, action_type, intent, info)
         self._emit_backfill(
             url, action_type, intent, info,
-            wrote_l1=wrote_l1, wrote_l2=wrote_l2, l2_score=l2_score,
+            wrote_l1=wrote_l1, wrote_l2=wrote_l2, wrote_l4=wrote_l4, l2_score=l2_score,
         )
 
     def _emit_backfill(
@@ -494,6 +514,7 @@ class LocatorResolver:
         reason: str = "",
         wrote_l1: bool = False,
         wrote_l2: bool = False,
+        wrote_l4: bool = False,
         l2_score: Optional[int] = None,
     ) -> None:
         cache_key = (
@@ -506,6 +527,7 @@ class LocatorResolver:
             "reason": reason,
             "l1": wrote_l1,
             "l2": wrote_l2,
+            "l4": wrote_l4,
             "l2_score": l2_score,
         }
         if self._trace is not None:
@@ -516,7 +538,7 @@ class LocatorResolver:
     def _print_backfill(self, data: dict[str, Any]) -> None:
         if data.get("skipped"):
             self.console.print(
-                f"[dim]  │   L3回填: 跳过 ({data.get('reason')}) "
+                f"[dim]  │   L5回填: 跳过 ({data.get('reason')}) "
                 f"selector={data.get('selector')!r}[/dim]"
             )
             return
@@ -526,9 +548,11 @@ class LocatorResolver:
         if data.get("l2"):
             score = data.get("l2_score")
             parts.append(f"L2记忆(score={score})" if score is not None else "L2记忆")
+        if data.get("l4"):
+            parts.append("L4学习")
         targets = "+".join(parts) if parts else "无"
         self.console.print(
-            f"[cyan]  │   L3回填 → {targets}[/cyan] "
+            f"[cyan]  │   L5回填 → {targets}[/cyan] "
             f"[dim]key={data.get('cache_key')!r} selector={data.get('selector')!r}[/dim]"
         )
 
@@ -542,6 +566,8 @@ class LocatorResolver:
         url = _url(page)
         if self.memory:
             self.memory.record_failure(url, action_type, intent, selector)
+        if self.learner:
+            self.learner.record_failure(url, action_type, selector)
 
     @staticmethod
     def _tag(info: dict, source: str) -> dict:

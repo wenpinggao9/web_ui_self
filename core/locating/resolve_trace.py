@@ -1,4 +1,4 @@
-"""三级定位链追踪 —— 记录每一级命中/跳过/失败, 供 verbose_trace 打印."""
+"""五级定位链追踪 —— 记录每一级命中/跳过/失败, 供 verbose_trace 打印."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

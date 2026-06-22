@@ -97,7 +97,7 @@ class UITestAgent:
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
         self.cache = SelectorCache(ttl_s=l1_ttl)
         self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
-        self.learner = StructureLearner(accel / "结构学习.json")
+        self.learner = StructureLearner(accel / "页面结构学习.json")
         self.decider = LLMElementDecider(
             self.llm, self.prompts,
             skill_prompt=skill_decider_prompt,
@@ -105,7 +105,7 @@ class UITestAgent:
         )
         self.resolver = LocatorResolver(
             self.decider, cache=self.cache, memory=self.memory,
-            console=self.console,
+            learner=self.learner, console=self.console,
             dom_limit=int(config.get("locating", {}).get("dom_limit", 80)),
             intent_window=bool(config.get("locating", {}).get("intent_window", True)),
         )

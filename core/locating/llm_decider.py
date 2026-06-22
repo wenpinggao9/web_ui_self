@@ -1,6 +1,6 @@
-"""步骤⑨ L3 元素决策 —— 大模型 + Skill/二次LLM (仍属三级链最后一级).
+"""步骤⑨ L5 元素决策 —— 大模型 + Skill/二次LLM (五级链最后一级).
 
-在 L1/L2 未命中后: action_type 预过滤 → LLM 选 index 或 use_skill → 可选二次 LLM.
+在 L1/L2/L3/L4 未命中后: action_type 预过滤 → LLM 选 index 或 use_skill → 可选二次 LLM.
 Skill 脚本执行与 selector 验证在 resolver 中完成 (需 page).
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ _SKILL_TO_COMPONENT_TYPE = {
 
 
 class LLMElementDecider:
-    """三级链 L3: LLM 元素决策 + skill 协议解析."""
+    """五级链 L5: LLM 元素决策 + skill 协议解析."""
 
     def __init__(
         self,

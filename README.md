@@ -29,7 +29,7 @@
 │  步骤⑤ 模块导航 — 按模块路径逐级点菜单                          │
 │  步骤⑥ 动作规划 — LLM 翻译并拆成原子 {类型, 意图, 值}, 不含选择器  │
 │  步骤⑧ 语义 DOM 抽取 — 实时页面快照 (弹窗/表单优先)             │
-│  步骤⑨ 元素定位三级链 — 缓存→记忆→L3(规则/大模型/Skill)          │
+│  步骤⑨ 元素定位五级链 — 缓存→记忆→规则→学习→LLM                  │
 │  步骤⑩ 步骤前就绪检查 — 页面就绪? 恢复动作                      │
 │  步骤⑪ 动作分发器 — 选择器 → Playwright 执行                   │
 │  步骤⑫ 步骤后校验 — LLM 判断"点对了吗" (防假操作)                │
@@ -83,22 +83,23 @@ ui_automation/
 │   ├── dom/                    # 步骤⑧ 语义 DOM 抽取
 │   │   ├── semantic_dom.py     #   索引化摘要 + build_locator_info
 │   │   └── v3_bridge.py        #   页面 traverse 采集脚本
-│   ├── locating/               # 步骤⑨ 三级定位链
-│   │   ├── resolver.py         #   编排: L1→L2→L3
+│   ├── locating/               # 步骤⑨ 五级定位链
+│   │   ├── resolver.py         #   编排: L1→L2→L3→L4→L5
 │   │   ├── cache.py            #   L1 选择器缓存 (30min TTL)
 │   │   ├── memory.py           #   L2 长期记忆 (加减分)
+│   │   ├── structure_learner.py#   L4 结构学习 (跨批次持久化)
 │   │   ├── skill_resolver.py   #   L3 规则 skill 分发 + 组件类型推断
 │   │   ├── skill_dom_helpers.py#   build_* 选择器 (radio/checkbox/fill/…)
 │   │   ├── intent_route.py     #   意图 → 组件类型路由
-│   │   ├── intent_window.py    #   L3大模型: 从完整 DOM 抽 intent 相关节点
-│   │   ├── llm_decider.py      #   L3 大模型元素决策 + use_skill
-│   │   ├── node_refiner.py     #   L3 节点纠偏 (skill 祖先爬升)
+│   │   ├── intent_window.py    #   L5大模型: 从完整 DOM 抽 intent 相关节点
+│   │   ├── llm_decider.py      #   L5 大模型元素决策 + use_skill
+│   │   ├── node_refiner.py     #   L5 节点纠偏 (skill 祖先爬升)
 │   │   ├── self_heal.py        #   自愈三策略
 │   │   └── normalize.py        #   URL/意图归一化 + 选择器校验
 │   ├── readiness/              # 步骤⑩ 步骤前就绪检查
 │   │   └── pre_check.py        #   弹窗优先 + 必填检测 + 恢复动作
 │   ├── execution/              # 步骤⑪⑫⑬⑭ 执行层
-│   │   ├── dispatcher.py       #   动作分发器 (三级链 + Playwright)
+│   │   ├── dispatcher.py       #   动作分发器 (五级链 + Playwright)
 │   │   ├── post_check.py       #   步骤后校验 (防假操作)
 │   │   ├── retry.py            #   带后校验重试 (值/选择器/两者/无)
 │   │   ├── retry_hint.py       #   后校验 hint → force_selector
@@ -348,16 +349,17 @@ docker run -p 8000:8000 ui-automation
 - 支持 `config.yaml` 覆盖
 - 每次运行输出实际使用的提示词和 LLM 原始响应
 
-### 5. 三级定位链 (智能加速)
+### 5. 五级定位链 (智能加速)
 
-定位顺序:**L1 缓存 → L2 记忆 → L3**. L1/L2 未命中或校验失败时进入 L3; L3 成功后回填 L1+L2, 同页面二次运行显著减少 LLM 调用.
+定位顺序:**L1 缓存 → L2 记忆 → L3 规则 → L4 学习 → L5 大模型**. L1-L4 未命中或校验失败时进入下一级; L5 成功后回填 L1+L2+L4, 同页面二次运行显著减少 LLM 调用.
 
 ```
-L1 缓存 ──→ L2 记忆 ──→ L3
-                          ├─ L3规则   build_* skill, 扫完整 semantic_items (radio/checkbox/fill/下拉/日期…)
-                          ├─ L3大模型 element_decide LLM (意图窗口 / dom_limit 限候选)
-                          ├─ L3 Skill  use_skill 节点纠偏 (choose_best_input_target 等)
-                          └─ L3纠偏    node_refiner 祖先爬升
+L1 缓存 ──→ L2 记忆 ──→ L3 规则 ──→ L4 学习 ──→ L5 大模型
+                                                    ├─ L3规则   build_* skill, 扫完整 semantic_items (radio/checkbox/fill/下拉/日期…)
+                                                    ├─ L4学习   相似意图 Jaccard 匹配, 跨批次持久化
+                                                    ├─ L5大模型 element_decide LLM (意图窗口 / dom_limit 限候选)
+                                                    ├─ L5 Skill  use_skill 节点纠偏 (choose_best_input_target 等)
+                                                    └─ L5纠偏    node_refiner 祖先爬升
 ```
 
 | 级别 | 来源 | 说明 |
@@ -365,11 +367,12 @@ L1 缓存 ──→ L2 记忆 ──→ L3
 | L1 缓存 | `智能加速/选择器缓存.json` | 同 URL+意图+动作类型, 进程内最快 |
 | L2 记忆 | `智能加速/选择器记忆库.json` | 跨运行加减分, 长期复用 |
 | L3 规则 | `skill_dom_helpers.build_*` | 无 LLM, 从语义 DOM 推断组件并生成选择器 |
-| L3 大模型 | `element_decide` | L3规则未命中时调用; `intent_window=true` 时从全量 DOM 抽相关节点 |
-| L3 Skill | `use_skill` 协议 | LLM 指定 skill 二次精确定位 |
-| L3 纠偏 | `node_refiner` | 初匹配 index 上爬升/精炼 |
+| L4 学习 | `智能加速/页面结构学习.json` | 相似意图 Jaccard 匹配, 跨批次持久化 |
+| L5 大模型 | `element_decide` | L4未命中时调用; `intent_window=true` 时从全量 DOM 抽相关节点 |
+| L5 Skill | `use_skill` 协议 | LLM 指定 skill 二次精确定位 |
+| L5 纠偏 | `node_refiner` | 初匹配 index 上爬升/精炼 |
 
-**DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L3大模型** 受 `dom_limit` / 意图窗口限制.
+**DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L5大模型** 受 `dom_limit` / 意图窗口限制.
 
 **重试 hint**: 后校验若给出裸 CSS (如 `input#searchText`), `retry_hint` 会转为 `force_selector` 跳过后续 LLM 定位.
 

@@ -1,6 +1,6 @@
 """步骤⑪ 动作分发器 —— 统一执行入口.
 
-dispatch(action) → (成功, 消息). 对需定位的动作先走三级链解析选择器, 再用 Playwright 执行.
+dispatch(action) → (成功, 消息). 对需定位的动作先走五级链解析选择器, 再用 Playwright 执行.
 消息里带"实际操作目标"(解析到的元素 HTML 片段), 供步骤⑫ 后校验判断是否点对.
 """
 from __future__ import annotations
@@ -739,13 +739,13 @@ class ActionDispatcher:
                 action.locator_info = {"method": "table_row", "selector": row_note or ""}
                 action.selector = row_note
                 return loc, target_html
-            # 已识别为行内表格点击 (含 extras.row_key) 时不再走三级链用 reason 猜 DOM
+            # 已识别为行内表格点击 (含 extras.row_key) 时不再走五级链用 reason 猜 DOM
             ex = action.extras or {}
             if ex.get("row_key") or parse_table_row_click(action.intent or "", ex):
                 if row_note:
                     action.resolve_hint = row_note
                 return None, None
-        # 正常路径交给三级定位链; 优先复用操作后 semantic_items (共用 DOM).
+        # 正常路径交给五级定位链; 优先复用操作后 semantic_items (共用 DOM).
         semantic_items, dom_source = self.get_semantic_items_for_resolve()
         menu_nav = detect_feature_titles_menu_nav(
             action.intent or "",
@@ -771,7 +771,7 @@ class ActionDispatcher:
             if self.trace:
                 self.trace.emit(
                     "locate",
-                    source=info.get("_source", "L3大模型"),
+                    source=info.get("_source", "L5大模型"),
                     selector="__SKIP_NAV__",
                     target_html=None,
                     hint=action.resolve_hint,
@@ -1307,7 +1307,7 @@ class ActionDispatcher:
         ok, msg, _ = assert_all_table_rows_contain(self.page, target)
         return ok, msg
 
-    # ---------- 文本断言 (字面量/scoped → semantic_assert, 不走三级定位链) ----------
+    # ---------- 文本断言 (字面量/scoped → semantic_assert, 不走五级定位链) ----------
     def _assert_text(self, action: PlannedAction) -> tuple[bool, str]:
         target = (action.value or action.intent or "").strip()
         if not target and not is_or_assert(action):

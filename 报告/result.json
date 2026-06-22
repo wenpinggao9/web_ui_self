@@ -10,18 +10,18 @@
   "failed": 0,
   "summary": "通过",
   "execution_time": "1分13秒",
-  "generated_time": "2026-06-22 14:27:00",
+  "generated_time": "2026-06-22 15:16:25",
   "details": [
     {
       "step": "步骤1: click",
       "action": {
         "type": "click",
-        "intent": "[恢复] 点击任务列表中任务146526315对应的'查看'按钮进入详情页",
+        "intent": "[恢复] 点击任务列表中任务146527974对应的'查看'按钮进入详情页",
         "selector": "ant_table_row[first:1].查看 (first_table_row)"
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击任务列表中任务146526315对应的'查看'按钮进入详情页 | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\" ant-click-animating-without-extra-node=\"false\"><span>查 看</span></button>",
+      "message": "点击 点击任务列表中任务146527974对应的'查看'按钮进入详情页 | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\" ant-click-animating-without-extra-node=\"false\"><span>查 看</span></button>",
       "error": "",
       "selector": "ant_table_row[first:1].查看 (first_table_row)",
       "resolved_html": ""
@@ -49,10 +49,10 @@
       },
       "success": true,
       "status": "passed",
-      "message": "API 调用成功: orderId1001=146526296, orderId=146526296",
+      "message": "API 调用成功: orderId1001=146527955, orderId=146527955",
       "error": "",
       "selector": null,
-      "resolved_html": "API 调用成功: orderId1001=146526296, orderId=146526296"
+      "resolved_html": "API 调用成功: orderId1001=146527955, orderId=146527955"
     },
     {
       "step": "步骤4: click",
@@ -103,17 +103,17 @@
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'题目内容涉及不良导向/敏感信息'\n输入值: \n分发成功: true\n分发消息: 点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <input class=\"ant-radio-input\" type=\"radio\" value=\"31\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146526315\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 请选择审核原因:\n题目内容涉及不良导向/敏感信息\n非大学题",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"dispatch_success 为 true，点击了 value='31' 的 radio input，对应'题目内容涉及不良导向/敏感信息'选项。页面 DOM 中该 radio 按钮存在于表单中（索引[10]），点击操作已成功执行。虽然 DOM 摘要未显示 checked 属性，但 Playwright 成功点击了正确的 radio input 元素，intent 已达成。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'题目内容涉及不良导向/敏感信息'\n输入值: \n分发成功: true\n分发消息: 点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <input class=\"ant-radio-input\" type=\"radio\" value=\"31\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146527974\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 请选择审核原因:\n题目内容涉及不良导向/敏感信息\n非大学题",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"dispatch_success为true，点击了value=31的radio input，对应'题目内容涉及不良导向/敏感信息'选项。虽然DOM摘要中未显示明确的checked状态，但Playwright成功点击了正确的radio按钮（[10] input type=radio value=31），该选项对应intent要求的'题目内容涉及不良导向/敏感信息'。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     }
   ],
   "dom_snapshot_summary": {},
   "_watermark": {
-    "banner": "高文苹",
-    "footer": "高文苹",
-    "overlay": "高文苹",
+    "banner": "gaowenping",
+    "footer": "gaowenping",
+    "overlay": "gaowenping",
     "generator": "ui-automation"
   }
 }

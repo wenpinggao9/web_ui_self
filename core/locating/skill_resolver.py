@@ -1,4 +1,4 @@
-"""Skill 分发: 2A 节点纠偏 + 2B selector 构建 (三级链 L3 大模型之后)."""
+"""Skill 分发: 2A 节点纠偏 + 2B selector 构建 (五级链 L5 大模型之后)."""
 from __future__ import annotations
 
 import re

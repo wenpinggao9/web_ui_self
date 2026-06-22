@@ -80,7 +80,7 @@ class ExecutionTrace:
                 c.print(f"[dim]  │   URL: {data['url']}[/dim]")
         elif phase == "locate_chain":
             c.print(
-                f"[dim]  ├─ 三级定位链[/dim] [{data.get('action_type')}] {data.get('intent', '')[:60]}"
+                f"[dim]  ├─ 五级定位链[/dim] [{data.get('action_type')}] {data.get('intent', '')[:60]}"
             )
             if data.get("hint"):
                 c.print(f"[dim]  │   resolve_hint: {str(data.get('hint'))[:120]}[/dim]")
@@ -100,9 +100,9 @@ class ExecutionTrace:
                     f"selector={data.get('hit_selector')!r}[/dim]"
                 )
             elif data.get("llm_called"):
-                c.print("[dim]  │   ✗ 三级均未命中 (含 L3 大模型)[/dim]")
+                c.print("[dim]  │   ✗ 五级均未命中 (含 L5 大模型)[/dim]")
             else:
-                c.print("[dim]  │   ✗ 三级均未命中 (未调用 L3)[/dim]")
+                c.print("[dim]  │   ✗ 五级均未命中 (未调用 L5)[/dim]")
         elif phase == "locate_backfill":
             if data.get("skipped"):
                 c.print(
@@ -127,7 +127,7 @@ class ExecutionTrace:
         elif phase == "locate":
             src = data.get("source", "?")
             if src == "失败":
-                src = "三级均未命中"
+                src = "五级均未命中"
             c.print(
                 f"[dim]  ├─ 元素定位结果[/dim] 来源={src} "
                 f"selector={data.get('selector')!r}"

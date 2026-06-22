@@ -148,42 +148,11 @@ class PageSession:
         url_before: str,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[Any, str, bool]:
-        # 调试: 打印 context 内所有 tab 状态
-        try:
-            ctx = None
-            try:
-                if self.active is not None:
-                    ctx = self.active.context
-            except Exception:
-                pass
-            if ctx is None and self.list_anchor is not None:
-                try:
-                    ctx = self.list_anchor.context
-                except Exception:
-                    pass
-            if ctx is not None:
-                tabs_info = []
-                for p in ctx.pages:
-                    try:
-                        t_url = p.url or "<no-url>"
-                        t_closed = p.is_closed()
-                    except Exception:
-                        t_url = "<err>"
-                        t_closed = True
-                    tabs_info.append(f"url={t_url[:60]} closed={t_closed}")
-                print(f"  [cyan]Context内tabs({len(tabs_info)}): {tabs_info}[/cyan]")
-            else:
-                print(f"  [cyan]Context: None[/cyan]")
-        except Exception as e:
-            print(f"  [cyan]Context调试异常: {e}[/cyan]")
-
         page, recovered, url, left = pick_surviving_tab_after_detail_close(
             self.active,
             url_before=url_before,
             list_anchor=self.list_anchor,
         )
-        # 调试: 恢复结果
-        print(f"  [cyan]Tab恢复: url_before={url_before[:80]} → recovered_page_url={(_url_safe(page) or '<none>')[:80]} recovered={recovered} left={left}[/cyan]")
         self.active = page
         if url and not is_detail_submission_url(url):
             self.list_anchor = page
