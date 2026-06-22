@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from .execution.assert_codegen import should_skip_or_branch
+from .variable_substitution import find_api_var_for_value
+
+_API_CTX_SKIP_KEYS = frozenset({"ops", "_ops_index"})
 from .execution.dispatcher import _parse_count_spec
 from .execution.script_helpers import min_count_for_compare, parse_table_row_click
 from .locating.playwright_api import infer_from_selector, info_to_python_expr, normalize_info
@@ -88,6 +91,7 @@ from core.execution.script_helpers import (
     wait_before_assert,
     wait_for_list_count_at_least,
     wait_for_url_fragment,
+    assert_table_cell,
     get_scoped_page_text,
     locate_button_in_table_row,
     wait_for_table_row_button,
@@ -110,28 +114,7 @@ def _step_log(step_no: int, action: str, intent: str) -> None:
 _ASSERT_TABLE_HELPER = '''
 def _assert_table_cell(page, row_key, key_col, target_col, expected):
     """断言表格中某行某列的值."""
-    tables = page.locator("table")
-    for ti in range(tables.count()):
-        table = tables.nth(ti)
-        headers = [h.strip() for h in table.locator("thead th, thead td").all_inner_texts()]
-        if not headers or key_col not in headers or target_col not in headers:
-            continue
-        key_idx = headers.index(key_col)
-        col_idx = headers.index(target_col)
-        body_rows = table.locator("tbody tr")
-        for ri in range(body_rows.count()):
-            cells = [c.strip() for c in body_rows.nth(ri).locator("td").all_inner_texts()]
-            if key_idx >= len(cells) or row_key not in cells[key_idx]:
-                continue
-            actual = cells[col_idx] if col_idx < len(cells) else ""
-            assert expected in actual or actual == expected, (
-                f"表格断言失败: 行 {row_key!r} 列 {target_col!r} "
-                f"期望 {expected!r} 实际 {actual!r}"
-            )
-            return
-    raise AssertionError(
-        f"表格断言失败: 未找到行 {row_key!r} (列 {key_col!r}) 或列 {target_col!r}"
-    )
+    assert_table_cell(page, row_key, key_col, target_col, expected)
 '''
 
 
@@ -377,6 +360,10 @@ def _value_expr(text: str | None, api_context: dict[str, Any], runtime_api: bool
     m = re.fullmatch(r"\$\{(\w+)\}", raw)
     if m and runtime_api:
         return f"api_ctx[{_py_str(m.group(1))}]"
+    if runtime_api:
+        var = find_api_var_for_value(raw, api_context)
+        if var:
+            return f"api_ctx[{_py_str(var)}]"
     out = raw
     for k, v in api_context.items():
         out = out.replace(f"${{{k}}}", str(v))
@@ -431,8 +418,44 @@ def _gen_login(cfg: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _gen_step_log_line(step_no: int, action: PlannedAction, prefix: str = "    ") -> str:
-    return f"{prefix}_step_log({step_no}, {_py_str(action.type)}, {_py_str(action.intent or '')})"
+def _intent_log_expr(intent: str, api_context: dict[str, Any], runtime_api: bool) -> str:
+    """生成 _step_log 的 intent 参数; runtime_api 时将 API 变量值替换为 api_ctx 引用."""
+    text = intent or ""
+    if not runtime_api or not text:
+        return _py_str(text)
+    out = text
+    pairs: list[tuple[str, str]] = []
+    for k, v in api_context.items():
+        if k in _API_CTX_SKIP_KEYS or isinstance(v, (dict, list)):
+            continue
+        sv = str(v).strip()
+        if sv:
+            pairs.append((k, sv))
+    pairs.sort(key=lambda x: len(x[1]), reverse=True)
+    changed = False
+    for k, sv in pairs:
+        if sv in out:
+            out = out.replace(sv, f"{{api_ctx[{_py_str(k)}]}}")
+            changed = True
+    for key in re.findall(r"\$\{(\w+)\}", out):
+        if key in api_context:
+            out = out.replace(f"${{{key}}}", f"{{api_ctx[{_py_str(key)}]}}")
+            changed = True
+    if changed and "{" in out:
+        return f"f{_py_str(out)}"
+    return _py_str(text)
+
+
+def _gen_step_log_line(
+    step_no: int,
+    action: PlannedAction,
+    prefix: str = "    ",
+    *,
+    api_context: dict[str, Any] | None = None,
+    runtime_api: bool = False,
+) -> str:
+    intent_expr = _intent_log_expr(action.intent or "", api_context or {}, runtime_api)
+    return f"{prefix}_step_log({step_no}, {_py_str(action.type)}, {intent_expr})"
 
 
 def _gen_locator(info: dict | str) -> str:
@@ -495,9 +518,10 @@ def _gen_table_row_click_step(
 
     key_col = str(extras.get("row_key_column") or "工单ID").strip()
     status_col = str(extras.get("status_column") or "").strip()
+    row_key_expr = _value_expr(row_key, api_context, runtime_api)
     kwargs = [
         f"button_label={_py_str(button)}",
-        f"row_keys=[{_py_str(row_key)}]",
+        f"row_keys=[{row_key_expr}]",
         f"key_col={_py_str(key_col)}",
     ]
     if status_hint:
@@ -871,13 +895,13 @@ def _gen_ui_steps(
             else:
                 lines.append(f"    # Step {i + 1}: API 调用 - {a.intent}")
                 lines.append("    # (无 API 配置, 请先跑 run.py 或手动投放数据)")
-            lines.append(_gen_step_log_line(i + 1, a))
+            lines.append(_gen_step_log_line(i + 1, a, api_context=api_context, runtime_api=runtime_api))
             lines.append("")
             continue
 
         if a.type == "bind_session":
             lines.append(f"    # Step {i + 1}: [bind_session] {a.intent}")
-            lines.append(_gen_step_log_line(i + 1, a))
+            lines.append(_gen_step_log_line(i + 1, a, api_context=api_context, runtime_api=runtime_api))
             lines.extend(_gen_bind_session_lines(a, case_id))
             lines.append("")
             continue
@@ -885,7 +909,7 @@ def _gen_ui_steps(
         is_popup_recovery = _is_popup_recovery_action(a)
         if is_popup_recovery:
             lines.append(f"    # Step {i + 1}: [recovery] {a.intent}")
-            lines.append(_gen_step_log_line(i + 1, a))
+            lines.append(_gen_step_log_line(i + 1, a, api_context=api_context, runtime_api=runtime_api))
             lines.extend(_gen_conditional_recovery_action(a, api_context, runtime_api))
             lines.append("")
             continue
@@ -894,7 +918,7 @@ def _gen_ui_steps(
             pass  # 关弹窗逻辑合并进 _gen_click_step
 
         lines.append(f"    # Step {i + 1}: [{a.type}] {a.intent}")
-        lines.append(_gen_step_log_line(i + 1, a))
+        lines.append(_gen_step_log_line(i + 1, a, api_context=api_context, runtime_api=runtime_api))
         value = _apply_api_context(a.value, api_context, runtime_api)
         extras = dict(a.extras or {})
 

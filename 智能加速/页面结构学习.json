@@ -982,123 +982,6 @@
   {
     "route": "/video/all-question",
     "action_type": "click",
-    "intent": "在筛选区点击'来源'下拉框",
-    "tokens": [
-      "源",
-      "在",
-      "下",
-      "来",
-      "筛",
-      "击",
-      "点",
-      "拉",
-      "框",
-      "选",
-      "区"
-    ],
-    "selector": "label:\"来源\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在下拉选项中点击'策略'",
-    "tokens": [
-      "在",
-      "下",
-      "项",
-      "击",
-      "点",
-      "拉",
-      "中",
-      "选",
-      "策",
-      "略"
-    ],
-    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"策略\")",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在筛选区点击'学段'下拉框",
-    "tokens": [
-      "在",
-      "下",
-      "筛",
-      "击",
-      "点",
-      "拉",
-      "框",
-      "段",
-      "选",
-      "学",
-      "区"
-    ],
-    "selector": "label:\"学段\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在下拉选项中点击'大学'",
-    "tokens": [
-      "在",
-      "下",
-      "项",
-      "击",
-      "点",
-      "拉",
-      "中",
-      "选",
-      "学",
-      "大"
-    ],
-    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"大学\")",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在筛选区点击'学科'下拉框",
-    "tokens": [
-      "在",
-      "下",
-      "筛",
-      "击",
-      "点",
-      "拉",
-      "框",
-      "选",
-      "科",
-      "学",
-      "区"
-    ],
-    "selector": "label:\"学科\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在下拉选项中点击'数学'",
-    "tokens": [
-      "在",
-      "下",
-      "项",
-      "击",
-      "点",
-      "拉",
-      "中",
-      "选",
-      "学",
-      "数"
-    ],
-    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"数学\")",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
     "intent": "在'全部题目'页面点击'来源'筛选下拉框",
     "tokens": [
       "源",
@@ -1137,25 +1020,6 @@
       "学"
     ],
     "selector": "label:\"学段\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "在下拉选项中点击'小学'",
-    "tokens": [
-      "小",
-      "在",
-      "下",
-      "项",
-      "击",
-      "点",
-      "拉",
-      "中",
-      "选",
-      "学"
-    ],
-    "selector": ".ant-select-dropdown:visible .ant-select-item-option:has-text(\"小学\")",
     "nth": 0
   },
   {
@@ -1582,6 +1446,157 @@
       "策"
     ],
     "selector": ".ant-select-dropdown:visible .ant-select-item-option-content:has-text(\"策略投放\")",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在筛选区点击'来源'下拉框",
+    "tokens": [
+      "点",
+      "在",
+      "击",
+      "源",
+      "下",
+      "框",
+      "来",
+      "区",
+      "拉",
+      "筛",
+      "选"
+    ],
+    "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"来源\")]]//*[@role='combobox'])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在下拉选项中点击'策略'",
+    "tokens": [
+      "点",
+      "策",
+      "在",
+      "项",
+      "中",
+      "下",
+      "击",
+      "选",
+      "拉",
+      "略"
+    ],
+    "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"策略\")])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在筛选区点击'学段'下拉框",
+    "tokens": [
+      "点",
+      "在",
+      "击",
+      "段",
+      "下",
+      "框",
+      "区",
+      "拉",
+      "学",
+      "筛",
+      "选"
+    ],
+    "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学段\")]]//*[@role='combobox'])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在下拉选项中点击'大学'",
+    "tokens": [
+      "点",
+      "在",
+      "项",
+      "中",
+      "下",
+      "击",
+      "选",
+      "大",
+      "学",
+      "拉"
+    ],
+    "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在筛选区点击'学科'下拉框",
+    "tokens": [
+      "点",
+      "在",
+      "击",
+      "下",
+      "框",
+      "区",
+      "拉",
+      "学",
+      "筛",
+      "选",
+      "科"
+    ],
+    "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学科\")]]//*[@role='combobox'])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在下拉选项中点击'数学'",
+    "tokens": [
+      "点",
+      "在",
+      "项",
+      "中",
+      "下",
+      "击",
+      "选",
+      "数",
+      "学",
+      "拉"
+    ],
+    "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"数学\")])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/detail",
+    "action_type": "click",
+    "intent": "点击'提交'按钮",
+    "tokens": [
+      "点",
+      "提",
+      "按",
+      "钮",
+      "击",
+      "交"
+    ],
+    "selector": "role=button[name=\"提 交\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "在下拉选项中点击'小学'",
+    "tokens": [
+      "在",
+      "项",
+      "击",
+      "拉",
+      "小",
+      "选",
+      "学",
+      "下",
+      "中",
+      "点"
+    ],
+    "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"小学\")])[1]",
     "nth": 0
   }
 ]

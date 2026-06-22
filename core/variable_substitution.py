@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+
+_API_CTX_SKIP_KEYS = frozenset({"ops", "_ops_index"})
 
 
 def substitute_variables(text: str, context: dict[str, Any]) -> str:
@@ -19,6 +22,30 @@ def substitute_variables(text: str, context: dict[str, Any]) -> str:
         if placeholder in text:
             text = text.replace(placeholder, str(v))
     return text
+
+
+def find_api_var_for_value(text: str, context: dict[str, Any]) -> str | None:
+    """若字面量等于 context 中某 API 标量值, 返回变量名 (优先 orderId/id 类)."""
+    raw = (text or "").strip()
+    if not raw or not context:
+        return None
+    matches: list[str] = []
+    for k, v in context.items():
+        if k in _API_CTX_SKIP_KEYS or isinstance(v, (dict, list)):
+            continue
+        if str(v) == raw:
+            matches.append(k)
+    if not matches:
+        return None
+
+    def _rank(key: str) -> tuple[int, str]:
+        kl = key.lower()
+        if "orderid" in kl or re.search(r"id\d+$", kl) or key.endswith("Id"):
+            return (0, key)
+        return (1, key)
+
+    matches.sort(key=_rank)
+    return matches[0]
 
 
 def substitute_in_list(items: list[str], context: dict[str, Any]) -> list[str]:

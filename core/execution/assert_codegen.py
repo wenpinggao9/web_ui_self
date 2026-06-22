@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..planning import PlannedAction
+from ..variable_substitution import find_api_var_for_value
 from .script_helpers import measure_list_count
 
 
@@ -24,9 +25,20 @@ def _url_path(url: str) -> str:
     return urlparse(url or "").path or ""
 
 
-def record_literal(action: PlannedAction, text: str, *, negate: bool = False) -> None:
+def record_literal(
+    action: PlannedAction,
+    text: str,
+    *,
+    negate: bool = False,
+    api_context: dict[str, Any] | None = None,
+) -> None:
     kind = "negate_literal" if negate else "literal"
-    set_codegen_assert(action, {"kind": kind, "text": text})
+    stored = text
+    if api_context:
+        var = find_api_var_for_value(text, api_context)
+        if var:
+            stored = "${" + var + "}"
+    set_codegen_assert(action, {"kind": kind, "text": stored})
 
 
 def record_button_state(action: PlannedAction, label: str, *, disabled: bool) -> None:
@@ -51,7 +63,14 @@ def record_post_click_wait(action: PlannedAction, url_before: str, url_after: st
         set_codegen_post_wait(action, {"kind": "url_contains", "fragment": path})
 
 
-def record_or_branch(action: PlannedAction, page: Any, branches: list[Any], body_text: str) -> None:
+def record_or_branch(
+    action: PlannedAction,
+    page: Any,
+    branches: list[Any],
+    body_text: str,
+    *,
+    api_context: dict[str, Any] | None = None,
+) -> None:
     """与 try_or_branches 判定顺序一致, 记录获胜分支当时页面状态."""
     from .assert_or import try_or_heuristic
 
@@ -61,19 +80,27 @@ def record_or_branch(action: PlannedAction, page: Any, branches: list[Any], body
         branch_intent = str(raw.get("intent") or raw.get("desc") or "").strip()
         branch_value = str(raw.get("value") or "").strip()
         if branch_value and branch_value in body_text:
-            record_literal(action, branch_value)
+            record_literal(action, branch_value, api_context=api_context)
             return
         hit = try_or_heuristic(page, branch_intent)
         if hit is not None:
-            record_pass_state(action, page, body_text, branch_value or None)
+            record_pass_state(
+                action, page, body_text, branch_value or None, api_context=api_context,
+            )
             return
 
 
-def record_or_heuristic(action: PlannedAction, page: Any, intent: str) -> None:
+def record_or_heuristic(
+    action: PlannedAction,
+    page: Any,
+    intent: str,
+    *,
+    api_context: dict[str, Any] | None = None,
+) -> None:
     from .assert_or import try_or_heuristic
 
     if try_or_heuristic(page, intent) is not None:
-        record_pass_state(action, page, "", None)
+        record_pass_state(action, page, "", None, api_context=api_context)
 
 
 def record_pass_state(
@@ -81,6 +108,8 @@ def record_pass_state(
     page: Any,
     body_text: str,
     literal_target: str | None,
+    *,
+    api_context: dict[str, Any] | None = None,
 ) -> None:
     """按 run.py 判定顺序, 用当时页面状态回填可执行断言 (无业务词典)."""
     target = (literal_target or (action.value or "")).strip()
@@ -93,11 +122,11 @@ def record_pass_state(
 
     if action.negate:
         if target and target not in body:
-            record_literal(action, target, negate=True)
+            record_literal(action, target, negate=True, api_context=api_context)
         return
 
     if target and target in body:
-        record_literal(action, target)
+        record_literal(action, target, api_context=api_context)
         return
 
     n, _ = measure_list_count(page)
@@ -111,7 +140,7 @@ def record_pass_state(
         return
 
     if target:
-        record_literal(action, target)
+        record_literal(action, target, api_context=api_context)
 
 
 def record_semantic_pass(action: PlannedAction, page: Any, body_text: str) -> None:

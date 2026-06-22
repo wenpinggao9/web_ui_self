@@ -1190,6 +1190,54 @@ def extract_url_query(page: Any, *keys: str) -> dict[str, str]:
     return out
 
 
+def assert_table_cell(
+    page: Any,
+    row_key: str,
+    key_col: str,
+    target_col: str,
+    expected: str,
+) -> None:
+    """断言表格中某行某列的值 (与 dispatcher._assert_table 行匹配规则一致)."""
+    from .session_ops import table_row_key_matches
+
+    tables = page.locator("table")
+    for ti in range(tables.count()):
+        table = tables.nth(ti)
+        headers = [h.strip() for h in table.locator("thead th, thead td").all_inner_texts()]
+        if not headers or key_col not in headers or target_col not in headers:
+            continue
+        key_idx = headers.index(key_col)
+        col_idx = headers.index(target_col)
+        body_rows = table.locator("tbody tr")
+        exact_row: tuple[list[str], str] | None = None
+        token_row: tuple[list[str], str] | None = None
+        for ri in range(body_rows.count()):
+            cells = [c.strip() for c in body_rows.nth(ri).locator("td").all_inner_texts()]
+            if key_idx >= len(cells):
+                continue
+            cell_val = cells[key_idx]
+            if not table_row_key_matches(cell_val, row_key):
+                continue
+            if cell_val.strip() == str(row_key).strip():
+                exact_row = (cells, cell_val)
+                break
+            if token_row is None:
+                token_row = (cells, cell_val)
+        hit = exact_row or token_row
+        if hit:
+            cells, matched = hit
+            actual = cells[col_idx] if col_idx < len(cells) else ""
+            if expected in actual or actual == expected:
+                return
+            raise AssertionError(
+                f"表格断言失败: 行 {matched!r} 列 {target_col!r} "
+                f"期望 {expected!r} 实际 {actual!r}"
+            )
+    raise AssertionError(
+        f"表格断言失败: 未找到行 {row_key!r} (列 {key_col!r}) 或列 {target_col!r}"
+    )
+
+
 from .tab_follow import (  # noqa: E402  — 统一 tab 跟随, 避免与上方循环 import
     recover_active_page,
     wait_and_recover_active_page,

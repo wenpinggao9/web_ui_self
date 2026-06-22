@@ -10,6 +10,8 @@ _NUM = re.compile(r"^\d+$")
 # 这些参数通常只影响鉴权/防重放, 不应进入页面结构级缓存 key.
 _TRACK_PARAMS = ("token", "timestamp", "ts", "_t", "sign", "nonce")
 
+_INTENT_RELAXED_MAX_LEN = 60
+
 
 def normalize_url(url: str) -> str:
     """hash 路由取 fragment; 纯数字段/UUID → {id}; 丢弃跟踪参数."""
@@ -31,11 +33,11 @@ def normalize_url(url: str) -> str:
 
 
 def normalize_intent(intent: str) -> str:
-    """去引号/多余空白, 便于做缓存键."""
-    # 文案里的中英文引号和空格差异不影响用户真实意图.
-    s = re.sub(r"[\"'“”‘’「」『』]", "", intent or "")
+    """去引号/多余空白/末尾标点, 截断到 60 字符, 便于做缓存键."""
+    s = re.sub(r"""["'""''\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]""", "", intent or "")
     s = re.sub(r"\s+", "", s)
-    return s.strip()
+    s = re.sub(r"[。，、；：！？.,;:!?]+$", "", s)
+    return s.strip()[:_INTENT_RELAXED_MAX_LEN]
 
 
 def validate_selector(page: Any, info: dict, timeout_ms: int = 1500) -> bool:

@@ -205,24 +205,28 @@ class LocatorResolver:
 
         # L2 记忆库
         if self.memory and not skip_acceleration:
-            info = self.memory.get(url, action_type, intent)
+            info = self.memory.lookup_validate(page, url, action_type, intent)
             if not info:
                 chain.add("L2记忆", "未命中")
             elif info_key(info) in excl:
                 chain.add("L2记忆", "跳过(已排除)", info_key(info))
-            elif validate_selector(page, info):
+                info = self.memory.get(url, action_type, intent)  # 不排除的原始值
+                if info:
+                    info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                        page, intent, info, semantic_items,
+                    )
+                    chain.mark_hit("L2记忆", info_key(info))
+                    self._emit_chain(chain)
+                    return self._tag(info, "L2记忆")
+            else:
                 info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
                     page, intent, info, semantic_items,
                 )
                 if upgraded:
                     chain.add("L2记忆", f"{upgrade_label}升级", info_key(info))
-                    if self.memory:
-                        self.memory.record_success(url, action_type, intent, info)
                 chain.mark_hit("L2记忆", info_key(info))
                 self._emit_chain(chain)
                 return self._tag(info, "L2记忆")
-            else:
-                chain.add("L2记忆", "校验失败", info["selector"])
         else:
             if skip_acceleration:
                 chain.add("L2记忆", "跳过(重试)")
@@ -465,6 +469,19 @@ class LocatorResolver:
             hit_selector=chain.hit_selector,
         )
 
+    def _detect_component_library(self) -> str:
+        """扫描最近抽取的 DOM 识别组件库 (element-ui / ant-design 等)."""
+        from .memory import _detect_component_library as _detect
+        if self._framework_selectors:
+            known = {
+                "el-select": "element-ui", "elx-select": "element-plus",
+                "ant-select": "ant-design", "van-field": "vant",
+            }
+            for key, lib in known.items():
+                if key in str(self._framework_selectors).lower():
+                    return lib
+        return "generic"
+
     # ---------- 回填 ----------
     def _backfill(self, url: str, action_type: str, intent: str, info: dict) -> None:
         if skip_locator_persistence(action_type):
@@ -491,11 +508,15 @@ class LocatorResolver:
         if self.cache:
             self.cache.put(url, action_type, intent, info)
         if self.memory:
-            self.memory.record_success(url, action_type, intent, info)
+            comp_lib = self._detect_component_library()
+            self.memory.record_success(
+                url, action_type, intent, info,
+                node=info, component_library=comp_lib,
+            )
             k = self.memory._key(url, action_type, intent)
-            entry = self.memory._data.get(k)
+            entry = self.memory._store.get(k)
             if entry:
-                l2_score = int(entry.get("score") or 0)
+                l2_score = int(entry.get("success_count") or 0)
         if self.learner:
             self.learner.learn(url, action_type, intent, info)
         self._emit_backfill(

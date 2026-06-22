@@ -41,8 +41,8 @@
         <div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-gray-500 text-sm">成功率</p><p class="text-2xl font-bold text-blue-600">100%</p></div>
       </div>
       <div class="mt-4 text-sm text-gray-600">
-        <p>执行时长: 1分13秒</p>
-        <p>生成时间: 2026-06-22 15:45:31</p>
+        <p>执行时长: 1分11秒</p>
+        <p>生成时间: 2026-06-22 18:16:44</p>
       </div>
     </header>
 
@@ -60,10 +60,10 @@
                   <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
                   <span class="font-semibold">步骤 1</span>
                   <span class="text-sm text-gray-600">click</span>
-                  <span class="text-sm text-gray-500">[恢复] 点击任务列表中任务146530222对应的&#x27;查看&#x27;按钮，进入详情页</span>
+                  <span class="text-sm text-gray-500">[恢复] 点击列表中第一条任务的&#x27;查看&#x27;按钮进入详情页</span>
                 </div>
               </div>
-              <p class="text-sm text-gray-600 mt-1">点击 点击任务列表中任务146530222对应的&#x27;查看&#x27;按钮，进入详情页 | 实际目标: &lt;button type=&quot;button&quot; class=&quot;ant-btn ant-btn-primary&quot; ant-click-animating-without-extra-node=&quot;false&quot;&gt;&lt;span&gt;查 看&lt;/span&gt;&lt;/button&gt;</p>
+              <p class="text-sm text-gray-600 mt-1">点击 点击列表中第一条任务的&#x27;查看&#x27;按钮进入详情页 | 实际目标: &lt;button type=&quot;button&quot; class=&quot;ant-btn ant-btn-primary&quot; ant-click-animating-without-extra-node=&quot;false&quot;&gt;&lt;span&gt;查 看&lt;/span&gt;&lt;/button&gt;</p>
               <p class="text-xs text-gray-500 mt-1 font-mono">selector: ant_table_row[first:1].查看 (first_table_row)</p>
             </div>
             
@@ -76,8 +76,8 @@
                   <span class="text-sm text-gray-500">在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27;</span>
                 </div>
               </div>
-              <p class="text-sm text-gray-600 mt-1">点击 在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27; | 实际目标: &lt;input class=&quot;ant-radio-input&quot; type=&quot;radio&quot; value=&quot;31&quot;&gt;</p>
-              <p class="text-xs text-gray-500 mt-1 font-mono">selector: input[type=&quot;radio&quot;][value=&quot;31&quot;]</p>
+              <p class="text-sm text-gray-600 mt-1">点击 在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27; | 实际目标: &lt;span&gt;题目内容涉及不良导向/敏感信息&lt;/span&gt;</p>
+              <p class="text-xs text-gray-500 mt-1 font-mono">selector: label:has-text(&quot;题目内容涉及不良导向/敏感信息&quot;)</p>
             </div>
             
             <div class="border-l-4 border-green-500 bg-green-50 rounded-lg p-4 mb-3 shadow-sm">
@@ -89,7 +89,7 @@
                   <span class="text-sm text-gray-500">根据当前任务ID查询对应工单ID，记录为orderId1001</span>
                 </div>
               </div>
-              <p class="text-sm text-gray-600 mt-1">API 调用成功: orderId1001=146530204, orderId=146530204</p>
+              <p class="text-sm text-gray-600 mt-1">API 调用成功: orderId1001=146533998, orderId=146533998</p>
               
             </div>
             
@@ -112,10 +112,10 @@
                   <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">通过</span>
                   <span class="font-semibold">步骤 5</span>
                   <span class="text-sm text-gray-600">assert_text</span>
-                  <span class="text-sm text-gray-500">验证提交后页面结果：没有下一个待完成任务则返回待领取页面，有则自动加载下一个任务详情</span>
+                  <span class="text-sm text-gray-500">验证页面自动加载下一个任务的详情页</span>
                 </div>
               </div>
-              <p class="text-sm text-gray-600 mt-1">或断言(启发式): 当前在待领取/待前审页面</p>
+              <p class="text-sm text-gray-600 mt-1">否定断言: 页面不包含 &#x27;提交失败&#x27;</p>
               
             </div>
             </section>
@@ -148,16 +148,20 @@
 操作意图: 在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27;
 输入值: 
 分发成功: true
-分发消息: 点击 在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27; | 实际目标: &lt;input class=&quot;ant-radio-input&quot; type=&quot;radio&quot; value=&quot;31&quot;&gt;
-当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146530222
+分发消息: 点击 在详情页选择&#x27;题目内容涉及不良导向/敏感信息&#x27; | 实际目标: &lt;span&gt;题目内容涉及不良导向/敏感信息&lt;/span&gt;
+当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146534037
 分发结构化上下文: (无)
 
 当前页面DOM摘要:
 [0] &lt;form&gt; 请选择审核原因:
 题目内容涉及不良导向/敏感信息
-非大学题</p>
+非大学题
+非目标学科
+题目不完整或题干残缺
+多题
+水印题且可做</p>
                   <p class="text-xs text-gray-500 font-medium mt-2">Response 预览:</p>
-                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">{&quot;step_ok&quot;: true, &quot;reason&quot;: &quot;dispatch_success 为 true，点击了 value=&#x27;31&#x27; 的 radio input，对应&#x27;题目内容涉及不良导向/敏感信息&#x27;选项。页面 DOM 中该 radio label [8] 存在且表单可见，radio 已被点击选中。虽然 DOM 摘要未显示 checked 属性，但 Playwright 成功点击了正确的 radio input (value=31)，操作已完成。&quot;, &quot;retry_focus&quot;: &quot;无&quot;, &quot;suggested_value&quot;: null, &quot;resolve_hint&quot;: null}</p>
+                  <p class="text-xs text-gray-700 bg-gray-50 rounded p-2 whitespace-pre-wrap">{&quot;step_ok&quot;: true, &quot;reason&quot;: &quot;点击成功，dispatch_success为true，页面DOM中[8]label显示&#x27;题目内容涉及不良导向/敏感信息&#x27;选项存在。虽然DOM摘要中未明确显示radio/checkbox的checked状态，但Playwright成功点击了该span元素，且该选项对应的label[8]在表单中为第一个选项，点击操作已完成。结合dispatch消息确认实际点击了正确的span元素。&quot;, &quot;retry_focus&quot;: &quot;无&quot;, &quot;suggested_value&quot;: null, &quot;resolve_hint&quot;: null}</p>
                 </div>
                 </div></div></div></div>
           

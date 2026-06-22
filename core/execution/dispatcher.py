@@ -1346,20 +1346,20 @@ class ActionDispatcher:
             )
             if field_hit is not None:
                 if field_hit[0]:
-                    record_literal(action, target)
+                    self._record_literal(action, target)
                 return field_hit
 
         if not action.negate:
             scoped_hit = try_scoped_literal_items(scope, items, target)
             if scoped_hit is not None:
                 if scoped_hit[0]:
-                    record_literal(action, target)
+                    self._record_literal(action, target)
                     return scoped_hit
                 if not scope.explicit_region:
                     return scoped_hit
                 # 区域字面未命中但全文有目标 (DOM 节点拆分/无 in_form 标记) → 仍走程序匹配, 不调 LLM
                 if _text_contains(target, flat_text):
-                    record_literal(action, target)
+                    self._record_literal(action, target)
                     return True, f"断言: 页面含 {target!r}"
 
         skip_flat_literal = (
@@ -1368,17 +1368,17 @@ class ActionDispatcher:
         if action.negate:
             present = target in flat_text
             if not present:
-                record_literal(action, target, negate=True)
+                record_literal(action, target, negate=True, api_context=self.api_context)
             return (not present), (f"否定断言: 页面{'仍包含' if present else '不包含'} {target!r}")
         if not skip_flat_literal:
             present = target in flat_text
             if present:
-                record_literal(action, target)
+                self._record_literal(action, target)
                 return True, f"断言: 页面含 {target!r}"
         row_hit = self._try_assert_list_rows(action, target, scope)
         if row_hit is not None:
             if row_hit[0]:
-                record_literal(action, target)
+                self._record_literal(action, target)
             return row_hit
         control = self._try_assert_control_mode(action)
         if control is not None:
@@ -1399,7 +1399,10 @@ class ActionDispatcher:
                 )
                 if hit is not None:
                     if hit[0]:
-                        record_or_branch(action, self.page, branches, flat_text)
+                        record_or_branch(
+                            action, self.page, branches, flat_text,
+                            api_context=self.api_context,
+                        )
                     return hit
             else:
                 hit = try_or_heuristic(
@@ -1801,6 +1804,17 @@ class ActionDispatcher:
         skip = {"ops"}
         items = [f"{k}={v}" for k, v in ctx.items() if k not in skip]
         return ", ".join(items) if items else "(空)"
+
+    def _record_literal(
+        self,
+        action: PlannedAction,
+        target: str,
+        *,
+        negate: bool = False,
+    ) -> None:
+        record_literal(
+            action, target, negate=negate, api_context=self.api_context,
+        )
 
 
 def _parse_count_spec(action: PlannedAction) -> tuple[str, int]:
