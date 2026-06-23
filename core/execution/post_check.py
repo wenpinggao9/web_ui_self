@@ -19,6 +19,7 @@ from ..llm import LLMAdapter, PromptLoader
 from ..planning import PlannedAction
 from .script_helpers import _page_alive, _page_usable
 from .submit_post_verify import evaluate_submit_post_check, is_submit_intent
+from .optional_step import should_skip_optional_step
 
 # 需要后校验的动作类型
 _POST_CHECK_TYPES = {"click", "fill", "press", "upload", "hover", "goto", "wait"}
@@ -278,6 +279,12 @@ class PostStepChecker:
         dispatch_meta: Optional[dict[str, Any]] = None,
         list_anchor: Any = None,
     ) -> PostCheckResult:
+        if should_skip_optional_step(page, action, dispatch_ok, dispatch_msg):
+            return PostCheckResult(
+                step_ok=True,
+                reason="可选步骤：目标未出现，已跳过",
+                retry_focus="无",
+            )
         # 优先复用操作后已抓取的 indexed DOM; 无缓存时再读页 (post_verify profile)
         if dom_summary:
             dom = dom_summary
@@ -351,18 +358,6 @@ class PostStepChecker:
                 resolve_hint="确认前置必填项已选中后再点 type=submit 提交按钮",
                 recovered_page=recovered,
                 updated_meta=submit_verdict.meta,
-            )
-        if (
-            is_submit_intent(action.intent or "")
-            and dispatch_ok
-            and (dispatch_meta or {}).get("submit_click_ok")
-        ):
-            return PostCheckResult(
-                step_ok=True,
-                reason="提交 click 已成功 (跳过后校验 LLM)",
-                retry_focus="无",
-                recovered_page=recovered,
-                updated_meta=dispatch_meta,
             )
 
         if _dom_summary_empty(base_dom):

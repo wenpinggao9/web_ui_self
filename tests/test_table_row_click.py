@@ -34,3 +34,27 @@ def test_parse_table_row_click_extracts_order_id():
 def test_normalize_btn_label():
     assert _normalize_btn_label("日 志") == "日志"
     assert _normalize_btn_label("查\u00a0看") == "查看"
+
+
+def test_parse_recovery_first_task_with_id():
+    intent = "点击第一条任务(146550684)的查看按钮，进入详情页"
+    parsed = parse_table_row_click(intent, {})
+    assert parsed is not None
+    button, row_hint, status = parsed
+    assert button == "查看"
+    assert row_hint == "146550684"
+    assert status is None
+
+
+def test_parse_recovery_first_task_quoted_button():
+    intent = "点击第一条任务(146550684)的'查看'按钮，进入详情页"
+    parsed = parse_table_row_click(intent, {})
+    assert parsed is not None
+    assert parsed[0] == "查看"
+    assert parsed[1] == "146550684"
+
+
+def test_parse_list_any_row_view_button():
+    intent = "点击待前审列表中任意一条任务的'查看'按钮"
+    parsed = parse_table_row_click(intent, {})
+    assert parsed == ("查看", "__first_row__", None)

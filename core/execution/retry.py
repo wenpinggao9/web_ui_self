@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from rich.console import Console
@@ -29,6 +29,7 @@ from .popup_recovery import (
     needs_popup_recovery,
     reset_action_for_popup_retry,
 )
+from .optional_step import should_skip_optional_step
 from .post_check import PostStepChecker, upgrade_submit_post_result
 from .retry_hint import resolve_force_selector_from_hint
 from .submit_post_verify import finalize_submit_after_dispatch, submit_dispatch_should_succeed
@@ -48,6 +49,10 @@ class RetryOutcome:
     attempts: int
     reason: str = ""
     selector: Optional[str] = None
+    dispatch_ok: bool = False
+    post_reason: str = ""
+    optional_skipped: bool = False
+    post_retries: list[dict] = field(default_factory=list)
 
 
 class RetryController:
@@ -81,6 +86,7 @@ class RetryController:
         last_ok, last_msg, last_reason = False, "", ""
         last_selector: Optional[str] = None
         popup_recovery_tried = False
+        post_retries: list[dict] = []
 
         for attempt in range(1, self.max_retries + 1):
             if attempt > 1:
@@ -112,6 +118,7 @@ class RetryController:
                             list_anchor=getattr(
                                 self.dispatcher, "_list_tab_anchor", None,
                             ),
+                            dispatch_ok=True,
                         )
                         self.dispatcher.page = fin.page
                         self.dispatcher.last_dispatch_meta = fin.meta
@@ -150,19 +157,47 @@ class RetryController:
                     self.dispatcher.page,
                     self.dispatcher.last_dispatch_meta,
                     list_anchor=getattr(self.dispatcher, "_list_tab_anchor", None),
+                    dispatch_ok=ok,
                 )
                 self.dispatcher.page = fin.page
                 self.dispatcher.last_dispatch_meta = fin.meta
-                if fin.dispatch_ok:
-                    ok = True
-                    if fin.message:
-                        msg = fin.message if not last_ok else f"{msg} | {fin.message}"
+                ok = fin.dispatch_ok
+                if fin.message:
+                    msg = fin.message if not last_ok else f"{msg} | {fin.message}"
                 if fin.meta.get("left_detail_context") and getattr(
                     self.dispatcher, "_list_tab_anchor", None
                 ) is None:
                     self.dispatcher._list_tab_anchor = fin.page
                 elif fin.meta.get("left_detail_context") and fin.page is not None:
                     self.dispatcher._list_tab_anchor = fin.page
+
+            if should_skip_optional_step(self.dispatcher.page, action, ok, msg):
+                reason = "可选步骤：目标未出现，已跳过"
+                self.console.print(f"  [green]✓ {reason}[/green]")
+                post_retries.append({
+                    "attempt": attempt,
+                    "dispatch_ok": ok,
+                    "post_check_ok": True,
+                    "optional_skipped": True,
+                    "message": msg,
+                    "reason": reason,
+                })
+                if self.trace:
+                    self.trace.emit(
+                        "post_check",
+                        attempt=attempt,
+                        dispatch_ok=ok,
+                        step_ok=True,
+                        retry_focus="无",
+                        reason=reason,
+                        optional_skipped=True,
+                    )
+                self.dispatcher.capture_page_state_if_needed(action)
+                return RetryOutcome(
+                    True, True, reason, attempt, reason, last_selector,
+                    dispatch_ok=ok, post_reason=reason, optional_skipped=True,
+                    post_retries=post_retries,
+                )
 
             # 按钮 disabled 且列表已有数据 → 幂等跳过 (如已领取后「领取题目」变灰)
             if (
@@ -185,7 +220,18 @@ class RetryController:
                     )
                 self.dispatcher.mark_idempotent_skip(action.intent)
                 self.dispatcher.capture_page_state_if_needed(action)
-                return RetryOutcome(True, True, reason, attempt, reason, last_selector)
+                post_retries.append({
+                    "attempt": attempt,
+                    "dispatch_ok": False,
+                    "post_check_ok": True,
+                    "message": msg,
+                    "reason": reason,
+                    "idempotent_skip": True,
+                })
+                return RetryOutcome(
+                    True, True, reason, attempt, reason, last_selector,
+                    dispatch_ok=False, post_reason=reason, post_retries=post_retries,
+                )
 
             # 误插的侧栏导航: 目标页已可操作 → 跳过本步
             if not ok and _spurious_nav_skip(self.dispatcher, action, msg):
@@ -203,7 +249,18 @@ class RetryController:
                         reason=reason,
                         resolve_hint=None,
                     )
-                return RetryOutcome(True, True, reason, attempt, reason, last_selector)
+                post_retries.append({
+                    "attempt": attempt,
+                    "dispatch_ok": False,
+                    "post_check_ok": True,
+                    "message": msg,
+                    "reason": reason,
+                    "spurious_nav_skip": True,
+                })
+                return RetryOutcome(
+                    True, True, reason, attempt, reason, last_selector,
+                    dispatch_ok=False, post_reason=reason, post_retries=post_retries,
+                )
 
             self.dispatcher.capture_page_state_if_needed(action)
             cached_dom = self.dispatcher.get_cached_dom_summary()
@@ -228,12 +285,27 @@ class RetryController:
                     reason=post.reason,
                     resolve_hint=post.resolve_hint,
                 )
-            if post.step_ok:
+            post_retries.append({
+                "attempt": attempt,
+                "dispatch_ok": ok,
+                "post_check_ok": post.step_ok,
+                "message": msg,
+                "reason": post.reason,
+                "retry_focus": post.retry_focus,
+            })
+            if post.step_ok and ok:
                 if action.type == "click":
                     backfill_click_from_dispatch(action, msg, post.suggested_value)
                 if attempt > 1:
                     self.console.print(f"  [green]✚ 第{attempt}次重试后校验通过[/green]")
-                return RetryOutcome(True, True, msg, attempt, post.reason, last_selector)
+                return RetryOutcome(
+                    True, True, msg, attempt, post.reason, last_selector,
+                    dispatch_ok=ok, post_reason=post.reason, post_retries=post_retries,
+                )
+            if post.step_ok and not ok:
+                self.console.print(
+                    "  [yellow]后校验通过但分发未成功, 继续重试 (对齐 V3 双门)[/yellow]"
+                )
 
             last_reason = post.reason
             self.console.print(f"  [yellow]后校验未过(第{attempt}次): {post.reason} → 焦点={post.retry_focus}[/yellow]")
@@ -248,7 +320,11 @@ class RetryController:
                 elif PageSession.is_same_tab_submit_nav(meta):
                     self.dispatcher.sync_page_after_post_check(None, meta, recapture=True)
                 self.console.print(f"  [green]✓ {tab_ok}[/green]")
-                return RetryOutcome(True, True, tab_ok, attempt, tab_ok, last_selector)
+                return RetryOutcome(
+                    True, True, tab_ok, attempt, tab_ok, last_selector,
+                    dispatch_ok=bool((self.dispatcher.last_dispatch_meta or {}).get("submit_click_ok")),
+                    post_reason=tab_ok, post_retries=post_retries,
+                )
 
             if (
                 _is_submit_action(action)
@@ -258,6 +334,7 @@ class RetryController:
                     self.dispatcher.page,
                     self.dispatcher.last_dispatch_meta,
                     list_anchor=getattr(self.dispatcher, "_list_tab_anchor", None),
+                    dispatch_ok=True,
                 )
                 self.dispatcher.page = fin.page
                 self.dispatcher.last_dispatch_meta = fin.meta
@@ -265,7 +342,10 @@ class RetryController:
                     reason = fin.message or "提交 click 已成功, 已恢复存活 tab"
                     self.console.print(f"  [green]✓ {reason}[/green]")
                     self.dispatcher.capture_page_state_if_needed(action)
-                    return RetryOutcome(True, True, reason, attempt, reason, last_selector)
+                    return RetryOutcome(
+                        True, True, reason, attempt, reason, last_selector,
+                        dispatch_ok=True, post_reason=reason, post_retries=post_retries,
+                    )
 
             post = upgrade_submit_post_result(
                 post, action.intent or "", self.dispatcher.last_dispatch_meta,
@@ -290,7 +370,7 @@ class RetryController:
                     action.force_selector = None
                     action.selector = None
                     action.resolve_hint = post.resolve_hint
-                    action.skip_acceleration = True
+                    action.skip_heuristics = True
                     exclude.clear()
                     self.console.print("  [cyan]↺ 已补选审核原因, 重试提交[/cyan]")
                     continue
@@ -360,7 +440,10 @@ class RetryController:
                 last_selector, exclude, dispatcher=self.dispatcher,
             )
 
-        return RetryOutcome(last_ok, False, last_msg, self.max_retries, last_reason, last_selector)
+        return RetryOutcome(
+            last_ok, False, last_msg, self.max_retries, last_reason, last_selector,
+            dispatch_ok=last_ok, post_reason=last_reason, post_retries=post_retries,
+        )
 
 
 def _submit_returned_to_list_success(
@@ -378,6 +461,7 @@ def _submit_returned_to_list_success(
         dispatcher.page,
         dispatch_meta,
         list_anchor=getattr(dispatcher, "_list_tab_anchor", None),
+        dispatch_ok=bool((dispatch_meta or {}).get("submit_click_ok")),
     )
     dispatcher.page = fin.page
     dispatcher.last_dispatch_meta = fin.meta
@@ -477,7 +561,7 @@ def _apply_retry(
         action.selector = None
         action.resolve_hint = resolve_hint if not forced else None
         action.exclude_selectors = list(exclude)
-    action.skip_acceleration = True
+    action.skip_heuristics = True
 
 
 def _merge_retry_plan(primary: "PostCheckResult", plan: "PostCheckResult") -> "PostCheckResult":

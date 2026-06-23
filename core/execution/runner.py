@@ -45,6 +45,10 @@ class ExecResult:
     code: Optional[str] = None
     resolved_html: Optional[str] = None
     post_check_ok: bool = True
+    dispatch_ok: Optional[bool] = None
+    post_check_reason: Optional[str] = None
+    optional_skipped: bool = False
+    post_retries: list[dict] = field(default_factory=list)
 
 
 class PlaywrightRunner:
@@ -92,6 +96,7 @@ class PlaywrightRunner:
         self.feature_titles = feature_titles or []
         self.screens_dir = self.out_dir / "截图"
         self.screens_dir.mkdir(parents=True, exist_ok=True)
+        self._last_active_role: Optional[str] = None
 
     def run_actions(self, actions: list[PlannedAction], case_id: str) -> list[ExecResult]:
         from ..readiness import should_run_readiness
@@ -148,6 +153,8 @@ class PlaywrightRunner:
             if new_page:
                 self.dispatcher.set_page(new_page)
                 current_role = actions[0].role
+                self._last_active_role = current_role
+                self.console.print(f"  [cyan]↻ 切换角色 → {actions[0].role}[/cyan]")
 
         # 按索引遍历, 就绪恢复动作插入到当前动作前, 保证最终 actions 列表包含完整步骤顺序
         idx = 0
@@ -183,6 +190,7 @@ class PlaywrightRunner:
                         self.dispatcher.set_page(new_page)
                         self.console.print(f"  [cyan]↻ 切换角色 → {action.role}[/cyan]")
                         current_role = action.role
+                        self._last_active_role = current_role
 
             # 步骤⑩ 就绪检查 (上步后校验通过则跳过, 推进类经 LLM 门控后仍检查)
             skip_main = False
@@ -197,6 +205,7 @@ class PlaywrightRunner:
                 ):
                     seq, idx, skip_main = self._run_readiness_with_insert(
                         action, case_id, results, seq, actions, idx,
+                        current_role=current_role or self._last_active_role,
                     )
 
             if skip_main:
@@ -290,6 +299,10 @@ class PlaywrightRunner:
                 ok = outcome.ok and outcome.post_ok
                 msg = outcome.message
                 post_ok = outcome.post_ok
+                dispatch_ok = outcome.dispatch_ok
+                post_reason = outcome.post_reason or outcome.reason
+                optional_skipped = outcome.optional_skipped
+                post_retries = list(outcome.post_retries or [])
                 # 重试耗尽仍失败: 就绪恢复 (如关弹窗) 后再次尝试本步骤
                 if not ok and self.pre_readiness_check:
                     rec = self._recover_and_retry(
@@ -301,6 +314,10 @@ class PlaywrightRunner:
                 # 未开启后校验或动作无需后校验时, 直接分发执行.
                 ok, msg = self.dispatcher.dispatch(action, case_id=case_id)
                 post_ok = ok
+                dispatch_ok = ok
+                post_reason = None
+                optional_skipped = False
+                post_retries = []
                 self.dispatcher.capture_page_state_if_needed(action)
                 # 断言失败不做 recovery 重试: 页面已可读则结果即结论 (见 readiness 断言规则).
 
@@ -337,6 +354,8 @@ class PlaywrightRunner:
                 screenshot=str(shot) if shot else None, message=msg,
                 selector=action.selector, locator_repr=action.selector,
                 resolved_html=msg if ok else None, post_check_ok=post_ok,
+                dispatch_ok=dispatch_ok, post_check_reason=post_reason,
+                optional_skipped=optional_skipped, post_retries=post_retries,
             )
 
             # 步骤⑲ 可观测性: 步骤结束
@@ -416,12 +435,24 @@ class PlaywrightRunner:
     def _run_readiness_with_insert(
         self, action: PlannedAction, case_id: str, results: list[ExecResult],
         seq: int, actions: list[PlannedAction], idx: int,
+        *,
+        current_role: Optional[str] = None,
     ) -> tuple[int, int, bool]:
         """就绪检查 + 恢复动作插入 actions 列表, 返回 (新 seq, 新 idx, skip_main)."""
         from ..readiness import should_run_readiness
+        from .login_recovery import filter_redundant_login_goto, recover_stuck_on_login_page
 
         if not should_run_readiness(action):
             return seq, idx, False
+
+        new_pg = recover_stuck_on_login_page(
+            self.dispatcher.page,
+            current_role,
+            self.page_switcher,
+            console=self.console,
+        )
+        if new_pg is not None:
+            self.dispatcher.set_page(new_pg)
 
         prior = actions[:idx]
         self._run_deterministic_pre_readiness(action, prior)
@@ -441,6 +472,10 @@ class PlaywrightRunner:
             return seq, idx, False
         if rdy.note:
             self.console.print(f"  [yellow]就绪检查: {rdy.note}[/yellow]")
+        if not rdy.recovery:
+            return seq, idx, False
+
+        rdy.recovery = filter_redundant_login_goto(rdy.recovery, self.dispatcher.page)
         if not rdy.recovery:
             return seq, idx, False
 
@@ -614,7 +649,7 @@ class PlaywrightRunner:
                             "selector": None,
                             "exclude_selectors": [],
                             "resolve_hint": None,
-                            "skip_acceleration": True,
+                            "skip_heuristics": True,
                         }
                     )
                     if self.post_step_check:
@@ -746,6 +781,10 @@ class PlaywrightRunner:
     def _render(self, case_id: str, results: list[ExecResult]) -> None:
         total_ms = sum(r.duration_ms for r in results)
         report_dir = self.out_dir / "报告"
+        locating_stats = None
+        resolver = getattr(self.dispatcher, "resolver", None)
+        if resolver is not None and hasattr(resolver, "case_locating_stats"):
+            locating_stats = resolver.case_locating_stats()
         try:
             from ..report import save_case_report
             save_case_report(
@@ -755,6 +794,7 @@ class PlaywrightRunner:
                 report_dir,
                 out_dir=self.out_dir,
                 observability=self.observability,
+                locating_stats=locating_stats,
                 watermark_cfg=self.watermark_cfg,
                 feature_titles=self.feature_titles,
             )

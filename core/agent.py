@@ -19,9 +19,11 @@ from .execution import ActionDispatcher, PlaywrightRunner
 from .execution.script_helpers import (
     bring_page_to_front,
     find_list_tab_anchor,
+    find_newest_non_anchor_tab,
     is_detail_submission_url,
     pick_role_handoff_page,
     recover_active_page,
+    _page_alive,
     _page_usable,
     _url_safe,
 )
@@ -31,12 +33,12 @@ from .execution.retry import RetryController
 from .llm import LLMAdapter, PromptLoader
 from .locating import (
     LLMElementDecider, LocatorResolver, SelectorCache, SelectorMemory,
-    StructureLearner,
+    CompositeStructureLearner,
 )
 from .observability import ObservabilityCollector
 from .output import FileManager
 from .parser import parse_case
-from .planning import ActionPlanner, strip_duplicate_menu_clicks
+from .planning import ActionPlanner, strip_duplicate_menu_clicks, sanitize_planned_roles
 from .planning.page_nav import should_preserve_page_on_case_start
 from .preprocess import PreconditionExpander, sort_cases
 from .parser import ExecutionBlock
@@ -52,6 +54,7 @@ from .session import Navigator, login
 from .skill_loader import load_skill_text, format_skills_for_decider
 from .variable_substitution import substitute_in_list, format_session_context
 from .execution.session_ops import enrich_session_actions
+from .execution.optional_step import tag_optional_actions_from_steps
 from .watermark import load_watermark_config
 from .report import build_report_data, save_batch_overview
 
@@ -90,14 +93,23 @@ class UITestAgent:
         # 【多系统扩展】Profile 管理器
         self.profile_mgr = ProfileManager(config)
 
-        # 步骤⑨ 智能加速层: L1 纯内存缓存, L2 文件记忆 (带 TTL)
+        # 步骤⑨ 智能加速层: L1 短期缓存 (30min TTL + 落盘), L2 长期记忆
         accel = self.root / "智能加速"
         accel_cfg = config.get("acceleration", {})
         l1_ttl = int(accel_cfg.get("l1_ttl_minutes", 30)) * 60
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
-        self.cache = SelectorCache(ttl_s=l1_ttl)
+        self.cache = SelectorCache(
+            ttl_s=l1_ttl,
+            path=accel / "选择器缓存.json",
+            self_heal=bool(accel_cfg.get("l1_self_heal", True)),
+        )
         self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
-        self.learner = StructureLearner(accel / "页面结构学习.json")
+        self.learner = CompositeStructureLearner(
+            intent_path=accel / "页面结构学习.json",
+            accel_dir=accel,
+            intent_fallback=bool(accel_cfg.get("l4_intent_fallback", True)),
+            similarity_threshold=float(accel_cfg.get("l4_similarity_threshold", 0.6)),
+        )
         self.decider = LLMElementDecider(
             self.llm, self.prompts,
             skill_prompt=skill_decider_prompt,
@@ -172,6 +184,7 @@ class UITestAgent:
                         case, browser, fm, biz=biz, case_file=test_file,
                         session_vars=session_vars, role_contexts=role_contexts,
                     ))
+                    self.cache.save()
                     self.memory.save()
                     self.learner.save()
             finally:
@@ -188,9 +201,13 @@ class UITestAgent:
                             pass
                 browser.close()
 
-        # 持久化智能加速层 (L1 内存, L2记忆+L4学习落盘)
+        # 持久化智能加速层 (L1 短期缓存 + L2 记忆 + L4 学习)
+        self.cache.save()
         self.memory.save()
         self.learner.save()
+        stats = self.resolver.acceleration_stats()
+        if stats:
+            self.console.print(f"[dim]智能加速统计: {stats}[/dim]")
 
         passed = sum(1 for r in case_results if r["passed"])
         failed = len(case_results) - passed
@@ -204,6 +221,7 @@ class UITestAgent:
                 watermark_cfg=self.watermark_cfg,
                 execution_time=batch_duration,
                 batch_timestamp=fm.batch_dir.name,
+                locating_stats=stats,
             )
             self.console.print(f"[cyan]批次报告: {ov_html}[/cyan]")
         except Exception as e:  # noqa: BLE001
@@ -292,20 +310,52 @@ class UITestAgent:
         if role_contexts is None:
             role_contexts: dict[str, Any] = {}  # role → (context, page, primary_page)
 
+        preserve_page_on_start = (
+            self.runner_cfg.get("cross_case_session", False)
+            and should_preserve_page_on_case_start(case.preconditions, case.steps)
+        )
+
         def _get_page_for_role(role: str) -> Any:
             """获取或创建角色对应的浏览器页面并登录."""
             if role in role_contexts:
                 ctx, pg, primary = role_contexts[role]
-                pg = pick_role_handoff_page(ctx, pg, primary_page=primary)
-                if not _page_usable(pg):
-                    pg, _ = recover_active_page(pg, prefer=primary)
-                anchor = find_list_tab_anchor(pg, primary if primary is not pg else None)
-                if anchor is not None:
-                    cur_u = _url_safe(pg) if _page_usable(pg) else ""
-                    if not _page_usable(pg) or is_detail_submission_url(cur_u):
+                list_anchor = find_list_tab_anchor(pg, primary if primary is not pg else None)
+                pg = pick_role_handoff_page(
+                    ctx, pg,
+                    list_anchor=list_anchor,
+                    primary_page=primary,
+                    prefer_current=preserve_page_on_start,
+                    prefer_detail=preserve_page_on_start,
+                    reason="case_start",
+                )
+                if not _page_usable(pg) and _page_alive(pg):
+                    pg, _ = recover_active_page(pg, prefer=pg)
+                elif not _page_usable(pg):
+                    pg, _ = recover_active_page(pg, prefer=list_anchor or primary)
+                if not preserve_page_on_start:
+                    anchor = find_list_tab_anchor(pg, primary if primary is not pg else None)
+                    if anchor is not None:
+                        cur_u = _url_safe(pg) if _page_alive(pg) else ""
+                        if not _page_alive(pg) or is_detail_submission_url(cur_u):
+                            self.console.print(
+                                f"  [dim]↳ 非保留模式切列表 anchor → "
+                                f"{(_url_safe(anchor) or '')[:100]}[/dim]"
+                            )
+                            pg = anchor
+                elif not _page_usable(pg) and not _page_alive(pg):
+                    anchor = find_list_tab_anchor(pg, primary if primary is not pg else None)
+                    if anchor is not None:
                         pg = anchor
                 role_contexts[role] = (ctx, pg, primary)
                 bring_page_to_front(pg)
+                try:
+                    handoff_url = pg.url or ""
+                except Exception:
+                    handoff_url = ""
+                if preserve_page_on_start and handoff_url:
+                    self.console.print(
+                        f"  [dim]↳ 跨用例保留页 → {handoff_url[:100]}[/dim]"
+                    )
                 return pg
             ctx = browser.new_context(viewport=self.pw_cfg.get("viewport"))
             pg = ctx.new_page()
@@ -400,6 +450,11 @@ class UITestAgent:
                         page = _get_page_for_role(primary_role)
                         self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
 
+                actions = sanitize_planned_roles(
+                    actions, role_keys, primary_role=primary_role, console=self.console,
+                )
+                actions = tag_optional_actions_from_steps(actions, case.steps)
+
                 if not actions:
                     self.console.print("[yellow]预规划动作为空, 跳过执行[/yellow]")
                     return self._case_result_summary(case, [], False, case_start)
@@ -473,6 +528,11 @@ class UITestAgent:
                         page = _get_page_for_role(primary_role)
                         self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
 
+                actions = sanitize_planned_roles(
+                    actions, role_keys, primary_role=primary_role, console=self.console,
+                )
+                actions = tag_optional_actions_from_steps(actions, case.steps)
+
                 if not actions:
                     self.console.print("[yellow]规划结果为空, 跳过执行[/yellow]")
                     return self._case_result_summary(case, [], False, case_start)
@@ -504,13 +564,19 @@ class UITestAgent:
                 if sync_role and sync_role in role_contexts:
                     ctx, _, primary = role_contexts[sync_role]
                     list_anchor = getattr(dispatcher, "_list_tab_anchor", None)
+                    has_child = find_newest_non_anchor_tab(
+                        ctx, list_anchor, dispatcher.page,
+                    ) is not None
                     handoff = pick_role_handoff_page(
                         ctx,
                         dispatcher.page,
                         list_anchor=list_anchor,
                         primary_page=primary,
+                        prefer_current=True,
+                        prefer_detail=has_child,
+                        reason="session_sync",
                     )
-                    if not _page_usable(handoff):
+                    if not _page_alive(handoff):
                         handoff, _ = recover_active_page(
                             handoff, prefer=list_anchor or primary,
                         )
@@ -597,7 +663,9 @@ class UITestAgent:
         report_data = build_report_data(
             case.case_id, results, total_ms,
             feature_titles=list(case.module_path or []),
+            locating_stats=self.resolver.case_locating_stats(),
         ) if results else {"details": [], "total_steps": 0, "passed": 0, "failed": 0}
+        locating = report_data.get("locating_stats") or {}
         return {
             "case_id": case.case_id,
             "passed": passed,
@@ -608,6 +676,7 @@ class UITestAgent:
             "step_success_rate": step_rate,
             "execution_time": exec_time,
             "details": report_data.get("details", []),
+            "locating_stats": locating,
         }
 
     def _print_plan_raw(self, raw: Any) -> None:
@@ -653,8 +722,10 @@ class UITestAgent:
         case: Any = None,
     ) -> tuple[ActionDispatcher, PlaywrightRunner]:
         self.resolver.set_trace(trace)
+        self.resolver.begin_case_stats()
         knowledge = biz.get_knowledge() if biz else {}
         rctx = self._make_readiness_case_context(case, biz) if case else None
+        accel_cfg = self.config.get("acceleration", {})
         dispatcher = ActionDispatcher(
             page, self.resolver,
             self.pw_cfg.get("default_timeout_ms", 10000),
@@ -665,6 +736,8 @@ class UITestAgent:
             api_profile=profile if profile.apis else None,
             session_ops_cfg=knowledge.get("session_ops"),
             page_capture=knowledge.get("page_capture"),
+            page_ready_guard=bool(accel_cfg.get("page_ready_guard", True)),
+            dialog_retrigger=bool(accel_cfg.get("dialog_retrigger", True)),
         )
         if session_vars:
             dispatcher.api_context.update(session_vars)
@@ -758,7 +831,6 @@ class UITestAgent:
 
             block_actions = strip_duplicate_menu_clicks(block_actions, case.module_path)
             block_actions = enrich_session_actions(block_actions, session_vars, session_ops_cfg)
-            self._print_action_list(block_actions, f"块 {block_no} 规划")
 
             if primary_role is None and block_actions:
                 primary_role = infer_primary_role(case, block_actions, role_keys)
@@ -768,6 +840,15 @@ class UITestAgent:
                     if session.roles and primary_role != first_role:
                         page = _get_page_for_role(primary_role)
                         self.console.print(f"  [cyan]↻ 切换至用例主角色 → {primary_role}[/cyan]")
+
+            block_actions = sanitize_planned_roles(
+                block_actions,
+                role_keys,
+                primary_role=primary_role,
+                console=self.console,
+            )
+            block_actions = tag_optional_actions_from_steps(block_actions, block.operations)
+            self._print_action_list(block_actions, f"块 {block_no} 规划")
 
             if dispatcher is None:
                 dispatcher, runner = self._build_runner(
@@ -789,6 +870,8 @@ class UITestAgent:
 
             results = runner.run_actions(block_actions, case.case_id)
             page = dispatcher.page
+            if primary_role:
+                runner._last_active_role = primary_role
             if not results or not all(r.status == "PASS" for r in results):
                 passed = False
                 self.console.print(f"  [red]块 {block_no} 执行失败, 停止后续块[/red]")

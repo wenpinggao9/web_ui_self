@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "saved_at": 1782123404.1989172,
+  "saved_at": 1782179646.046156,
   "page_entries": {
     "/video/all-question|click|在筛选区点击来源下拉框": {
       "nth": 0,
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"来源\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 3,
+      "success_count": 11,
       "created_at": 1782121380.9641411,
-      "updated_at": 1782123190.067843,
+      "updated_at": 1782178862.050957,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -23,9 +23,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"策略\")])[1]",
       "method": "css",
-      "success_count": 3,
+      "success_count": 11,
       "created_at": 1782121397.6158369,
-      "updated_at": 1782123201.225045,
+      "updated_at": 1782178872.9696121,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -39,9 +39,9 @@
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学段\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 3,
+      "success_count": 11,
       "created_at": 1782121410.135294,
-      "updated_at": 1782123212.363992,
+      "updated_at": 1782178883.675325,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -55,9 +55,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]",
       "method": "css",
-      "success_count": 2,
+      "success_count": 10,
       "created_at": 1782121426.30214,
-      "updated_at": 1782123063.3334122,
+      "updated_at": 1782178894.7457511,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -71,9 +71,9 @@
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学科\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 2,
+      "success_count": 10,
       "created_at": 1782121437.823912,
-      "updated_at": 1782123074.649892,
+      "updated_at": 1782178904.72518,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -87,9 +87,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"数学\")])[1]",
       "method": "css",
-      "success_count": 2,
+      "success_count": 10,
       "created_at": 1782121454.60553,
-      "updated_at": 1782123085.915603,
+      "updated_at": 1782178915.014994,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -106,9 +106,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=button[name=\"提 交\"]",
-      "success_count": 2,
+      "success_count": 6,
       "created_at": 1782121581.957115,
-      "updated_at": 1782123344.888959,
+      "updated_at": 1782179044.049758,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -122,10 +122,370 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"小学\")])[1]",
       "method": "css",
-      "success_count": 1,
+      "success_count": 2,
       "created_at": 1782123227.7173781,
-      "updated_at": 1782123227.7173781,
+      "updated_at": 1782172119.952841,
       "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击侧栏菜单待前审进入待前审列表页面": {
+      "method": "role",
+      "role": "menuitem",
+      "name": "待前审",
+      "exact": true,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=menuitem[name=\"待前审\"]",
+      "success_count": 3,
+      "created_at": 1782129762.0115871,
+      "updated_at": 1782171642.445708,
+      "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "menuitem",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|点击提交按钮查看结果": {
+      "method": "role",
+      "role": "button",
+      "name": "提 交",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"提 交\"]",
+      "success_count": 4,
+      "created_at": 1782138143.025463,
+      "updated_at": 1782178929.2879329,
+      "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
+    },
+    "/video/welcome|click|点击侧栏菜单全部题目进入全部题目页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"全部题目\"",
+      "method": "text",
+      "name": "全部题目",
+      "exact": true,
+      "success_count": 4,
+      "created_at": 1782142954.8364859,
+      "updated_at": 1782178851.238243,
+      "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|点击提交按钮": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"提 交\"]",
+      "method": "role",
+      "role": "button",
+      "name": "提 交",
+      "exact": false,
+      "success_count": 4,
+      "created_at": 1782143045.139819,
+      "updated_at": 1782179156.635988,
+      "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/welcome|click|点击全部题目": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"全部题目\"",
+      "method": "text",
+      "name": "全部题目",
+      "exact": true,
+      "success_count": 2,
+      "created_at": 1782144885.995884,
+      "updated_at": 1782174887.4253461,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|点击工单id作为搜索类型": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"工单ID\"",
+      "method": "text",
+      "name": "工单ID",
+      "exact": true,
+      "success_count": 4,
+      "created_at": 1782144900.1370492,
+      "updated_at": 1782179192.0096698,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|fill|在筛选区搜索框输入工单id": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "input#searchText",
+      "method": "css",
+      "success_count": 6,
+      "created_at": 1782138240.9022899,
+      "updated_at": 1782179205.7590232,
+      "component_library": "ant-design",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/welcome|click|点击侧栏菜单待前审进入待前审列表页": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"待前审\"",
+      "method": "text",
+      "name": "待前审",
+      "exact": true,
+      "success_count": 2,
+      "created_at": 1782146569.792053,
+      "updated_at": 1782174960.159202,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击领取按钮": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "button:has-text(\"领取\")",
+      "method": "role",
+      "role": "button",
+      "name": "领取",
+      "exact": false,
+      "success_count": 4,
+      "created_at": 1782146590.337204,
+      "updated_at": 1782178994.550974,
+      "component_library": "ant-design",
+      "selector_type": "role",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
+    },
+    "/video/welcome|click|点击侧栏菜单待前审进入待前审页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"待前审\"",
+      "method": "text",
+      "name": "待前审",
+      "exact": true,
+      "success_count": 4,
+      "created_at": 1782146813.4398952,
+      "updated_at": 1782178977.049166,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|点击全部题目": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"全部题目\"",
+      "method": "text",
+      "name": "全部题目",
+      "exact": true,
+      "success_count": 2,
+      "created_at": 1782172484.3599591,
+      "updated_at": 1782179180.89807,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击待前审页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"待前审\"",
+      "method": "text",
+      "name": "待前审",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782172549.43009,
+      "updated_at": 1782172549.43009,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击查看": {
+      "method": "role",
+      "role": "button",
+      "name": "查 看",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"查 看\"]",
+      "success_count": 2,
+      "created_at": 1782172626.22586,
+      "updated_at": 1782179310.0900228,
+      "component_library": "ant-design",
+      "selector_type": "role",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
+    },
+    "/video/detail|click|点击多题选项": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"多题\"",
+      "method": "text",
+      "name": "多题",
+      "exact": true,
+      "success_count": 2,
+      "created_at": 1782172644.151654,
+      "updated_at": 1782179323.86797,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击已审核页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"已审核\"",
+      "method": "text",
+      "name": "已审核",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782172736.983582,
+      "updated_at": 1782172736.983582,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/already-self|click|点击最近一条数据的查看": {
+      "method": "role",
+      "role": "button",
+      "name": "查 看",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"查 看\"]",
+      "success_count": 1,
+      "created_at": 1782172752.177461,
+      "updated_at": 1782172752.177461,
+      "component_library": "ant-design",
+      "selector_type": "role",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击侧栏菜单待前审进入待前审页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"待前审\"",
+      "method": "text",
+      "name": "待前审",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782179244.245891,
+      "updated_at": 1782179244.245891,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击已审核页面标签进入已审核页面": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"已审核\"",
+      "method": "text",
+      "name": "已审核",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782179397.7167401,
+      "updated_at": 1782179397.7167401,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|点击审核历史": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"审核历史\"",
+      "method": "text",
+      "name": "审核历史",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782179485.832546,
+      "updated_at": 1782179485.832546,
+      "component_library": "ant-design",
+      "selector_type": "css",
       "node_signature": {
         "tag": "",
         "text": "",
@@ -134,5 +494,15 @@
       }
     }
   },
-  "generic_entries": {}
+  "generic_entries": {
+    "ant-design|dropdown_option": {
+      "selector_template": "text=\"{text}\"",
+      "selector_type": "css",
+      "component_library": "ant-design",
+      "component_type": "dropdown_option",
+      "success_count": 1,
+      "created_at": 1782172644.151726,
+      "updated_at": 1782172644.151726
+    }
+  }
 }

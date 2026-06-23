@@ -1,10 +1,12 @@
 """步骤⑨ 元素定位五级降级链编排器.
 
-顺序: L1缓存 → L2记忆 → L3规则 → L4学习 → L5大模型. 逐级降级, 命中即返回.
+顺序: L1缓存 → L2记忆 → L3规则(+build_* skill) → L4学习(Composite) → L5大模型.
+- L2 内含通用模板子策略 (lookup_generic); L1 含自愈分支.
+- L1/L2 可在 DOM 抽取前短路命中 (dispatcher try_acceleration_only).
 - L1/L2 命中后校验可用; 失效则自愈, 自愈失败清除条目降级.
-- L3 规则: 组件类型推断 → build_* skill, 不经 LLM.
-- L4 学习: 相似意图 Jaccard 匹配, 跨批次持久化.
-- L5 成功后回填 L1+L2+L4, 下次同页面不再需要大模型.
+- L3 规则: IntentRuleEngine + build_* skill, 不经 LLM.
+- L4 学习: CompositeStructureLearner (Jaccard + 页面结构), 跨批次持久化.
+- L5: LLM → 本地 fallback → 二次 LLM (confidence≤0.3); 成功后回填 L1+L2+L4.
 - 步骤⑬ 失败连锁清理: evict(缓存) + penalize(记忆+学习).
 """
 from __future__ import annotations
@@ -24,13 +26,16 @@ from ..dom.semantic_dom import (
 from .cache import SelectorCache
 from .llm_decider import LLMElementDecider
 from .intent_route import is_ant_radio_option, is_checkbox, is_tree_checkbox
+from .intent_rule_engine import IntentRuleEngine
 from .memory import SelectorMemory
 from .node_refiner import refine_node_index
 from .normalize import normalize_intent, normalize_url, skip_locator_persistence, validate_selector
 from .playwright_api import info_key
 from .resolve_trace import ResolveChain
-from .self_heal import heal
+from .selector_type import infer_selector_type
+from .composite_learner import CompositeStructureLearner
 from .structure_learner import StructureLearner
+from .locate_observability import summarize_locating_stats
 from .intent_window import pick_intent_window_indices
 from .skill_resolver import (
     build_selector_via_skill,
@@ -113,7 +118,8 @@ class LocatorResolver:
         decider: LLMElementDecider,
         cache: Optional[SelectorCache] = None,
         memory: Optional[SelectorMemory] = None,
-        learner: Optional[StructureLearner] = None,
+        learner: Optional[StructureLearner | CompositeStructureLearner] = None,
+        rule_engine: Optional[IntentRuleEngine] = None,
         console: Optional[Console] = None,
         *,
         dom_limit: int = 80,
@@ -123,12 +129,58 @@ class LocatorResolver:
         self.cache = cache
         self.memory = memory
         self.learner = learner
+        self.rule_engine = rule_engine if rule_engine is not None else IntentRuleEngine()
         self.console = console or Console()
         self.dom_limit = max(1, int(dom_limit))
         self.intent_window = bool(intent_window)
         self._trace: Optional[Any] = None
         self._framework_selectors: Optional[dict[str, str]] = None
         self.last_chain: Optional[ResolveChain] = None
+        self._resolve_hits: dict[str, int] = {}
+        self._case_stats_baseline: Optional[dict[str, Any]] = None
+
+    def begin_case_stats(self) -> None:
+        """用例开始时快照, 供 case_locating_stats 计算本用例增量."""
+        decider_snap: dict[str, int] = {}
+        if self.decider is not None and hasattr(self.decider, "stats_snapshot"):
+            decider_snap = self.decider.stats_snapshot()
+        self._case_stats_baseline = {
+            "resolve_hits": dict(self._resolve_hits),
+            "decider": decider_snap,
+        }
+
+    def case_locating_stats(self) -> dict[str, Any]:
+        """本用例五级定位统计 (相对 begin_case_stats 增量 + 模块累计)."""
+        from .locate_observability import counter_delta, summarize_locating_stats
+
+        baseline = self._case_stats_baseline or {}
+        resolve_delta = counter_delta(
+            baseline.get("resolve_hits") or {},
+            self._resolve_hits,
+        )
+        decider_delta: dict[str, Any] = {}
+        if self.decider is not None and hasattr(self.decider, "stats_snapshot"):
+            raw = counter_delta(
+                baseline.get("decider") or {},
+                self.decider.stats_snapshot(),
+            )
+            if raw:
+                calls = raw.get("llm_calls", 0) + raw.get("retry_llm_calls", 0)
+                decider_delta = {
+                    **raw,
+                    "total_llm_calls": calls,
+                    "fallback_rate": round(raw.get("fallback_hits", 0) / calls * 100, 1) if calls else 0.0,
+                }
+        return summarize_locating_stats(
+            cache=self.cache,
+            memory=self.memory,
+            rule_engine=self.rule_engine,
+            learner=self.learner,
+            decider=self.decider,
+            resolve_hits=resolve_delta or None,
+            decider_stats=decider_delta or None,
+            scope="case",
+        )
 
     def set_trace(self, trace: Optional[Any]) -> None:
         """注入 ExecutionTrace, 用于打印五级定位链路."""
@@ -137,6 +189,113 @@ class LocatorResolver:
     def set_framework_selectors(self, selectors: Optional[dict[str, str]]) -> None:
         """注入从 skill.md 加载的框架专属选择器."""
         self._framework_selectors = selectors
+
+    def try_acceleration_only(
+        self,
+        page: Any,
+        intent: str,
+        action_type: str,
+        exclude: Optional[list[str]] = None,
+        semantic_items: Optional[list[dict]] = None,
+        *,
+        skip_heuristics: bool = False,
+    ) -> Optional[dict]:
+        """仅 L1/L2 (含 L2 通用模板); L1 命中时跳过 DOM 抽取 (对齐 V3 cache 短路)."""
+        chain = ResolveChain(
+            intent=intent,
+            action_type=action_type,
+            hint=None,
+            exclude=list(exclude or []),
+        )
+        self.last_chain = chain
+        if skip_locator_persistence(action_type):
+            return None
+        hit = self._resolve_acceleration_layers(
+            page, intent, action_type, set(exclude or []),
+            semantic_items, skip_heuristics, chain,
+        )
+        if hit:
+            self._emit_chain(chain)
+        return hit
+
+    def _resolve_acceleration_layers(
+        self,
+        page: Any,
+        intent: str,
+        action_type: str,
+        excl: set[str],
+        semantic_items: Optional[list[dict]],
+        skip_heuristics: bool,
+        chain: ResolveChain,
+    ) -> Optional[dict]:
+        url = _url(page)
+
+        if self.cache:
+            info = self.cache.lookup(page, url, action_type, intent)
+            if not info:
+                chain.add("L1缓存", "未命中")
+            elif info_key(info) in excl:
+                chain.add("L1缓存", "跳过(已排除)", info_key(info))
+            else:
+                from_cache_heal = bool(info.pop("_from_cache_heal", False))
+                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                    page, intent, info, semantic_items,
+                )
+                if upgraded:
+                    label = "L1自愈" if from_cache_heal else "L1缓存"
+                    chain.add(label, f"{upgrade_label}升级", info_key(info))
+                    self.cache.put(url, action_type, intent, info, node=info)
+                if from_cache_heal:
+                    chain.mark_hit("L1缓存", info_key(info), note="自愈")
+                    return self._tag_and_track(info, "L1缓存")
+                chain.mark_hit("L1缓存", info_key(info))
+                return self._tag_and_track(info, "L1缓存")
+
+        if self.memory:
+            info = self.memory.lookup_validate(page, url, action_type, intent)
+            if not info:
+                chain.add("L2记忆", "未命中")
+            elif info_key(info) in excl:
+                chain.add("L2记忆", "跳过(已排除)", info_key(info))
+                info = self.memory.get(url, action_type, intent)
+                if info:
+                    info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                        page, intent, info, semantic_items,
+                    )
+                    self._backfill_l1(url, action_type, intent, info)
+                    chain.mark_hit("L2记忆", info_key(info))
+                    return self._tag_and_track(info, "L2记忆")
+            else:
+                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
+                    page, intent, info, semantic_items,
+                )
+                if upgraded:
+                    chain.add("L2记忆", f"{upgrade_label}升级", info_key(info))
+                self._backfill_l1(url, action_type, intent, info)
+                chain.mark_hit("L2记忆", info_key(info))
+                return self._tag_and_track(info, "L2记忆")
+
+        if self.memory and not skip_heuristics:
+            gen_items = semantic_items
+            if not gen_items:
+                gen_items = extract_semantic_items(
+                    page, dialog_first=True, stable=True,
+                    selectors=self._framework_selectors, profile="locate",
+                )
+            gen_info = self.memory.lookup_generic(
+                page, action_type, intent, gen_items,
+                component_library=self._detect_component_library(),
+            )
+            if not gen_info:
+                chain.add("L2记忆", "通用·未命中")
+            elif info_key(gen_info) in excl:
+                chain.add("L2记忆", "通用·跳过(已排除)", info_key(gen_info))
+            else:
+                self._backfill_l1(url, action_type, intent, gen_info)
+                chain.mark_hit("L2记忆", info_key(gen_info), note="通用模板")
+                return self._tag_and_track(gen_info, "L2记忆")
+
+        return None
 
     def resolve(
         self,
@@ -150,6 +309,8 @@ class LocatorResolver:
         semantic_items: Optional[list[dict]] = None,
         dom_source: str = "",
         skip_acceleration: bool = False,
+        skip_heuristics: bool = False,
+        acceleration_prefetched: bool = False,
         feature_titles_menu_nav: bool = False,
         feature_titles: Optional[list[str]] = None,
     ) -> Optional[dict]:
@@ -168,70 +329,20 @@ class LocatorResolver:
             self._emit_chain(chain)
             return None
 
-        # L1 缓存
-        if self.cache and not skip_acceleration:
-            info = self.cache.get(url, action_type, intent)
-            if not info:
-                chain.add("L1缓存", "未命中")
-            elif info_key(info) in excl:
-                chain.add("L1缓存", "跳过(已排除)", info_key(info))
-            elif validate_selector(page, info):
-                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
-                    page, intent, info, semantic_items,
-                )
-                if upgraded:
-                    chain.add("L1缓存", f"{upgrade_label}升级", info_key(info))
-                    if self.cache:
-                        self.cache.put(url, action_type, intent, info)
-                chain.mark_hit("L1缓存", info_key(info))
+        if not skip_acceleration:
+            hit = self._resolve_acceleration_layers(
+                page, intent, action_type, excl, semantic_items,
+                skip_heuristics, chain,
+            )
+            if hit:
                 self._emit_chain(chain)
-                return self._tag(info, "L1缓存")
-            else:
-                chain.add("L1缓存", "校验失败", info["selector"])
-                healed = heal(page, info)
-                if healed:
-                    chain.add("L1自愈", "命中", healed["selector"])
-                    self.cache.put(url, action_type, intent, healed)
-                    chain.mark_hit("L1自愈", healed["selector"])
-                    self._emit_chain(chain)
-                    return self._tag(healed, "L1自愈")
-                chain.add("L1自愈", "失败", info["selector"])
-                self.cache.evict(url, action_type, intent)
+                return hit
         else:
-            if skip_acceleration:
-                chain.add("L1缓存", "跳过(重试)")
-            else:
-                chain.add("L1缓存", "未启用")
-
-        # L2 记忆库
-        if self.memory and not skip_acceleration:
-            info = self.memory.lookup_validate(page, url, action_type, intent)
-            if not info:
-                chain.add("L2记忆", "未命中")
-            elif info_key(info) in excl:
-                chain.add("L2记忆", "跳过(已排除)", info_key(info))
-                info = self.memory.get(url, action_type, intent)  # 不排除的原始值
-                if info:
-                    info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
-                        page, intent, info, semantic_items,
-                    )
-                    chain.mark_hit("L2记忆", info_key(info))
-                    self._emit_chain(chain)
-                    return self._tag(info, "L2记忆")
-            else:
-                info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
-                    page, intent, info, semantic_items,
-                )
-                if upgraded:
-                    chain.add("L2记忆", f"{upgrade_label}升级", info_key(info))
-                chain.mark_hit("L2记忆", info_key(info))
-                self._emit_chain(chain)
-                return self._tag(info, "L2记忆")
-        else:
-            if skip_acceleration:
-                chain.add("L2记忆", "跳过(重试)")
-            else:
-                chain.add("L2记忆", "未启用")
+            prefetched_note = "已在短路路径尝试" if acceleration_prefetched else "跳过(重试)"
+            chain.add("L1缓存", prefetched_note)
+            chain.add("L2记忆", prefetched_note)
+            if skip_heuristics:
+                chain.add("L2记忆", f"通用·{prefetched_note}")
 
         # L3 大模型 — 优先复用已抽取的 semantic_items (共用 DOM)
         if semantic_items:
@@ -244,25 +355,44 @@ class LocatorResolver:
             )
             dom_note_prefix = "实时"
 
-        # 规则 skill 扫完整 DOM; LLM 用意图窗口或前 N 条
+        # 规则: V3 IntentRuleEngine → skill; LLM 用意图窗口或前 N 条
         rule_items = source_items
-        rule_info = self._try_rule_skill_resolve(
-            page, intent, action_type, rule_items, excl, chain,
-        )
-        if rule_info is not None:
-            self._backfill(url, action_type, intent, rule_info)
-            chain.mark_hit("L3规则", rule_info.get("selector") or "")
-            self._emit_chain(chain)
-            return self._tag(rule_info, "L3规则")
+        if not skip_heuristics:
+            intent_rule_info = self._try_intent_rule_resolve(
+                page, intent, action_type, rule_items, excl, chain,
+            )
+            if intent_rule_info is not None:
+                self._backfill(url, action_type, intent, intent_rule_info, semantic_items=rule_items)
+                chain.mark_hit("L3规则", intent_rule_info.get("selector") or "")
+                self._emit_chain(chain)
+                return self._tag_and_track(intent_rule_info, "L3规则")
 
-        # L4 学习: 相似意图 Jaccard 匹配 (跨批次持久化)
-        if self.learner and not skip_acceleration:
-            learn_info = self.learner.resolve(page, url, action_type, intent)
+            rule_info = self._try_rule_skill_resolve(
+                page, intent, action_type, rule_items, excl, chain,
+            )
+            if rule_info is not None:
+                self._backfill(url, action_type, intent, rule_info, semantic_items=rule_items)
+                chain.mark_hit("L3规则", rule_info.get("selector") or "")
+                self._emit_chain(chain)
+                return self._tag_and_track(rule_info, "L3规则")
+        else:
+            chain.add("L3规则", "跳过(重试)")
+
+        # L4 学习: PageStructureLearner + intent Jaccard fallback
+        # skip_acceleration 仅跳过 L1/L2 重复查找; L4 仍应执行 (对齐 V3)
+        if self.learner and not skip_heuristics:
+            learn_info = self.learner.resolve(
+                page, url, action_type, intent, semantic_items=source_items,
+            )
             if learn_info is not None:
+                self._backfill(
+                    url, action_type, intent, learn_info, semantic_items=source_items,
+                )
                 chain.mark_hit("L4学习", learn_info.get("selector") or "")
                 self._emit_chain(chain)
-                return self._tag(learn_info, "L4学习")
-        elif self.learner and skip_acceleration:
+                return self._tag_and_track(learn_info, "L4学习")
+            chain.add("L4学习", "未命中")
+        elif self.learner and skip_heuristics:
             chain.add("L4学习", "跳过(重试)")
         elif not self.learner:
             chain.add("L4学习", "未启用")
@@ -317,7 +447,7 @@ class LocatorResolver:
             chain.add("L5大模型", "跳过导航", note=result.reason[:80] if result.reason else "")
             chain.mark_hit("L5大模型", "__SKIP_NAV__")
             self._emit_chain(chain)
-            return self._tag(
+            return self._tag_and_track(
                 {"method": "css", "selector": "__SKIP_NAV__", "_skip_navigation": True},
                 "L5大模型",
             )
@@ -335,6 +465,7 @@ class LocatorResolver:
                     note=result.skill_name or "recommended_selector",
                 )
                 info = skill_info
+                info["_from_skill"] = True
 
         if info is None and result.skill_name and result.skill_name.startswith("build_"):
             sel = build_selector_via_skill(
@@ -347,6 +478,7 @@ class LocatorResolver:
                 if info_key(skill_info) not in excl_set:
                     chain.add("L3Skill", "命中", info_key(skill_info), note=result.skill_name)
                     info = skill_info
+                    info["_from_skill"] = True
 
         if info is None and llm_index is not None and llm_index >= 0:
             refined_idx, skill_name = refine_node_index(
@@ -367,6 +499,7 @@ class LocatorResolver:
                     if info_key(skill_info) not in excl_set and validate_selector(page, skill_info):
                         chain.add("L3Skill", "命中", info_key(skill_info), note="auto_skill")
                         info = skill_info
+                        info["_from_skill"] = True
                 if info is None:
                     info = build_locator_info(llm_items[llm_index])
                     info = dict(info)
@@ -374,13 +507,52 @@ class LocatorResolver:
         if info:
             note = f"index={llm_index}" if llm_index is not None else ""
             chain.add("L5大模型", "命中", info["selector"], note)
-            self._backfill(url, action_type, intent, info)
+            self._backfill(url, action_type, intent, info, semantic_items=source_items)
             chain.mark_hit("L5大模型", info["selector"])
             self._emit_chain(chain)
-            return self._tag(info, "L5大模型")
+            return self._tag_and_track(info, "L5大模型")
         chain.add("L5大模型", "未命中", note="index=-1/排除/调用失败")
         self._emit_chain(chain)
         return None
+
+    def _backfill_l1(
+        self,
+        url: str,
+        action_type: str,
+        intent: str,
+        info: dict,
+    ) -> None:
+        """L2 命中后回填 L1 (对齐 V3 selector_memory → selector_cache)."""
+        if self.cache and info:
+            self.cache.put(url, action_type, intent, info, node=info)
+            self.cache.touch(url, action_type, intent)
+
+    def _try_intent_rule_resolve(
+        self,
+        page: Any,
+        intent: str,
+        action_type: str,
+        items: list[dict],
+        excl: set[str],
+        chain: ResolveChain,
+    ) -> Optional[dict]:
+        """L3: V3 IntentRuleEngine 确定性规则."""
+        if not items:
+            return None
+        sel = self.rule_engine.resolve(page, intent, action_type, items)
+        if not sel:
+            chain.add("L3规则", "未命中", note="intent_rule_engine")
+            return None
+        info = info_from_recommended_selector(sel)
+        if info_key(info) in excl or not validate_selector(page, info):
+            chain.add(
+                "L3规则", "未命中",
+                note=self.rule_engine.last_matched_rule() or "intent_rule_engine",
+            )
+            return None
+        rule_name = self.rule_engine.last_matched_rule() or "intent_rule_engine"
+        chain.add("L3规则", "命中", info_key(info), note=rule_name)
+        return info
 
     def _try_rule_skill_resolve(
         self,
@@ -467,6 +639,7 @@ class LocatorResolver:
             llm_called=chain.llm_called,
             hit_level=chain.hit_level,
             hit_selector=chain.hit_selector,
+            hit_note=chain.hit_note,
         )
 
     def _detect_component_library(self) -> str:
@@ -483,7 +656,15 @@ class LocatorResolver:
         return "generic"
 
     # ---------- 回填 ----------
-    def _backfill(self, url: str, action_type: str, intent: str, info: dict) -> None:
+    def _backfill(
+        self,
+        url: str,
+        action_type: str,
+        intent: str,
+        info: dict,
+        *,
+        semantic_items: Optional[list[dict]] = None,
+    ) -> None:
         if skip_locator_persistence(action_type):
             return
         # 宽松子串匹配 (text=X 不带引号) 容易误匹配, 不回填到缓存,
@@ -506,19 +687,40 @@ class LocatorResolver:
         wrote_l4 = bool(self.learner)
         l2_score: Optional[int] = None
         if self.cache:
-            self.cache.put(url, action_type, intent, info)
+            self.cache.put(url, action_type, intent, info, node=info)
         if self.memory:
             comp_lib = self._detect_component_library()
+            sel_type = infer_selector_type(
+                info,
+                source=str(info.get("_source") or ""),
+                from_skill=bool(info.get("_from_skill")),
+            )
             self.memory.record_success(
                 url, action_type, intent, info,
                 node=info, component_library=comp_lib,
+                selector_type=sel_type,
+            )
+            self.memory.maybe_record_generic(
+                intent, action_type, info,
+                semantic_items=semantic_items,
+                component_library=comp_lib,
             )
             k = self.memory._key(url, action_type, intent)
             entry = self.memory._store.get(k)
             if entry:
                 l2_score = int(entry.get("success_count") or 0)
         if self.learner:
-            self.learner.learn(url, action_type, intent, info)
+            comp_lib = self._detect_component_library()
+            learn_kw: dict[str, Any] = {
+                "semantic_items": semantic_items,
+                "component_library": comp_lib,
+            }
+            try:
+                self.learner.learn(
+                    url, action_type, intent, info, **learn_kw,
+                )
+            except TypeError:
+                self.learner.learn(url, action_type, intent, info)
         self._emit_backfill(
             url, action_type, intent, info,
             wrote_l1=wrote_l1, wrote_l2=wrote_l2, wrote_l4=wrote_l4, l2_score=l2_score,
@@ -577,6 +779,18 @@ class LocatorResolver:
             f"[dim]key={data.get('cache_key')!r} selector={data.get('selector')!r}[/dim]"
         )
 
+    def acceleration_stats(self) -> dict[str, Any]:
+        """批次级五级加速层命中率汇总 (对齐 V3 observability.get_hit_rate_summary)."""
+        return summarize_locating_stats(
+            cache=self.cache,
+            memory=self.memory,
+            rule_engine=self.rule_engine,
+            learner=self.learner,
+            decider=self.decider,
+            resolve_hits=dict(self._resolve_hits) if self._resolve_hits else None,
+            scope="batch",
+        )
+
     # ---------- 步骤⑬ 失败连锁清理 ----------
     def evict(self, page: Any, intent: str, action_type: str, selector: Optional[str]) -> None:
         url = _url(page)
@@ -595,6 +809,10 @@ class LocatorResolver:
         out = dict(info)
         out["_source"] = source
         return out
+
+    def _tag_and_track(self, info: dict, source: str) -> dict:
+        self._resolve_hits[source] = self._resolve_hits.get(source, 0) + 1
+        return self._tag(info, source)
 
     def _llm_xpath_builder(self):
         decider = self.decider

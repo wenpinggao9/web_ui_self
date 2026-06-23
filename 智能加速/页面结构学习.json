@@ -848,50 +848,6 @@
     "nth": 0
   },
   {
-    "route": "/video/welcome",
-    "action_type": "click",
-    "intent": "点击侧栏菜单'待前审'进入待前审页面",
-    "tokens": [
-      "菜",
-      "前",
-      "击",
-      "待",
-      "进",
-      "栏",
-      "审",
-      "入",
-      "页",
-      "面",
-      "侧",
-      "点",
-      "单"
-    ],
-    "selector": "role=link[name=\"待前审\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/wait-preview",
-    "action_type": "click",
-    "intent": "点击侧栏菜单'待前审'进入待前审页面",
-    "tokens": [
-      "菜",
-      "前",
-      "击",
-      "待",
-      "进",
-      "栏",
-      "审",
-      "入",
-      "页",
-      "面",
-      "侧",
-      "点",
-      "单"
-    ],
-    "selector": "text:exact:\"待前审\"",
-    "nth": 0
-  },
-  {
     "route": "/video/wait-preview",
     "action_type": "click",
     "intent": "在'待前审'页面点击'领取'按钮",
@@ -939,44 +895,6 @@
       "在"
     ],
     "selector": "text:exact:\"题目内容涉及不良导向/敏感信息\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/wait-preview",
-    "action_type": "click",
-    "intent": "点击'领取'按钮",
-    "tokens": [
-      "击",
-      "按",
-      "点",
-      "领",
-      "取",
-      "钮"
-    ],
-    "selector": "role=button[name=\"领取\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/welcome",
-    "action_type": "click",
-    "intent": "点击侧栏菜单'全部题目'进入全部题目页面",
-    "tokens": [
-      "进",
-      "部",
-      "侧",
-      "页",
-      "栏",
-      "击",
-      "单",
-      "点",
-      "面",
-      "入",
-      "目",
-      "全",
-      "题",
-      "菜"
-    ],
-    "selector": "role=link[name=\"全部题目\"]",
     "nth": 0
   },
   {
@@ -1066,21 +984,6 @@
       "击"
     ],
     "selector": "role=button[name=\"领取题目\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/all-question",
-    "action_type": "click",
-    "intent": "点击'全部题目'",
-    "tokens": [
-      "全",
-      "击",
-      "部",
-      "题",
-      "点",
-      "目"
-    ],
-    "selector": "text:exact:\"全部题目\"",
     "nth": 0
   },
   {
@@ -1237,30 +1140,6 @@
   {
     "route": "/video/wait-preview",
     "action_type": "click",
-    "intent": "点击侧栏菜单'待前审'进入待前审列表页面",
-    "tokens": [
-      "审",
-      "进",
-      "待",
-      "表",
-      "列",
-      "页",
-      "入",
-      "栏",
-      "侧",
-      "单",
-      "前",
-      "击",
-      "面",
-      "点",
-      "菜"
-    ],
-    "selector": "text:exact:\"待前审\"",
-    "nth": 0
-  },
-  {
-    "route": "/video/wait-preview",
-    "action_type": "click",
     "intent": "点击待前审列表中任务的'查看'",
     "tokens": [
       "审",
@@ -1410,21 +1289,6 @@
       "按"
     ],
     "selector": "role=button[name=\"领取题目\"]",
-    "nth": 0
-  },
-  {
-    "route": "/video/welcome",
-    "action_type": "click",
-    "intent": "点击'全部题目'",
-    "tokens": [
-      "目",
-      "部",
-      "全",
-      "题",
-      "点",
-      "击"
-    ],
-    "selector": "role=link[name=\"全部题目\"]",
     "nth": 0
   },
   {
@@ -1597,6 +1461,317 @@
       "点"
     ],
     "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"小学\")])[1]",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击侧栏菜单'待前审'进入待前审列表页面",
+    "tokens": [
+      "菜",
+      "列",
+      "侧",
+      "审",
+      "单",
+      "进",
+      "点",
+      "表",
+      "击",
+      "待",
+      "前",
+      "面",
+      "页",
+      "栏",
+      "入"
+    ],
+    "selector": "role=menuitem[name=\"待前审\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "点击'提交'按钮查看结果",
+    "tokens": [
+      "交",
+      "果",
+      "点",
+      "结",
+      "按",
+      "看",
+      "提",
+      "查",
+      "钮",
+      "击"
+    ],
+    "selector": "role=button[name=\"提 交\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "fill",
+    "intent": "在筛选区搜索框输入工单ID",
+    "tokens": [
+      "搜",
+      "在",
+      "入",
+      "区",
+      "输",
+      "单",
+      "索",
+      "id",
+      "工",
+      "筛",
+      "选",
+      "框"
+    ],
+    "selector": "input#searchText",
+    "nth": 0
+  },
+  {
+    "route": "/video/welcome",
+    "action_type": "click",
+    "intent": "点击侧栏菜单'全部题目'进入全部题目页面",
+    "tokens": [
+      "部",
+      "目",
+      "栏",
+      "进",
+      "页",
+      "全",
+      "点",
+      "单",
+      "入",
+      "题",
+      "面",
+      "菜",
+      "击",
+      "侧"
+    ],
+    "selector": "text=\"全部题目\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "点击'提交'按钮",
+    "tokens": [
+      "按",
+      "提",
+      "钮",
+      "交",
+      "击",
+      "点"
+    ],
+    "selector": "role=button[name=\"提 交\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/welcome",
+    "action_type": "click",
+    "intent": "点击'全部题目'",
+    "tokens": [
+      "题",
+      "目",
+      "全",
+      "点",
+      "部",
+      "击"
+    ],
+    "selector": "text=\"全部题目\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "点击'工单ID'作为搜索类型",
+    "tokens": [
+      "索",
+      "型",
+      "id",
+      "工",
+      "点",
+      "为",
+      "击",
+      "单",
+      "作",
+      "搜",
+      "类"
+    ],
+    "selector": "text=\"工单ID\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/welcome",
+    "action_type": "click",
+    "intent": "点击侧栏菜单'待前审'进入待前审列表页",
+    "tokens": [
+      "待",
+      "菜",
+      "列",
+      "前",
+      "击",
+      "审",
+      "页",
+      "点",
+      "进",
+      "入",
+      "表",
+      "单",
+      "侧",
+      "栏"
+    ],
+    "selector": "text=\"待前审\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击'领取'按钮",
+    "tokens": [
+      "点",
+      "领",
+      "击",
+      "取",
+      "按",
+      "钮"
+    ],
+    "selector": "button:has-text(\"领取\")",
+    "nth": 0
+  },
+  {
+    "route": "/video/welcome",
+    "action_type": "click",
+    "intent": "点击侧栏菜单'待前审'进入待前审页面",
+    "tokens": [
+      "侧",
+      "击",
+      "入",
+      "页",
+      "点",
+      "进",
+      "栏",
+      "单",
+      "审",
+      "菜",
+      "待",
+      "前",
+      "面"
+    ],
+    "selector": "text=\"待前审\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "点击'全部题目'",
+    "tokens": [
+      "点",
+      "题",
+      "全",
+      "目",
+      "击",
+      "部"
+    ],
+    "selector": "text=\"全部题目\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击'查看'",
+    "tokens": [
+      "点",
+      "击",
+      "看",
+      "查"
+    ],
+    "selector": "role=button[name=\"查 看\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/detail",
+    "action_type": "click",
+    "intent": "点击'多题'选项",
+    "tokens": [
+      "点",
+      "题",
+      "多",
+      "项",
+      "击",
+      "选"
+    ],
+    "selector": "text=\"多题\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击'已审核'页面",
+    "tokens": [
+      "点",
+      "面",
+      "已",
+      "核",
+      "页",
+      "击",
+      "审"
+    ],
+    "selector": "text=\"已审核\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/already-self",
+    "action_type": "click",
+    "intent": "点击最近一条数据的'查看'",
+    "tokens": [
+      "点",
+      "看",
+      "一",
+      "最",
+      "数",
+      "条",
+      "据",
+      "的",
+      "近",
+      "击",
+      "查"
+    ],
+    "selector": "role=button[name=\"查 看\"]",
+    "nth": 0
+  },
+  {
+    "route": "/video/wait-preview",
+    "action_type": "click",
+    "intent": "点击'已审核'页面标签进入已审核页面",
+    "tokens": [
+      "标",
+      "进",
+      "页",
+      "点",
+      "面",
+      "签",
+      "已",
+      "审",
+      "入",
+      "核",
+      "击"
+    ],
+    "selector": "text=\"已审核\"",
+    "nth": 0
+  },
+  {
+    "route": "/video/all-question",
+    "action_type": "click",
+    "intent": "点击'审核历史'",
+    "tokens": [
+      "点",
+      "史",
+      "历",
+      "审",
+      "核",
+      "击"
+    ],
+    "selector": "text=\"审核历史\"",
     "nth": 0
   }
 ]

@@ -17,6 +17,7 @@ class ResolveChain:
     llm_called: bool = False
     hit_level: Optional[str] = None
     hit_selector: Optional[str] = None
+    hit_note: Optional[str] = None
 
     def add(self, level: str, status: str, selector: Optional[str] = None, note: str = "") -> None:
         self.steps.append({
@@ -26,6 +27,7 @@ class ResolveChain:
             "note": note,
         })
 
-    def mark_hit(self, level: str, selector: str) -> None:
+    def mark_hit(self, level: str, selector: str, note: str = "") -> None:
         self.hit_level = level
         self.hit_selector = selector
+        self.hit_note = note or None

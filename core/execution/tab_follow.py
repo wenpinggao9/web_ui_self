@@ -1,6 +1,6 @@
-"""Tab 跟随: 新开第 N 个 tab 就看第 N 个, 关闭顶层 tab 则回到 list_anchor (第 1 个).
+"""Tab 跟随: popup 打开 → active=新 tab; active 关闭 → 回 list_anchor.
 
-所有 page 指针恢复/提交等待/断言前切 tab 应走本模块, 避免各处各自轮询导致 timeout 长等待.
+Tab 切换仅依赖 page 引用与 anchor, 不用 URL 区分 tab 角色.
 """
 from __future__ import annotations
 
@@ -45,6 +45,25 @@ def ordered_usable_tabs(*hints: Any) -> list[Any]:
         return find_usable_context_pages(*hints)
 
 
+def ordered_alive_tabs(*hints: Any) -> list[Any]:
+    """仍存活 tab (含 evaluate 暂时超时但 URL 可读)."""
+    ctx = _context_from_any(*hints)
+    if ctx is None:
+        out: list[Any] = []
+        for p in hints:
+            if p is not None and _page_alive(p) and p not in out:
+                out.append(p)
+        return out
+    try:
+        return [p for p in ctx.pages if _page_alive(p)]
+    except Exception:
+        alive: list[Any] = []
+        for p in hints:
+            if p is not None and _page_alive(p) and p not in alive:
+                alive.append(p)
+        return alive
+
+
 def newest_usable_tab(*hints: Any) -> Any:
     tabs = ordered_usable_tabs(*hints)
     return tabs[-1] if tabs else None
@@ -54,61 +73,10 @@ def follow_active_tab(
     active: Any,
     list_anchor: Any = None,
 ) -> tuple[Any, bool, str]:
-    """解析当前应操作的 tab.
+    """解析当前应操作的 tab (粘滞: 详情 tab 存活则一直在 tab2)."""
+    from .script_helpers import sticky_resolve_tab
 
-    规则 (与用户预期一致):
-    - active 仍可用 → 保持
-    - active 已关/不可用:
-      - 若存在比 list_anchor 更新的详情 tab → 跟随最新 tab
-      - 否则若 list_anchor 可用 → 回到 list_anchor (第 2 个关了就只看第 1 个)
-      - 否则 → 任一最新可用 tab
-    - active 可用但存在更新的非 anchor 兄弟 tab → 跟随最新 (补抓漏掉的 popup)
-    """
-    if active is not None and _page_usable(active, timeout_ms=400):
-        tabs = ordered_usable_tabs(active, list_anchor)
-        if len(tabs) >= 2:
-            newest = tabs[-1]
-            if (
-                newest is not active
-                and list_anchor is not None
-                and newest is not list_anchor
-                and _page_usable(newest, timeout_ms=400)
-            ):
-                try:
-                    newest.bring_to_front()
-                except Exception:
-                    pass
-                return newest, True, "follow_newest_sibling"
-        try:
-            active.bring_to_front()
-        except Exception:
-            pass
-        return active, False, "keep_active"
-
-    tabs = ordered_usable_tabs(active, list_anchor)
-    if not tabs:
-        return active, False, "no_usable_tab"
-
-    if list_anchor is not None and _page_usable(list_anchor, timeout_ms=400):
-        newest = tabs[-1]
-        if newest is not list_anchor and is_detail_submission_url(_url_safe(newest)):
-            try:
-                newest.bring_to_front()
-            except Exception:
-                pass
-            return newest, True, "follow_new_detail"
-        try:
-            list_anchor.bring_to_front()
-        except Exception:
-            pass
-        return list_anchor, True, "fallback_list_anchor"
-
-    pick = tabs[-1]
-    try:
-        pick.bring_to_front()
-    except Exception:
-        pass
-    return pick, True, "fallback_newest"
+    return sticky_resolve_tab(active, list_anchor)
 
 
 def recover_active_page(page: Any, prefer: Any = None) -> tuple[Any, bool]:
@@ -182,6 +150,8 @@ def _scan_tabs_for_outcome(
     list_url: str = "",
     hints: tuple[Any, ...],
 ) -> tuple[Optional[str], Any]:
+    from .script_helpers import _log_tab_handoff, tab_handoff_snapshot
+
     tabs = ordered_usable_tabs(*hints)
     for p in reversed(tabs):
         purl = _url_safe(p)
@@ -201,9 +171,35 @@ def _scan_tabs_for_outcome(
                 and is_detail_submission_url(_url_safe(t))
                 for t in tabs
             )
+            if not live_detail:
+                live_detail = any(
+                    _page_alive(t) and is_detail_submission_url(_url_safe(t))
+                    for t in ordered_alive_tabs(*hints)
+                )
             if live_detail:
+                _log_tab_handoff(
+                    "[submit_scan] skip returned_to_list on list tab; detail tab still alive"
+                )
                 continue
+        _log_tab_handoff(
+            f"[submit_scan] hit usable tab outcome={out} url={purl[:70]}"
+        )
         return out, p
+
+    # evaluate 暂时失败但 URL 已变的详情 tab (提交后同 tab 切下一任务)
+    if is_detail_submission_url(url_before):
+        for p in reversed(ordered_alive_tabs(*hints)):
+            purl = _url_safe(p)
+            if not purl or not is_detail_submission_url(purl):
+                continue
+            out = classify_navigation_outcome(
+                url_before, purl, list_url=list_url,
+            )
+            if out in ("resource_id_changed", "route_changed"):
+                _log_tab_handoff(
+                    f"[submit_scan] hit weak detail tab outcome={out} url={purl[:70]}"
+                )
+                return out, p
     return None, None
 
 
@@ -270,16 +266,13 @@ def wait_after_detail_submit(
             if switched:
                 recovered = True
             out, hit = _scan_tabs_for_outcome(
-                url_before, list_url=list_url, hints=(cur, list_anchor),
+                url_before, list_url=list_url, hints=(cur, list_anchor, page),
             )
             if hit and out:
                 cur = hit
                 recovered = True
                 return _finish(out, cur)
-            if list_anchor is not None and _page_usable(list_anchor, timeout_ms=300):
-                if not _page_alive(page) or page is cur and not _page_usable(page, timeout_ms=200):
-                    recovered = True
-                    return _finish("returned_to_list", list_anchor)
+            # cur 暂时不可用时不在此处切 list_anchor, 继续轮询弱详情 tab
 
         if ctx is not None:
             try:
@@ -337,10 +330,25 @@ def wait_after_detail_submit(
     recovered = recovered or switched
 
     out, hit = _scan_tabs_for_outcome(
-        url_before, list_url=list_url, hints=(cur, list_anchor),
+        url_before, list_url=list_url, hints=(cur, list_anchor, page),
     )
     if hit and out:
         return _finish(out, hit)
+
+    if is_detail_submission_url(url_before):
+        for p in reversed(ordered_alive_tabs(cur, list_anchor, page)):
+            purl = _url_safe(p)
+            if not is_detail_submission_url(purl):
+                continue
+            late_out = classify_navigation_outcome(
+                url_before, purl, list_url=list_url,
+            )
+            if late_out in ("resource_id_changed", "route_changed"):
+                from .script_helpers import _log_tab_handoff
+                _log_tab_handoff(
+                    f"[submit_scan] final weak detail outcome={late_out} url={purl[:70]}"
+                )
+                return _finish(late_out, p)
 
     url_now = _url_safe(cur)
     if not _page_alive(page) and list_anchor is not None and _page_usable(list_anchor, timeout_ms=400):

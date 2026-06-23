@@ -13,6 +13,7 @@ from ..llm import LLMAdapter, PromptLoader
 from ..skill_loader import get_component_structure
 from .action_type_filter import filter_items_by_action_type, item_matches_action_type
 from .decide_result import DecideResult
+from .fallback_resolve import fallback_resolve_index
 from .intent_align import (
     append_element_decide_user_hints,
     climb_to_matching_node,
@@ -79,6 +80,32 @@ class LLMElementDecider:
         self.prompts = prompts
         self.skill_prompt = skill_prompt or ""
         self.skill_path = Path(skill_path) if skill_path else None
+        self._stats: dict[str, int] = {
+            "llm_calls": 0,
+            "fallback_hits": 0,
+            "retry_llm_calls": 0,
+            "use_skill": 0,
+            "misses": 0,
+        }
+
+    @property
+    def stats(self) -> dict[str, Any]:
+        """L5 决策统计 (对齐 V3 observability element_decider 段)."""
+        calls = self._stats["llm_calls"] or 1
+        retries = self._stats["retry_llm_calls"]
+        total_calls = calls + retries
+        fb = self._stats["fallback_hits"]
+        return {
+            **dict(self._stats),
+            "total_llm_calls": total_calls,
+            "fallback_rate": round(fb / total_calls * 100, 1) if total_calls else 0.0,
+            "hit_rate": round(
+                (total_calls - self._stats["misses"]) / total_calls * 100, 1,
+            ) if total_calls else 0.0,
+        }
+
+    def stats_snapshot(self) -> dict[str, int]:
+        return dict(self._stats)
 
     def decide(
         self,
@@ -121,11 +148,14 @@ class LLMElementDecider:
         )
 
         try:
+            self._stats["llm_calls"] += 1
             data = self.llm.complete_json("element_decide", system, user).data
         except Exception:
+            self._stats["misses"] += 1
             return DecideResult(index=None, reason="LLM 调用失败")
 
         if not isinstance(data, dict):
+            self._stats["misses"] += 1
             return DecideResult(index=None, reason="LLM 响应非对象")
 
         if feature_titles_menu_nav and data.get("skip_navigation") is True:
@@ -137,6 +167,7 @@ class LLMElementDecider:
 
         use_skill = data.get("use_skill")
         if isinstance(use_skill, dict):
+            self._stats["use_skill"] += 1
             result = self._parse_use_skill(
                 use_skill, items or [], intent, action_type,
                 action_value=action_value, exclude=exclude,
@@ -147,11 +178,28 @@ class LLMElementDecider:
                 feature_titles=feature_titles,
             )
 
-        idx, confidence, reason = self._parse_index_response(data, dom, exclude)
+        idx, confidence, reason = self._parse_index_response(
+            data, dom, exclude, items=items,
+        )
         first_gave_valid = idx is not None and idx >= 0
 
-        if idx is not None and not first_gave_valid:
-            idx = None
+        if not first_gave_valid and items:
+            filtered = filter_items_by_action_type(items, action_type)
+            fb_pool = filtered if filtered else items
+            fb_idx = fallback_resolve_index(fb_pool, intent, action_type)
+            if fb_idx is not None and 0 <= fb_idx < len(items):
+                real_idx = fb_idx
+                if filtered and filtered is not items:
+                    target = fb_pool[fb_idx]
+                    try:
+                        real_idx = items.index(target)
+                    except ValueError:
+                        real_idx = fb_idx
+                idx = real_idx
+                first_gave_valid = True
+                confidence = max(confidence, 0.75)
+                reason = reason or "本地兜底文本匹配"
+                self._stats["fallback_hits"] += 1
 
         if feature_titles_menu_nav and confidence < 0.5:
             return DecideResult(
@@ -160,9 +208,11 @@ class LLMElementDecider:
                 confidence=confidence,
             )
 
+        # 对齐 V3: confidence <= 0.3 或首轮无有效 index 时二次 LLM
         should_retry = bool(action_type) and (confidence <= 0.3 or not first_gave_valid)
         if should_retry and not feature_titles_menu_nav:
-            retry = self._retry_text_anchor(dom, intent, hint, exclude)
+            self._stats["retry_llm_calls"] += 1
+            retry = self._retry_text_anchor(dom, intent, hint, exclude, items=items)
             if retry.index is not None and retry.index >= 0:
                 climbed = climb_to_matching_node(items or [], retry.index, action_type, intent)
                 final_idx = climbed if climbed is not None else retry.index
@@ -180,7 +230,17 @@ class LLMElementDecider:
                     feature_titles=feature_titles,
                 )
 
-        result = DecideResult(index=idx, reason=reason or "", confidence=confidence)
+        if (idx is None or idx < 0) and items:
+            fb_idx = fallback_resolve_index(items, intent, action_type)
+            if fb_idx is not None and 0 <= fb_idx < len(items):
+                idx = fb_idx
+                confidence = max(confidence, 0.7)
+                reason = reason or "本地兜底(全量DOM)"
+                self._stats["fallback_hits"] += 1
+
+        if idx is None or idx < 0:
+            self._stats["misses"] += 1
+        result = DecideResult(index=idx if idx is not None and idx >= 0 else None, reason=reason or "", confidence=confidence)
         return self._apply_menu_validation(
             result, items, intent,
             feature_titles_menu_nav=feature_titles_menu_nav,
@@ -332,11 +392,31 @@ class LLMElementDecider:
             confidence=0.85,
         )
 
+    @staticmethod
+    def _index_upper_bound(items: Optional[list[dict]], dom: DomIndex) -> int:
+        """意图窗口下 prompt 保留原始 index, 上界应为全量 items 长度."""
+        if items:
+            return len(items)
+        return len(dom.selectors)
+
+    @staticmethod
+    def _locator_info_at(
+        items: Optional[list[dict]],
+        dom: DomIndex,
+        idx: int,
+    ) -> dict:
+        if items and len(items) != len(dom.selectors):
+            from ..dom.semantic_dom import build_locator_info
+            return build_locator_info(items[idx])
+        return dom.selectors[idx]
+
     def _parse_index_response(
         self,
         data: dict,
         dom: DomIndex,
         exclude: Optional[list[str]],
+        *,
+        items: Optional[list[dict]] = None,
     ) -> tuple[Optional[int], float, str]:
         idx = _as_int(data.get("index"))
         if idx is None:
@@ -347,10 +427,11 @@ class LLMElementDecider:
         reason = str(data.get("reason") or "")
         if idx is None:
             return None, confidence, reason
-        if idx < 0 or idx >= len(dom.selectors):
+        upper = self._index_upper_bound(items, dom)
+        if idx < 0 or idx >= upper:
             return idx if idx == -1 else None, confidence, reason
         from .playwright_api import info_key
-        info = dom.selectors[idx]
+        info = self._locator_info_at(items, dom, idx)
         if exclude and info_key(info) in set(exclude):
             return None, confidence, reason
         return idx, confidence, reason
@@ -361,6 +442,8 @@ class LLMElementDecider:
         intent: str,
         hint: Optional[str],
         exclude: Optional[list[str]],
+        *,
+        items: Optional[list[dict]] = None,
     ) -> DecideResult:
         hint_block = f"\n\n【重试提示】\n{hint}" if hint else ""
         base_user = self.prompts.user(
@@ -385,11 +468,12 @@ class LLMElementDecider:
         idx = _as_int(data.get("index"))
         if idx is None:
             idx = _as_int(data.get("node_index"))
-        if idx is not None and (idx < 0 or idx >= len(dom.selectors)):
+        upper = self._index_upper_bound(items, dom)
+        if idx is not None and (idx < 0 or idx >= upper):
             idx = None
         if idx is not None and exclude:
             from .playwright_api import info_key
-            if info_key(dom.selectors[idx]) in set(exclude):
+            if info_key(self._locator_info_at(items, dom, idx)) in set(exclude):
                 idx = None
         return DecideResult(
             index=idx,

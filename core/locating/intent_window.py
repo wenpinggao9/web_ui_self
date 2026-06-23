@@ -53,7 +53,8 @@ def _node_blob(it: dict) -> str:
         str(it.get("role") or ""),
         str(it.get("class") or ""),
     ]
-    return " ".join(parts).lower()
+    # 归一化: 去空格/空白, 使「提 交」和「提交」等价
+    return re.sub(r"\s+", "", " ".join(parts)).lower()
 
 
 def _score_item(
@@ -69,7 +70,7 @@ def _score_item(
     score = 0.0
 
     for t in targets:
-        tl = t.lower()
+        tl = re.sub(r"\s+", "", t.lower())  # 归一化: 去空格, 使「提 交」和「提交」等价
         if not tl:
             continue
         if tl in blob:

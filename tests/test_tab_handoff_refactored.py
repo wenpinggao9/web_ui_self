@@ -216,6 +216,14 @@ class TestNeedsListTabHandoff:
             url_before="https://x/detail/?id=1",
         ) is True
 
+    def test_resource_id_changed_no_list_handoff(self):
+        assert self._needs_handoff(
+            navigation_outcome="resource_id_changed",
+            submit_click_ok=True,
+            url_before="https://x/detail/?id=1",
+            url_after="https://x/video/wait-preview",
+        ) is False
+
     def test_settled_no_handoff(self):
         assert self._needs_handoff(
             navigation_outcome="settled", submit_click_ok=True,

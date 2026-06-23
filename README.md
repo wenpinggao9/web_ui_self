@@ -351,26 +351,25 @@ docker run -p 8000:8000 ui-automation
 
 ### 5. 五级定位链 (智能加速)
 
-定位顺序:**L1 缓存 → L2 记忆 → L3 规则 → L4 学习 → L5 大模型**. L1-L4 未命中或校验失败时进入下一级; L5 成功后回填 L1+L2+L4, 同页面二次运行显著减少 LLM 调用.
+定位顺序:**L1 缓存 → L2 记忆 → L3 规则 → L4 学习(Composite) → L5 大模型**. L1-L4 未命中或校验失败时进入下一级; L5 成功后回填 L1+L2+L4.
 
 ```
 L1 缓存 ──→ L2 记忆 ──→ L3 规则 ──→ L4 学习 ──→ L5 大模型
-                                                    ├─ L3规则   build_* skill, 扫完整 semantic_items (radio/checkbox/fill/下拉/日期…)
-                                                    ├─ L4学习   相似意图 Jaccard 匹配, 跨批次持久化
-                                                    ├─ L5大模型 element_decide LLM (意图窗口 / dom_limit 限候选)
-                                                    ├─ L5 Skill  use_skill 节点纠偏 (choose_best_input_target 等)
-                                                    └─ L5纠偏    node_refiner 祖先爬升
+   └ 自愈              └ 通用模板          ├─ 本地 fallback
+                                          ├─ 二次 LLM (confidence≤0.3)
+                                          ├─ L5 Skill / 节点纠偏
+                                          └─ auto_skill 升级
 ```
 
 | 级别 | 来源 | 说明 |
 |------|------|------|
-| L1 缓存 | `智能加速/选择器缓存.json` | 同 URL+意图+动作类型, 进程内最快 |
-| L2 记忆 | `智能加速/选择器记忆库.json` | 跨运行加减分, 长期复用 |
-| L3 规则 | `skill_dom_helpers.build_*` | 无 LLM, 从语义 DOM 推断组件并生成选择器 |
-| L4 学习 | `智能加速/页面结构学习.json` | 相似意图 Jaccard 匹配, 跨批次持久化 |
-| L5 大模型 | `element_decide` | L4未命中时调用; `intent_window=true` 时从全量 DOM 抽相关节点 |
-| L5 Skill | `use_skill` 协议 | LLM 指定 skill 二次精确定位 |
-| L5 纠偏 | `node_refiner` | 初匹配 index 上爬升/精炼 |
+| L1 缓存 | `智能加速/选择器缓存.json` | 同 URL+意图; 命中可跳过 DOM; 含自愈分支 |
+| L2 记忆 | `智能加速/选择器记忆库.json` | 跨运行加减分 + selector_type; 含通用模板子策略 |
+| L3 规则 | IntentRuleEngine + build_* skill | 无 LLM 确定性规则 |
+| L4 学习 | PageStructure + Jaccard fallback | CompositeStructureLearner |
+| L5 大模型 | `element_decide` | intent_window / dom_limit 限候选 |
+
+**可观测性**: 批次末 `acceleration_stats()`; 用例/批次报告「可观测性」Tab 与 `report_overview.html` 展示五级命中率与 `resolve_distribution`.
 
 **DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L5大模型** 受 `dom_limit` / 意图窗口限制.
 

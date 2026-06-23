@@ -1,30 +1,87 @@
-"""定位链共用: URL / 意图 归一化, 选择器在页面上的校验."""
+"""定位链共用: URL / 意图 归一化, 选择器在页面上的校验 (对齐 V3)."""
 from __future__ import annotations
 
 import re
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_UUID = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+)
 _NUM = re.compile(r"^\d+$")
-# 这些参数通常只影响鉴权/防重放, 不应进入页面结构级缓存 key.
-_TRACK_PARAMS = ("token", "timestamp", "ts", "_t", "sign", "nonce")
+_LONG_HEX_ID = re.compile(
+    r"^(?=[0-9a-f]*\d)[0-9a-f]{8,}(-[0-9a-f]+)*$",
+    re.IGNORECASE,
+)
+_QUOTE_RE = re.compile(
+    r"""["'""''\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]""",
+)
+_INTENT_MAX_LEN = 60
+_IGNORE_QUERY_PREFIXES = ("token", "session", "_t", "timestamp", "ts=", "utm_", "ref", "from=")
 
-_INTENT_RELAXED_MAX_LEN = 60
+
+def _parametrize_path(path: str) -> str:
+    if not path or path == "/":
+        return "/"
+    segments = path.strip("/").split("/")
+    out: list[str] = []
+    for seg in segments:
+        if not seg:
+            continue
+        if _NUM.match(seg) or _UUID.match(seg) or _LONG_HEX_ID.match(seg):
+            out.append("{id}")
+        else:
+            out.append(seg)
+    return "/" + "/".join(out) if out else "/"
 
 
 def normalize_url(url: str) -> str:
-    """hash 路由取 fragment; 纯数字段/UUID → {id}; 丢弃跟踪参数."""
+    """V3 对齐: hash 路由、路径参数化、过滤跟踪 query."""
+    if not url:
+        return "/"
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "/"
+
+    fragment = (parsed.fragment or "").strip()
+    if fragment.startswith("/"):
+        route = fragment
+    elif fragment.startswith("#/"):
+        route = fragment[1:]
+    else:
+        route = parsed.path or "/"
+
+    route = route.strip()
+    if not route or route in ("#", "/#", "/"):
+        return "/"
+    if not route.startswith("/"):
+        route = "/" + route
+
+    query_suffix = ""
+    if "?" in route:
+        path_part, query_part = route.split("?", 1)
+        kept = [
+            p for p in query_part.split("&")
+            if p and not any(p.lower().startswith(pref) for pref in _IGNORE_QUERY_PREFIXES)
+        ]
+        route = path_part
+        if kept:
+            query_suffix = "?" + "&".join(kept)
+
+    return _parametrize_path(route) + query_suffix
+
+
+def normalize_url_legacy(url: str) -> str:
+    """旧版 URL 归一化 (兼容历史 L1/L2 key)."""
     if not url:
         return ""
     parsed = urlparse(url)
-    # 前端 SPA 通常把真实路由放在 hash fragment, 优先使用 fragment.
     frag = parsed.fragment or ""
     path = frag.split("?")[0] if frag else (parsed.path or "")
     segs = [s for s in path.split("/") if s]
-    out = []
+    out: list[str] = []
     for s in segs:
-        # 详情页 ID 不参与定位经验区分, 同模板页面可以复用选择器.
         if _NUM.match(s) or _UUID.match(s):
             out.append("{id}")
         else:
@@ -32,12 +89,32 @@ def normalize_url(url: str) -> str:
     return "/" + "/".join(out)
 
 
+def normalize_intent_relaxed(intent: str) -> str:
+    """V3 记忆库 key: 小写 + 去空格/引号 + 去末尾标点."""
+    s = re.sub(r"\s+", "", (intent or "").lower())
+    s = re.sub(r"[「」『』\u201c\u201d\u2018\u2019]", "", s)
+    s = _QUOTE_RE.sub("", s)
+    s = re.sub(r"[。，、；：！？.,;:!?]+$", "", s)
+    return s.strip()[:_INTENT_MAX_LEN]
+
+
+def normalize_intent_cache(intent: str) -> str:
+    """V3 短期缓存 key: 小写 + 合并空白为单空格."""
+    s = re.sub(r"\s+", " ", (intent or "").lower()).strip()
+    return s[:_INTENT_MAX_LEN]
+
+
 def normalize_intent(intent: str) -> str:
-    """去引号/多余空白/末尾标点, 截断到 60 字符, 便于做缓存键."""
-    s = re.sub(r"""["'""''\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]""", "", intent or "")
+    """默认 intent 归一化 (= relaxed, 供 L2/L4 等)."""
+    return normalize_intent_relaxed(intent)
+
+
+def normalize_intent_legacy(intent: str) -> str:
+    """旧版 intent 归一化 (兼容历史 key)."""
+    s = _QUOTE_RE.sub("", intent or "")
     s = re.sub(r"\s+", "", s)
     s = re.sub(r"[。，、；：！？.,;:!?]+$", "", s)
-    return s.strip()[:_INTENT_RELAXED_MAX_LEN]
+    return s.strip()[:_INTENT_MAX_LEN]
 
 
 def validate_selector(page: Any, info: dict, timeout_ms: int = 1500) -> bool:

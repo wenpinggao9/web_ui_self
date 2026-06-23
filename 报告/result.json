@@ -1,110 +1,698 @@
 {
-  "case_id": "vip_前审_005",
+  "case_id": "vip_前审_012",
   "feature_titles": [
     "大学增加前审",
     "前审功能",
-    "Case 5"
+    "Case 12"
   ],
-  "total_steps": 5,
-  "passed": 5,
-  "failed": 0,
-  "summary": "通过",
-  "execution_time": "1分11秒",
-  "generated_time": "2026-06-22 18:16:44",
+  "total_steps": 18,
+  "passed": 7,
+  "failed": 11,
+  "summary": "失败",
+  "execution_time": "2分0秒",
+  "generated_time": "2026-06-23 09:54:05",
   "details": [
     {
       "step": "步骤1: click",
       "action": {
         "type": "click",
-        "intent": "[恢复] 点击列表中第一条任务的'查看'按钮进入详情页",
-        "selector": "ant_table_row[first:1].查看 (first_table_row)"
+        "intent": "点击'审核历史'",
+        "selector": "text=\"审核历史\""
       },
       "success": true,
       "status": "passed",
-      "message": "点击 点击列表中第一条任务的'查看'按钮进入详情页 | 实际目标: <button type=\"button\" class=\"ant-btn ant-btn-primary\" ant-click-animating-without-extra-node=\"false\"><span>查 看</span></button>",
+      "message": "点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>",
       "error": "",
-      "selector": "ant_table_row[first:1].查看 (first_table_row)",
-      "resolved_html": ""
+      "selector": "text=\"审核历史\"",
+      "resolved_html": "点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。",
+      "optional_skipped": false,
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>",
+          "reason": "点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。",
+          "retry_focus": "无"
+        }
+      ],
+      "gate_mismatch": false
     },
     {
       "step": "步骤2: click",
       "action": {
         "type": "click",
-        "intent": "在详情页选择'题目内容涉及不良导向/敏感信息'",
-        "selector": "label:has-text(\"题目内容涉及不良导向/敏感信息\")"
+        "intent": "在筛选区点击'类型'下拉框",
+        "selector": "#supplier"
       },
-      "success": true,
-      "status": "passed",
-      "message": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>",
-      "error": "",
-      "selector": "label:has-text(\"题目内容涉及不良导向/敏感信息\")",
-      "resolved_html": "点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>"
+      "success": false,
+      "status": "failed",
+      "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+      "error": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+      "selector": "#supplier",
+      "resolved_html": "",
+      "dispatch_ok": true,
+      "post_check_ok": false,
+      "post_check_reason": "intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。",
+      "optional_skipped": false,
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+          "reason": "意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的是供应商的下拉列表（supplier_list，含选项：-、测试、小视牛到、博雅智库等），而非'类型'字段的下拉。类型字段对应索引 [1]-[8] 区域，未见其下拉面板展开。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 2,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+          "reason": "Intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），导致展开的是供应商的下拉列表（可见选项为：-、测试、小视牛到、博雅智库等），而非'类型'下拉框。类型字段（索引[1]-[8]）的下拉并未展开。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 3,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+          "reason": "意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox (id=supplier)，展开的是供应商的下拉列表（显示了-、测试、小视牛到、博雅智库等供应商选项），而非'类型'的下拉选项（应显示前审等选项）。DOM中[1]~[8]为'类型'字段区域，其下拉未展开。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 4,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+          "reason": "意图是点击'类型'下拉框展开，但实际点击的是'供应商'下拉框（id=supplier），从DOM可见展开的listbox是supplier_list，包含供应商选项（小视牛到、博雅智库等），而非类型选项。'类型'字段对应的是索引[1]-[8]区域，没有展开的下拉面板。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 5,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+          "reason": "intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。",
+          "retry_focus": "选择器"
+        }
+      ],
+      "gate_mismatch": true
     },
     {
-      "step": "步骤3: api_call",
+      "step": "步骤3: click",
       "action": {
-        "type": "api_call",
-        "intent": "根据当前任务ID查询对应工单ID，记录为orderId1001",
+        "type": "click",
+        "intent": "在下拉选项中点击'前审'",
         "selector": null
       },
-      "success": true,
-      "status": "passed",
-      "message": "API 调用成功: orderId1001=146533998, orderId=146533998",
-      "error": "",
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
       "selector": null,
-      "resolved_html": "API 调用成功: orderId1001=146533998, orderId=146533998"
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
     },
     {
       "step": "步骤4: click",
       "action": {
         "type": "click",
-        "intent": "点击'提交'按钮",
-        "selector": "role=button[name=\"提 交\"]"
+        "intent": "在筛选区点击'学段'下拉框",
+        "selector": null
       },
-      "success": true,
-      "status": "passed",
-      "message": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=returned_to_list",
-      "error": "",
-      "selector": "role=button[name=\"提 交\"]",
-      "resolved_html": "点击 点击'提交'按钮 | 实际目标: <button type=\"submit\" class=\"ant-btn ant-btn-primary\"><span>提 交</span></button> | navigation_outcome=returned_to_list"
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
     },
     {
-      "step": "步骤5: assert_text",
+      "step": "步骤5: click",
       "action": {
-        "type": "assert_text",
-        "intent": "验证页面自动加载下一个任务的详情页",
+        "type": "click",
+        "intent": "在下拉选项中点击'大学'",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤6: click",
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'审核行为'下拉框",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤7: click",
+      "action": {
+        "type": "click",
+        "intent": "在下拉选项中点击'举报/放弃'",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤8: click",
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'审核时间'日期选择框",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤9: click",
+      "action": {
+        "type": "click",
+        "intent": "选择今天的日期",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤10: click",
+      "action": {
+        "type": "click",
+        "intent": "点击'提交'按钮进行查询",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": null,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤11: assert_count",
+      "action": {
+        "type": "assert_count",
+        "intent": "验证当前总数大于0",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "否定断言: 页面不包含 '提交失败'",
+      "message": "计数断言(当前总数): 实际32176 > 0 → 通过",
       "error": "",
       "selector": null,
-      "resolved_html": "否定断言: 页面不包含 '提交失败'"
+      "resolved_html": "计数断言(当前总数): 实际32176 > 0 → 通过",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤12: assert_text",
+      "action": {
+        "type": "assert_text",
+        "intent": "验证审核历史列表中存在工单ID为146567164的记录",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "断言: 页面含 '146567164'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "断言: 页面含 '146567164'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤13: assert_text",
+      "action": {
+        "type": "assert_text",
+        "intent": "验证审核历史列表中存在工单ID为146567172的记录",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "断言: 页面含 '146567172'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "断言: 页面含 '146567172'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤14: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146567164的审核老师UID为1001636",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "表格断言: 行标识 '146567164' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "表格断言: 行标识 '146567164' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤15: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
+      "error": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": false,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤16: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146567172的审核老师UID包含1001636",
+        "selector": null
+      },
+      "success": false,
+      "status": "failed",
+      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
+      "error": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
+      "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": false,
+      "post_check_ok": false,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤17: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146567172的审核老师UID包含1001635",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤18: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146567172的举报原因为「多题」",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "表格断言: 行标识 '146567172' 列 '举报原因' 期望 '多题' 实际 '多题'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "表格断言: 行标识 '146567172' 列 '举报原因' 期望 '多题' 实际 '多题'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
     }
   ],
-  "screenshot_timeline": [],
+  "screenshot_timeline": [
+    {
+      "step_idx": 2,
+      "success": false,
+      "screenshot": "截图/step_002_fail.png",
+      "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+      "action_type": "click",
+      "intent": "在筛选区点击'类型'下拉框"
+    },
+    {
+      "step_idx": 15,
+      "success": false,
+      "screenshot": "截图/step_015_fail.png",
+      "message": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
+      "action_type": "assert_table",
+      "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」"
+    },
+    {
+      "step_idx": 16,
+      "success": false,
+      "screenshot": "截图/step_016_fail.png",
+      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
+      "action_type": "assert_table",
+      "intent": "验证工单ID为146567172的审核老师UID包含1001636"
+    }
+  ],
+  "locating_stats": {
+    "scope": "case",
+    "selector_cache": {
+      "lookups": 36,
+      "hits": 12,
+      "hit_rate": 33.3,
+      "self_heals": 0,
+      "entries": 20
+    },
+    "selector_memory": {
+      "lookups": 17,
+      "hits": 17,
+      "hit_rate": 100.0,
+      "generic_lookups": 3,
+      "generic_hits": 0,
+      "generic_hit_rate": 0.0,
+      "page_entries": 27,
+      "generic_entries": 1
+    },
+    "intent_rule_engine": {
+      "lookups": 7,
+      "hits": 7,
+      "misses": 0,
+      "hit_rate": 100.0,
+      "rule_count": 11,
+      "per_rule_hits": {
+        "generic_text_click": 6,
+        "dropdown_trigger": 1
+      }
+    },
+    "page_structure_learner": {
+      "lookups": 0,
+      "exact_hits": 0,
+      "similar_hits": 0,
+      "total_hits": 0,
+      "misses": 0,
+      "hit_rate": 0.0,
+      "exact_hit_rate": 0.0,
+      "similar_hit_rate": 0.0,
+      "pages": 6,
+      "total_rules": 8,
+      "intent_fallback": true,
+      "intent_records": 87
+    },
+    "element_decider": {
+      "llm_calls": 0,
+      "fallback_hits": 0,
+      "retry_llm_calls": 0,
+      "use_skill": 0,
+      "misses": 0,
+      "total_llm_calls": 1,
+      "fallback_rate": 0.0,
+      "hit_rate": 100.0
+    },
+    "resolve_distribution": {
+      "L3规则": 2
+    },
+    "overall": {
+      "total_resolves": 2,
+      "non_llm_resolves": 2,
+      "non_llm_rate": 100.0,
+      "llm_resolves": 0,
+      "total_module_lookups": 60,
+      "total_module_hits": 36,
+      "overall_module_hit_rate": 60.0
+    }
+  },
+  "hit_rate_summary": {
+    "scope": "case",
+    "selector_cache": {
+      "lookups": 36,
+      "hits": 12,
+      "hit_rate": 33.3,
+      "self_heals": 0,
+      "entries": 20
+    },
+    "selector_memory": {
+      "lookups": 17,
+      "hits": 17,
+      "hit_rate": 100.0,
+      "generic_lookups": 3,
+      "generic_hits": 0,
+      "generic_hit_rate": 0.0,
+      "page_entries": 27,
+      "generic_entries": 1
+    },
+    "intent_rule_engine": {
+      "lookups": 7,
+      "hits": 7,
+      "misses": 0,
+      "hit_rate": 100.0,
+      "rule_count": 11,
+      "per_rule_hits": {
+        "generic_text_click": 6,
+        "dropdown_trigger": 1
+      }
+    },
+    "page_structure_learner": {
+      "lookups": 0,
+      "exact_hits": 0,
+      "similar_hits": 0,
+      "total_hits": 0,
+      "misses": 0,
+      "hit_rate": 0.0,
+      "exact_hit_rate": 0.0,
+      "similar_hit_rate": 0.0,
+      "pages": 6,
+      "total_rules": 8,
+      "intent_fallback": true,
+      "intent_records": 87
+    },
+    "element_decider": {
+      "llm_calls": 0,
+      "fallback_hits": 0,
+      "retry_llm_calls": 0,
+      "use_skill": 0,
+      "misses": 0,
+      "total_llm_calls": 1,
+      "fallback_rate": 0.0,
+      "hit_rate": 100.0
+    },
+    "resolve_distribution": {
+      "L3规则": 2
+    },
+    "overall": {
+      "total_resolves": 2,
+      "non_llm_resolves": 2,
+      "non_llm_rate": 100.0,
+      "llm_resolves": 0,
+      "total_module_lookups": 60,
+      "total_module_hits": 36,
+      "overall_module_hit_rate": 60.0
+    }
+  },
   "failure_analysis": {
-    "total_failures": 0,
-    "failures": []
+    "total_failures": 3,
+    "failures": [
+      {
+        "step": "步骤2",
+        "intent": "在筛选区点击'类型'下拉框",
+        "classification": "unknown",
+        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
+      },
+      {
+        "step": "步骤15",
+        "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」",
+        "classification": "unknown",
+        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
+      },
+      {
+        "step": "步骤16",
+        "intent": "验证工单ID为146567172的审核老师UID包含1001636",
+        "classification": "unknown",
+        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
+      }
+    ]
   },
   "llm_call_summary": {
-    "total_calls": 6
+    "total_calls": 22
   },
   "llm_call_details": [
     {
-      "step_idx": 2,
+      "step_idx": 1,
       "success": true,
       "action": {
         "type": "click",
-        "intent": "在详情页选择'题目内容涉及不良导向/敏感信息'"
+        "intent": "点击'审核历史'"
       },
       "llm_calls": [
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在详情页选择'题目内容涉及不良导向/敏感信息'\n输入值: \n分发成功: true\n分发消息: 点击 在详情页选择'题目内容涉及不良导向/敏感信息' | 实际目标: <span>题目内容涉及不良导向/敏感信息</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/detail/?uniqId=146534037\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 请选择审核原因:\n题目内容涉及不良导向/敏感信息\n非大学题\n非目标学科\n题目不完整或题干残缺\n多题\n水印题且可做",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击成功，dispatch_success为true，页面DOM中[8]label显示'题目内容涉及不良导向/敏感信息'选项存在。虽然DOM摘要中未明确显示radio/checkbox的checked状态，但Playwright成功点击了该span元素，且该选项对应的label[8]在表单中为第一个选项，点击操作已完成。结合dispatch消息确认实际点击了正确的span元素。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'审核历史'\n输入值: \n分发成功: true\n分发消息: 点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n供应商\n学段\n学科\n来源\n审核行为\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 2,
+      "success": false,
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'类型'下拉框"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的是供应商的下拉列表（supplier_list，含选项：-、测试、小视牛到、博雅智库等），而非'类型'字段的下拉。类型字段对应索引 [1]-[8] 区域，未见其下拉面板展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"类型下拉框在索引[1]-[8]区域，尝试点击 div:has(> label:text('类型')) >>"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> .. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox，类型下拉框对应索引[1]-[8]区域，应点击类型字段对应的ant-select选择器区域来展开下拉\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"Intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），导致展开的是供应商的下拉列表（可见选项为：-、测试、小视牛到、博雅智库等），而非'类型'下拉框。类型字段（索引[1]-[8]）的下拉并未展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"类型下拉框对应索引[1]-[8]区域，应点击类型字段内的 span 触发展开。尝试选择器: form >> text=类型 >> xpath=.. >"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> xpath=.. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox（id=supplier），应该点击'类型'字段对应的下拉选择器，类型字段在索引[1]-[8]区域，需定位到类型label旁边的ant-select组件\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox (id=supplier)，展开的是供应商的下拉列表（显示了-、测试、小视牛到、博雅智库等供应商选项），而非'类型'的下拉选项（应显示前审等选项）。DOM中[1]~[8]为'类型'字段区域，其下拉未展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'字段对应的下拉区域，尝试选择器: form >> text=类型 >> nth=0 >> .. >> .ant"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> div:has(> label:has-text('类型')) >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox，应该点击'类型'字段对应的下拉选择器区域，DOM中[1]~[8]为类型字段区域，需定位到类型label所在div内的ant-select-selector元素\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击的是'供应商'下拉框（id=supplier），从DOM可见展开的listbox是supplier_list，包含供应商选项（小视牛到、博雅智库等），而非类型选项。'类型'字段对应的是索引[1]-[8]区域，没有展开的下拉面板。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'下拉框区域，尝试选择器: div:has(> label:text('类型')) .ant-select-selector "
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> xpath=.. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商下拉框（id=supplier），应该点击'类型'标签旁边的下拉框，对应索引[1]-[8]区域，需要定位到类型label同级的select选择器。\"\n}\n```"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'字段对应的下拉触发区域，尝试选择器: div:has(> div > label:text-"
+        },
+        {
+          "model": "readiness",
+          "latency_ms": 0,
+          "prompt_preview": "当前URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n必填项: 共0个, 未填0个\n未填字段名: (无)\n\n下一步动作: type=click intent=在筛选区点击'类型'下拉框 value=\n\n用例备注/业务提示:\n备注:\n- 大学前审遇到非目标题目时，全部选择「题目内容涉及不良导向/敏感信息」让工单退场，不占用后续 case 的题池资源\n- 管理员审核历史中包括大学前审信息\n\n用例操作步骤 (原始):\n- 管理员点击「审核历史」\n- 筛选「类型」为「前审」，「学段」为「大学」，「审核行为」为「举报/放弃」，「审",
+          "response_preview": "{\"ready\": true, \"recovery\": []}"
         }
       ]
     }

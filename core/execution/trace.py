@@ -95,8 +95,10 @@ class ExecutionTrace:
                     f"[dim]  │   {step.get('level')}: {step.get('status')}{sel_part}{note_part}[/dim]"
                 )
             if data.get("hit_level"):
+                note = data.get("hit_note") or ""
+                note_part = f" ({note})" if note else ""
                 c.print(
-                    f"[dim]  │   ✓ 最终命中: {data.get('hit_level')} "
+                    f"[dim]  │   ✓ 最终命中: {data.get('hit_level')}{note_part} "
                     f"selector={data.get('hit_selector')!r}[/dim]"
                 )
             elif data.get("llm_called"):
@@ -158,10 +160,17 @@ class ExecutionTrace:
             if data.get("retry_focus"):
                 c.print(f"[dim]  │   hint: {str(data.get('retry_focus'))[:120]}[/dim]")
         elif phase == "post_check":
-            ok = data.get("step_ok")
-            color = "green" if ok else "yellow"
+            dispatch_ok = data.get("dispatch_ok")
+            step_ok = data.get("step_ok")
+            mismatch = dispatch_ok is not None and step_ok is not None and bool(dispatch_ok) != bool(step_ok)
+            if step_ok and mismatch:
+                color = "yellow"
+            else:
+                color = "green" if step_ok else "yellow"
+            opt = " [可选跳过]" if data.get("optional_skipped") else ""
+            gate_note = " ⚠双门不一致" if mismatch and step_ok else ""
             c.print(
-                f"[{color}]  ├─ 后校验 step_ok={ok} "
+                f"[{color}]  ├─ 后校验 dispatch_ok={dispatch_ok} step_ok={step_ok}{opt}{gate_note} "
                 f"retry_focus={data.get('retry_focus')} "
                 f"reason={data.get('reason', '')[:120]}[/{color}]"
             )

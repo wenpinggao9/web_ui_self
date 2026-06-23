@@ -27,6 +27,59 @@ def _format_duration(ms: int) -> str:
     return f"{int(sec // 60)}分{int(sec % 60)}秒"
 
 
+def _gate_pill(label: str, value: Optional[bool], *, mismatch: bool = False) -> str:
+    if value is None:
+        return f'<span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">{escape(label)}: —</span>'
+    if value:
+        cls = "bg-green-100 text-green-700"
+        text = "是"
+    else:
+        cls = "bg-red-100 text-red-700" if not mismatch else "bg-orange-100 text-orange-800"
+        text = "否"
+    return f'<span class="px-2 py-0.5 rounded text-xs {cls}">{escape(label)}: {text}</span>'
+
+
+def _format_dual_gate_html(step: dict[str, Any]) -> str:
+    dispatch_ok = step.get("dispatch_ok")
+    post_ok = step.get("post_check_ok")
+    if dispatch_ok is None and post_ok is None:
+        return ""
+    mismatch = bool(step.get("gate_mismatch"))
+    note = ""
+    if step.get("optional_skipped"):
+        note = '<span class="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">可选跳过</span>'
+    elif mismatch:
+        note = '<span class="px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-800">双门不一致</span>'
+    reason = step.get("post_check_reason") or ""
+    reason_html = (
+        f'<p class="text-xs text-gray-500 mt-1">后校验: {escape(str(reason)[:160])}</p>'
+        if reason else ""
+    )
+    return (
+        f'<div class="flex flex-wrap gap-2 mt-2 items-center">'
+        f'{_gate_pill("分发", dispatch_ok, mismatch=mismatch)}'
+        f'{_gate_pill("后校验", post_ok, mismatch=mismatch)}'
+        f'{note}</div>{reason_html}'
+    )
+
+
+def _format_post_retries_html(retries: list[dict]) -> str:
+    if not retries:
+        return ""
+    rows = ""
+    for item in retries:
+        att = item.get("attempt", "?")
+        d_ok = item.get("dispatch_ok")
+        p_ok = item.get("post_check_ok")
+        reason = escape(str(item.get("reason") or "")[:100])
+        rows += (
+            f'<li class="text-xs text-gray-600">'
+            f'第{att}次 · 分发={d_ok} · 后校验={p_ok}'
+            f'{(" · " + reason) if reason else ""}</li>'
+        )
+    return f'<ul class="mt-2 ml-4 list-disc">{rows}</ul>'
+
+
 def _rel_path(from_dir: Path, target: str | Path | None) -> str:
     if not target:
         return ""
@@ -45,6 +98,7 @@ def build_report_data(
     total_ms: int,
     *,
     observability: Optional["ObservabilityCollector"] = None,
+    locating_stats: Optional[dict[str, Any]] = None,
     out_dir: Optional[Path] = None,
     feature_titles: Optional[list[str]] = None,
 ) -> dict[str, Any]:
@@ -71,6 +125,16 @@ def build_report_data(
             "error": r.error or "",
             "selector": r.selector or r.locator_repr,
             "resolved_html": (r.resolved_html or "")[:200],
+            "dispatch_ok": r.dispatch_ok,
+            "post_check_ok": r.post_check_ok,
+            "post_check_reason": r.post_check_reason or "",
+            "optional_skipped": r.optional_skipped,
+            "post_retries": r.post_retries or [],
+            "gate_mismatch": (
+                r.dispatch_ok is not None
+                and r.post_check_ok is not None
+                and bool(r.dispatch_ok) != bool(r.post_check_ok)
+            ),
         })
         shot_rel = _rel_path(report_dir, r.screenshot)
         if shot_rel or r.screenshot:
@@ -95,6 +159,10 @@ def build_report_data(
         "details": details,
         "screenshot_timeline": screenshot_timeline,
     }
+
+    if locating_stats:
+        data["locating_stats"] = locating_stats
+        data["hit_rate_summary"] = locating_stats
 
     if observability is not None:
         obs_dict = observability.to_dict()
@@ -167,6 +235,7 @@ def save_case_report(
     *,
     out_dir: Optional[Path] = None,
     observability: Optional["ObservabilityCollector"] = None,
+    locating_stats: Optional[dict[str, Any]] = None,
     watermark_cfg: Optional[dict[str, Any]] = None,
     feature_titles: Optional[list[str]] = None,
 ) -> tuple[Path, Path]:
@@ -176,6 +245,7 @@ def save_case_report(
     report_data = build_report_data(
         case_id, results, total_ms,
         observability=observability,
+        locating_stats=locating_stats,
         out_dir=out_dir or report_dir.parent,
         feature_titles=feature_titles,
     )
@@ -234,6 +304,8 @@ def generate_html_report(report_data: dict[str, Any], watermark_cfg: dict[str, A
         err_html = (
             f'<p class="text-xs text-red-600 mt-1">{escape(err[:200])}</p>' if err else ""
         )
+        gate_html = _format_dual_gate_html(step)
+        retries_html = _format_post_retries_html(step.get("post_retries") or [])
         steps_html += f"""
             <div class="border-l-4 {status_class} rounded-lg p-4 mb-3 shadow-sm">
               <div class="flex items-center justify-between">
@@ -244,8 +316,9 @@ def generate_html_report(report_data: dict[str, Any], watermark_cfg: dict[str, A
                   <span class="text-sm text-gray-500">{escape(intent)}</span>
                 </div>
               </div>
+              {gate_html}
               <p class="text-sm text-gray-600 mt-1">{escape(str(step.get('message', ''))[:300])}</p>
-              {sel_html}{err_html}
+              {sel_html}{err_html}{retries_html}
             </div>
             """
 
@@ -397,33 +470,104 @@ def generate_html_report(report_data: dict[str, Any], watermark_cfg: dict[str, A
 def _generate_hit_rate_html(hit_rate_summary: dict[str, Any]) -> str:
     if not hit_rate_summary:
         return '<div class="text-gray-400 text-center py-4">无命中率数据</div>'
+
+    try:
+        from core.locating.locate_observability import MODULE_LABELS, RESOLVE_LEVEL_LABELS
+    except ImportError:
+        try:
+            from .locating.locate_observability import MODULE_LABELS, RESOLVE_LEVEL_LABELS
+        except ImportError:
+            MODULE_LABELS = {}
+            RESOLVE_LEVEL_LABELS = {}
+
     overall = hit_rate_summary.get("overall", {})
-    modules = {k: v for k, v in hit_rate_summary.items() if k != "overall" and isinstance(v, dict)}
+    scope = hit_rate_summary.get("scope", "case")
+    scope_note = "本用例" if scope == "case" else "批次累计"
+
+    skip_keys = {"overall", "resolve_distribution", "scope"}
+    modules = {
+        k: v for k, v in hit_rate_summary.items()
+        if k not in skip_keys and isinstance(v, dict)
+    }
+
     cards = ""
     for name, stats in modules.items():
-        hit_rate = stats.get("hit_rate", stats.get("exact_hit_rate", 0))
-        lookups = stats.get("lookups", 0)
-        hits = stats.get("hits", stats.get("total_hits", stats.get("exact_hits", 0)))
-        color = "text-green-600" if hit_rate >= 50 else "text-yellow-600" if hit_rate >= 10 else "text-red-600"
-        label = {
-            "selector_cache": "元素缓存", "selector_memory": "记忆库",
-            "page_structure_learner": "结构学习",
-        }.get(name, name)
+        hit_rate = stats.get(
+            "hit_rate",
+            stats.get("exact_hit_rate", stats.get("fallback_rate", 0)),
+        )
+        lookups = stats.get("lookups", stats.get("total_llm_calls", stats.get("llm_calls", 0)))
+        hits = stats.get(
+            "hits",
+            stats.get("total_hits", stats.get("exact_hits", stats.get("fallback_hits", 0))),
+        )
+        color = "text-green-600" if float(hit_rate or 0) >= 50 else "text-yellow-600" if float(hit_rate or 0) >= 10 else "text-red-600"
+        label = MODULE_LABELS.get(name, name)
+        extra = ""
+        if name == "element_decider":
+            extra = (
+                f'<p class="text-xs text-gray-400 mt-1">'
+                f'LLM {stats.get("llm_calls", 0)} · 二次 {stats.get("retry_llm_calls", 0)} · '
+                f'fallback {stats.get("fallback_hits", 0)} · skill {stats.get("use_skill", 0)}'
+                f'</p>'
+            )
+        elif name == "selector_memory" and stats.get("generic_lookups"):
+            extra = (
+                f'<p class="text-xs text-gray-400 mt-1">'
+                f'通用模板 查询 {stats.get("generic_lookups", 0)} · 命中 {stats.get("generic_hits", 0)}'
+                f'</p>'
+            )
+        elif name == "intent_rule_engine" and stats.get("per_rule_hits"):
+            top = sorted(stats["per_rule_hits"].items(), key=lambda x: -x[1])[:3]
+            rules = ", ".join(f"{k}({v})" for k, v in top)
+            extra = f'<p class="text-xs text-gray-400 mt-1 truncate" title="{escape(rules)}">Top: {escape(rules)}</p>'
         cards += (
             f'<div class="bg-gray-50 rounded-lg p-4"><p class="text-sm text-gray-500 mb-1">{escape(label)}</p>'
             f'<p class="text-3xl font-bold {color}">{hit_rate}%</p>'
-            f'<p class="text-xs text-gray-400 mt-1">查询 {lookups} · 命中 {hits}</p></div>'
+            f'<p class="text-xs text-gray-400 mt-1">查询 {lookups} · 命中 {hits}</p>{extra}</div>'
         )
+
+    resolve_dist = hit_rate_summary.get("resolve_distribution") or {}
+    dist_html = ""
+    if resolve_dist:
+        total_r = sum(resolve_dist.values()) or 1
+        bars = ""
+        for level, count in sorted(resolve_dist.items(), key=lambda x: -x[1]):
+            pct = round(count / total_r * 100, 1)
+            lbl = RESOLVE_LEVEL_LABELS.get(level, level)
+            bars += (
+                f'<div class="flex items-center gap-2 text-sm mb-1">'
+                f'<span class="w-24 text-gray-600 shrink-0">{escape(lbl)}</span>'
+                f'<div class="flex-1 bg-gray-200 rounded h-2"><div class="bg-blue-500 h-2 rounded" style="width:{pct}%"></div></div>'
+                f'<span class="w-16 text-right text-gray-500">{count} ({pct}%)</span></div>'
+            )
+        dist_html = (
+            f'<div class="mt-4"><p class="text-sm font-medium text-gray-700 mb-2">'
+            f'定位命中层级分布 ({scope_note})</p>{bars}</div>'
+        )
+
     non_llm_rate = overall.get("non_llm_rate", 0)
-    non_llm_steps = overall.get("non_llm_steps", 0)
-    total_steps = overall.get("total_steps", 0)
+    non_llm_resolves = overall.get("non_llm_resolves", overall.get("non_llm_steps", 0))
+    total_resolves = overall.get("total_resolves", overall.get("total_steps", 0))
+    mod_rate = overall.get("overall_module_hit_rate", "")
+
+    summary_cards = (
+        f'<div class="bg-blue-50 rounded-lg p-4"><p class="text-sm text-gray-500 mb-1">非 LLM 定位</p>'
+        f'<p class="text-3xl font-bold text-blue-600">{non_llm_rate}%</p>'
+        f'<p class="text-xs text-gray-400 mt-1">{non_llm_resolves} / {total_resolves} 次</p></div>'
+    )
+    if mod_rate != "":
+        summary_cards += (
+            f'<div class="bg-indigo-50 rounded-lg p-4"><p class="text-sm text-gray-500 mb-1">模块查询命中率</p>'
+            f'<p class="text-3xl font-bold text-indigo-600">{mod_rate}%</p>'
+            f'<p class="text-xs text-gray-400 mt-1">{scope_note}</p></div>'
+        )
+
     return (
         f'<div><h3 class="text-lg font-semibold text-gray-800 mb-3">'
-        f'<i class="fa fa-bullseye mr-2 text-blue-500"></i>命中率总览</h3>'
-        f'<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">{cards}'
-        f'<div class="bg-blue-50 rounded-lg p-4"><p class="text-sm text-gray-500 mb-1">非 LLM 解析</p>'
-        f'<p class="text-3xl font-bold text-blue-600">{non_llm_rate}%</p>'
-        f'<p class="text-xs text-gray-400 mt-1">{non_llm_steps} / {total_steps} 步</p></div></div></div>'
+        f'<i class="fa fa-bullseye mr-2 text-blue-500"></i>五级定位命中率 ({scope_note})</h3>'
+        f'<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">{cards}{summary_cards}</div>'
+        f'{dist_html}</div>'
     )
 
 
@@ -587,6 +731,7 @@ def save_batch_overview(
     watermark_cfg: dict[str, Any],
     execution_time: str = "",
     batch_timestamp: str = "",
+    locating_stats: Optional[dict[str, Any]] = None,
 ) -> tuple[Path, Path]:
     """保存批次汇总 JSON + HTML (report_overview.*)."""
     total_cases = len(case_results)
@@ -606,6 +751,9 @@ def save_batch_overview(
         "cases": case_results,
         "generated_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+    if locating_stats:
+        report_data["locating_stats"] = locating_stats
+        report_data["hit_rate_summary"] = locating_stats
     apply_watermark_to_report(report_data, watermark_cfg)
 
     json_path = batch_dir / "report_overview.json"
@@ -668,6 +816,7 @@ def _generate_batch_html(report_data: dict[str, Any], watermark_cfg: dict[str, A
     wm_extras = watermark_html_extras(watermark_cfg)
     wm_footer = watermark_html_footer(watermark_cfg)
     all_ok = report_data.get("failed_cases", 0) == 0
+    locating_html = _generate_hit_rate_html(report_data.get("hit_rate_summary", {}))
 
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -709,6 +858,7 @@ def _generate_batch_html(report_data: dict[str, Any], watermark_cfg: dict[str, A
         <p>生成时间: {escape(str(report_data.get("generated_time", "")))}</p>
       </div>
     </header>
+    <section class="bg-white rounded-xl shadow-lg p-6 mb-6">{locating_html}</section>
     {''.join(case_sections)}
     {wm_footer}
   </div>

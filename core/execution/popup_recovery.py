@@ -91,10 +91,10 @@ def is_redline_recovery_intent(intent: str) -> bool:
 
 
 def prepare_dialog_recovery_action(rec: PlannedAction) -> None:
-    """弹窗/协议类 recovery: 跳过 L1/L2 弱缓存, 限定在 dialog 内定位."""
+    """弹窗/协议类 recovery: 跳过 L3/L4 启发式, L1/L2 仍可用."""
     if not is_redline_recovery_intent(rec.intent or ""):
         return
-    rec.skip_acceleration = True
+    rec.skip_heuristics = True
     intent = rec.intent or ""
     if re.search(r"勾选|复选框|checkbox", intent, re.I):
         rec.resolve_hint = rec.resolve_hint or '[role="dialog"] input[type="checkbox"]'

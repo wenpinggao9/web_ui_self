@@ -53,7 +53,14 @@ class StructureLearner:
             "tokens": toks, "selector": info["selector"], "nth": info.get("nth", 0),
         })
 
-    def resolve(self, page: Any, url: str, action_type: str, intent: str) -> Optional[dict]:
+    def resolve(
+        self,
+        page: Any,
+        url: str,
+        action_type: str,
+        intent: str,
+        **_: Any,
+    ) -> Optional[dict]:
         route = normalize_url(url)
         q = _tokens(intent)
         best, best_sim = None, 0.0

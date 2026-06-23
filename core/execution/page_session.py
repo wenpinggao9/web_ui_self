@@ -75,17 +75,25 @@ class PageSession:
         return self.url_keys_equivalent(cached, cur)
 
     def on_detail_opened(self, list_page: Any, detail_page: Any) -> None:
-        """打开详情 tab 前记录列表锚点."""
+        """popup 打开新 tab: anchor=打开前 page, active=新 tab (通用, 与业务 URL 无关)."""
         self.list_anchor = list_page
         self.active = detail_page
         self.page_state = None
 
+    on_tab_opened = on_detail_opened
+
     def remember_list_if_non_detail(self) -> None:
-        """当前在非详情页时更新 list_anchor."""
-        if self.active is None:
-            return
-        url = _url_safe(self.active)
-        if url and not is_detail_submission_url(url):
+        """仅一个存活 tab 时将其记为 anchor."""
+        ctx = _context_from_any(self.active)
+        if ctx is not None:
+            try:
+                alive = [p for p in ctx.pages if _page_alive(p)]
+                if len(alive) == 1:
+                    self.list_anchor = alive[0]
+                    return
+            except Exception:
+                pass
+        if self.active is not None and _page_alive(self.active):
             self.list_anchor = self.active
 
     def resolve_list_anchor(self) -> None:
@@ -113,11 +121,11 @@ class PageSession:
         if outcome == "returned_to_list":
             return True
         url_before = str(meta.get("url_before") or "")
-        url_after = str(meta.get("url_after") or "")
         if not (meta.get("submit_click_ok") and is_detail_submission_url(url_before)):
             return False
+        # 同 tab 自动加载下一任务: 一直在 tab2, 不切 list
         if outcome in ("resource_id_changed", "route_changed"):
-            return bool(url_after) and not is_detail_submission_url(url_after)
+            return False
         if outcome in ("timeout", "settled", "submit_error"):
             return bool(
                 meta.get("detail_tab_closed") or meta.get("left_detail_context"),
@@ -203,8 +211,9 @@ class PageSession:
         if PageSession.needs_list_tab_handoff(merged):
             if is_detail_submission_url(url_before):
                 self.recover_after_detail_close(url_before, merged)
-
-        self.ensure_alive(max_polls=30)
+            self.ensure_alive(max_polls=12)
+        else:
+            self.ensure_alive(max_polls=3)
 
         # 调试: handoff 后 active tab 状态
         _dbg_url_after_handoff = ""

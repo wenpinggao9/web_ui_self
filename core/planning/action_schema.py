@@ -40,6 +40,7 @@ class PlannedAction(BaseModel):
     exclude_selectors: list[str] = Field(default_factory=list, exclude=True)
     resolve_hint: Optional[str] = Field(None, exclude=True)
     skip_acceleration: bool = Field(False, exclude=True, description="重试时跳过 L1/L2 缓存记忆")
+    skip_heuristics: bool = Field(False, exclude=True, description="重试时跳过 L3/L4 启发式, 仍走 L1/L2")
     locator_info: Optional[dict] = Field(None, exclude=True, description="运行时定位信息(含 method)")
 
     def needs_locating(self) -> bool:

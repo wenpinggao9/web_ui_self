@@ -28,19 +28,197 @@ def bring_page_to_front(page: Any) -> None:
         pass
 
 
+def _log_tab_handoff(message: str) -> None:
+    print(f"  [cyan]TabHandoff: {message}[/cyan]")
+
+
+def tab_handoff_snapshot(context: Any, *pages: Any) -> str:
+    """所有相关 tab 的可读快照 (alive / usable / url)."""
+    ctx = context or _context_from_any(*pages)
+    seen: set[int] = set()
+    parts: list[str] = []
+    candidates: list[Any] = []
+    for p in pages:
+        if p is not None and id(p) not in seen:
+            candidates.append(p)
+            seen.add(id(p))
+    if ctx is not None:
+        try:
+            for p in ctx.pages:
+                if id(p) not in seen:
+                    candidates.append(p)
+                    seen.add(id(p))
+        except Exception:
+            pass
+    for i, p in enumerate(candidates):
+        url = _url_safe(p)[:70] if p is not None else ""
+        parts.append(
+            f"#{i+1} alive={_page_alive(p)} usable={_page_usable(p, timeout_ms=400)} "
+            f"detail={is_detail_submission_url(url)} url={url or '<empty>'}"
+        )
+    return " | ".join(parts) if parts else "(no tabs)"
+
+
+def find_newest_non_anchor_tab(
+    context: Any,
+    anchor: Any = None,
+    *hints: Any,
+) -> Any:
+    """Context 中最新存活且非 anchor 的 tab (popup 子 tab, 纯 page 引用)."""
+    ctx = context or _context_from_any(anchor, *hints)
+    if ctx is None:
+        return None
+    try:
+        alive = [p for p in ctx.pages if _page_alive(p)]
+    except Exception:
+        return None
+    if not alive:
+        return None
+    if anchor is not None:
+        others = [p for p in alive if p is not anchor]
+        if others:
+            return others[-1]
+    if len(alive) >= 2:
+        return alive[-1]
+    return None
+
+
+def find_preferred_detail_tab(context: Any, *hints: Any) -> Any:
+    """兼容旧名: 优先走 anchor 模型 (非 anchor 的最新 tab)."""
+    anchor = None
+    for h in hints:
+        if h is not None:
+            anchor = h
+            break
+    return find_newest_non_anchor_tab(context, anchor, *hints)
+
+
+def find_alive_detail_tab(context: Any, *hints: Any) -> Any:
+    """兼容旧名 → find_newest_non_anchor_tab."""
+    anchor = None
+    for h in hints:
+        if h is not None and not is_detail_submission_url(_url_safe(h)):
+            anchor = h
+            break
+    return find_newest_non_anchor_tab(context, anchor, *hints)
+
+
+def sticky_resolve_tab(
+    active: Any,
+    list_anchor: Any = None,
+) -> tuple[Any, bool, str]:
+    """纯 anchor 模型: active 未关闭则一直用 active; 关闭则回 list_anchor.
+
+    不依赖 URL / 业务路径; 仅 _page_alive + 打开时记录的 anchor.
+    """
+    switched = False
+
+    def _front(p: Any) -> None:
+        try:
+            p.bring_to_front()
+        except Exception:
+            pass
+
+    if active is not None and _page_alive(active):
+        _front(active)
+        return active, False, "stick_active"
+
+    if list_anchor is not None and _page_alive(list_anchor):
+        switched = active is not list_anchor
+        _front(list_anchor)
+        return list_anchor, switched, "stick_anchor"
+
+    ctx = _context_from_any(active, list_anchor)
+    if ctx is not None:
+        try:
+            alive = [p for p in ctx.pages if _page_alive(p)]
+        except Exception:
+            alive = []
+        if alive:
+            pick = alive[-1]
+            switched = pick is not active
+            _front(pick)
+            return pick, switched, "stick_newest"
+
+    return active, False, "stick_none"
+
+
 def pick_role_handoff_page(
     context: Any,
     current_page: Any = None,
     *,
     list_anchor: Any = None,
     primary_page: Any = None,
+    prefer_current: bool = False,
+    prefer_detail: bool = False,
+    reason: str = "",
 ) -> Any:
     """跨用例/跨角色复用时选稳定 tab, 仅依赖运行时 tab 关系, 不假设 URL 形态.
 
-    优先级: list_anchor > primary_page > 多 tab 时非 current 的首个 tab > 首个可用 tab > recover.
+    优先级 (默认): list_anchor > primary_page > 多 tab 时非 current > 首个可用 tab.
+    prefer_current=True: 当前 tab 仍可用/仍存活时优先保留.
+    prefer_detail=True: 在 prefer_current 路径下优先详情 tab (跨用例连续审详情).
     """
+    tag = f"[{reason}] " if reason else ""
+    _log_tab_handoff(
+        f"{tag}start prefer_current={prefer_current} prefer_detail={prefer_detail} "
+        f"current={(_url_safe(current_page) or '<none>')[:70]}"
+    )
+    _log_tab_handoff(
+        f"{tag}inventory {tab_handoff_snapshot(context, current_page, list_anchor, primary_page)}"
+    )
+
+    if prefer_current and current_page is not None:
+        if _page_usable(current_page):
+            _log_tab_handoff(f"{tag}→ keep current (usable)")
+            return current_page
+        if _page_alive(current_page):
+            if _page_usable(current_page, timeout_ms=4000):
+                _log_tab_handoff(f"{tag}→ keep current (slow evaluate ok)")
+                return current_page
+            cur_url = _url_safe(current_page)
+            if cur_url:
+                _log_tab_handoff(
+                    f"{tag}current alive but evaluate slow, url={cur_url[:70]}"
+                )
+
+    if prefer_current and prefer_detail:
+        if current_page is not None and _page_alive(current_page):
+            if list_anchor is None or current_page is not list_anchor:
+                _log_tab_handoff(
+                    f"{tag}→ keep current child tab {_url_safe(current_page)[:70]}"
+                )
+                try:
+                    current_page.bring_to_front()
+                except Exception:
+                    pass
+                return current_page
+        child = find_newest_non_anchor_tab(
+            context, list_anchor, current_page, primary_page,
+        )
+        if child is not None:
+            _log_tab_handoff(f"{tag}→ prefer_child_tab {_url_safe(child)[:70]}")
+            try:
+                child.bring_to_front()
+            except Exception:
+                pass
+            return child
+
+    if prefer_current and current_page is not None and _page_alive(current_page):
+        cur_url = _url_safe(current_page)
+        if cur_url:
+            _log_tab_handoff(f"{tag}→ keep current (alive+url, weak)")
+            try:
+                current_page.bring_to_front()
+            except Exception:
+                pass
+            return current_page
+
     for candidate in (list_anchor, primary_page):
         if candidate is not None and _page_usable(candidate):
+            _log_tab_handoff(
+                f"{tag}→ fallback candidate {_url_safe(candidate)[:70]}"
+            )
             return candidate
 
     usable: list[Any] = []
@@ -51,11 +229,14 @@ def pick_role_handoff_page(
         usable = []
 
     if usable:
-        # 用例结束时 current_page 常为最后聚焦 tab (如 click 新开的 tab), 优先回到其它仍存活的 tab
-        if current_page is not None and len(usable) > 1:
+        if current_page is not None and len(usable) > 1 and not prefer_current:
             others = [p for p in usable if p is not current_page]
             if others:
+                _log_tab_handoff(
+                    f"{tag}→ other usable tab (non-preserve) {_url_safe(others[0])[:70]}"
+                )
                 return others[0]
+        _log_tab_handoff(f"{tag}→ first usable tab {_url_safe(usable[0])[:70]}")
         return usable[0]
 
     if current_page is not None:
@@ -63,7 +244,9 @@ def pick_role_handoff_page(
             current_page, prefer=list_anchor or primary_page,
         )
         if _page_usable(recovered):
+            _log_tab_handoff(f"{tag}→ recovered {_url_safe(recovered)[:70]}")
             return recovered
+    _log_tab_handoff(f"{tag}→ return current unchanged")
     return current_page
 
 
@@ -233,17 +416,20 @@ def recover_after_submit_tab_close(
         ))
 
     for _ in range(max_polls):
+        if _page_alive(cur):
+            u = _url_safe(cur)
+            if still_on_same_detail_after_submit(url_before, u):
+                return cur, recovered, u
+            if _left(u) or not want_leave:
+                return cur, recovered, u
+
         cur, changed = recover_active_page(cur, prefer=list_anchor)
         if changed:
             recovered = True
-        if list_anchor is not None and _page_usable(list_anchor):
-            cur_url = _url_safe(cur) if _page_usable(cur) else ""
-            should_use_anchor = (
-                not _page_usable(cur)
-                or submit_left_detail_context(
-                    url_before, cur_url, list_anchor=list_anchor,
-                )
-            )
+
+        if list_anchor is not None and _page_alive(list_anchor):
+            cur_url = _url_safe(cur) if _page_alive(cur) else ""
+            should_use_anchor = not _page_alive(cur) or _left(cur_url)
             if should_use_anchor:
                 try:
                     list_anchor.bring_to_front()
@@ -251,16 +437,13 @@ def recover_after_submit_tab_close(
                     pass
                 cur = list_anchor
                 recovered = True
-        if _page_usable(cur):
-            u = _url_safe(cur)
-            if still_on_same_detail_after_submit(url_before, u):
-                return cur, recovered, u
-            if _left(u) or not want_leave:
-                return cur, recovered, u
+                if _page_alive(cur):
+                    return cur, recovered, _url_safe(cur)
+
         ctx = _context_from_any(cur, list_anchor)
         if ctx is not None:
             for p in reversed(list(ctx.pages)):
-                if not _page_usable(p):
+                if not _page_alive(p):
                     continue
                 u = _url_safe(p)
                 if _left(u):
@@ -284,9 +467,9 @@ def recover_after_submit_tab_close(
 
     cur, changed = recover_active_page(cur, prefer=list_anchor)
     recovered = recovered or changed
-    cur_url = _url_safe(cur) if _page_usable(cur) else ""
-    if list_anchor is not None and _page_usable(list_anchor):
-        if not _page_usable(cur) or submit_left_detail_context(
+    cur_url = _url_safe(cur) if _page_alive(cur) else ""
+    if list_anchor is not None and _page_alive(list_anchor):
+        if not _page_alive(cur) or submit_left_detail_context(
             url_before, cur_url, list_anchor=list_anchor,
         ):
             cur = list_anchor
@@ -342,32 +525,20 @@ def find_usable_context_pages(*pages: Any) -> list[Any]:
 
 
 def find_list_tab_anchor(page: Any, list_anchor: Any = None) -> Any:
-    """找列表/非详情兄弟 tab, 供提交后恢复与跨用例 handoff."""
-    _dbg1 = f"page_alive={_page_alive(page)} list_anchor={'None' if list_anchor is None else ('alive=' + str(_page_alive(list_anchor)))}"
-    if list_anchor is not None and _page_usable(list_anchor):
+    """打开 popup 时记录的 anchor; 无记录时取 context 中最早存活的 tab."""
+    if list_anchor is not None and _page_alive(list_anchor):
         return list_anchor
-    if _page_usable(page):
-        sib = find_sibling_tab_anchor(page)
-        if sib is not None:
-            return sib
-
-    # 尝试获取 context
     ctx = _context_from_any(page, list_anchor)
-    _dbg_ctx = f"context={'found' if ctx else 'None'}"
     if ctx is not None:
         try:
-            _dbg_ctx += f" tabs={len(ctx.pages)}"
-        except Exception as e:
-            _dbg_ctx += f" tabs_err={e}"
-
-    for p in find_usable_context_pages(page, list_anchor):
-        if not is_detail_submission_url(_url_safe(p)):
-            return p
-    usable = find_usable_context_pages(page, list_anchor)
-    _dbg_usable = f"usable_count={len(usable)}"
-    result = usable[0] if usable else None
-    print(f"  [cyan]find_list_tab_anchor: [{_dbg1}] {_dbg_ctx} {_dbg_usable} → {'found' if result else 'None'}[/cyan]")
-    return result
+            alive = [p for p in ctx.pages if _page_alive(p)]
+            if alive:
+                return alive[0]
+        except Exception:
+            pass
+    if _page_alive(page):
+        return page
+    return list_anchor
 
 
 def pick_surviving_tab_after_detail_close(
@@ -376,16 +547,21 @@ def pick_surviving_tab_after_detail_close(
     url_before: str = "",
     list_anchor: Any = None,
 ) -> tuple[Any, bool, str, bool]:
-    """详情 tab 关闭后选存活 tab. 返回 (page, recovered, url, left_detail)."""
+    """active 关闭后选存活 tab. 返回 (page, recovered, url, left_context).
+
+    Tab 切换纯 anchor 模型; url_before 仅用于提交层 left_detail 语义 (不参与选 tab).
+    """
     url_now = _url_safe(page) if _page_usable(page) else ""
+    if not url_now and _page_alive(page):
+        url_now = _url_safe(page)
     _dbg_pick1 = f"page_alive={_page_alive(page)} page_usable={_page_usable(page)} url_now={url_now[:80] if url_now else '<empty>'}"
 
-    if (
-        is_detail_submission_url(url_before)
-        and still_on_same_detail_after_submit(url_before, url_now)
-        and _page_usable(page)
-    ):
-        return page, False, url_now, False
+    if _page_alive(page):
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+        return page, False, url_now or _url_safe(page), False
 
     anchor = find_list_tab_anchor(page, list_anchor)
     _dbg_anchor_url = ""
@@ -398,7 +574,7 @@ def pick_surviving_tab_after_detail_close(
         page,
         url_before=url_before,
         list_anchor=anchor,
-        max_polls=25,
+        max_polls=8,
     )
     _dbg_recover = f"after_recover: page_alive={_page_alive(page)} page_usable={_page_usable(page)} url={(_url_safe(page) or '<none>')[:80]} recovered={recovered}"
     print(f"  [cyan]pick_surviving: [{_dbg_pick1}] anchor={_dbg_anchor_url[:80]} → {_dbg_recover}[/cyan]")
@@ -408,14 +584,15 @@ def pick_surviving_tab_after_detail_close(
         return page, recovered, url, left
 
     if not _page_alive(page):
+        if anchor is not None and _page_alive(anchor):
+            try:
+                anchor.bring_to_front()
+            except Exception:
+                pass
+            return anchor, True, _url_safe(anchor), True
         usable = find_usable_context_pages(page, anchor)
-        _dbg_usable = len(usable)
         if usable:
             p = usable[0]
-            for cand in usable:
-                if not is_detail_submission_url(_url_safe(cand)):
-                    p = cand
-                    break
             try:
                 p.bring_to_front()
             except Exception:
@@ -426,10 +603,10 @@ def pick_surviving_tab_after_detail_close(
         left = True
     elif _page_usable(page) and not is_detail_submission_url(url):
         left = True
-    elif anchor is not None and _page_usable(anchor):
-        if still_on_same_detail_after_submit(url_before, url) and _page_usable(page):
-            pass  # timeout 仍停同一详情: 不切 list_anchor, 不标 left
-        else:
+    elif anchor is not None and _page_alive(anchor) and page is not anchor:
+        if still_on_same_detail_after_submit(url_before, url) and _page_alive(page):
+            pass
+        elif not _page_alive(page):
             page = anchor
             try:
                 page.bring_to_front()
@@ -438,13 +615,13 @@ def pick_surviving_tab_after_detail_close(
             url = _url_safe(page)
             left = True
             recovered = True
-    elif not _page_usable(page):
+    elif not _page_alive(page):
         usable = find_usable_context_pages(page, anchor)
-        non_detail = [
-            p for p in usable
-            if not is_detail_submission_url(_url_safe(p))
-        ]
-        pick = non_detail[0] if non_detail else (usable[0] if usable else None)
+        pick = None
+        if anchor is not None and _page_alive(anchor):
+            pick = anchor
+        elif usable:
+            pick = usable[0]
         if pick is not None:
             page = pick
             try:
@@ -643,9 +820,17 @@ def is_table_row_click_intent(intent: str) -> bool:
     # 行内按钮: ${id}的'按钮' 或 数字ID的'按钮'
     if re.search(r"(?:\d{4,}|\$\{[^}]+\})的[「'\"]", text):
         return True
+    # readiness/recovery 常见: 第一条任务(146550684)的查看按钮
+    if re.search(r"任务[（(](?:\d{4,}|\$\{[^}]+\})[）)]", text):
+        return True
+    if re.search(r"第[一二三四五六七八九十\d]+条", text) and re.search(
+        r"(?:任务|记录|工单|订单).*(?:的|中).*(?:按钮|查看|编辑|删除|日志)",
+        text,
+    ):
+        return True
     markers = (
         "对应", "该行", "此行", "列表中", "某行", "工单", "订单", "记录", "行内",
-        "第一个", "第一行", "首行", "首条", "任务的",
+        "第一个", "第一行", "首行", "首条", "第一条", "任务的",
     )
     if not any(m in text for m in markers):
         return False
@@ -698,7 +883,14 @@ def parse_table_row_click(
         if not button:
             btn_m = re.search(r"点击[「'\"]([^」'\"]+)[」'\"]", text)
             button = (btn_m.group(1) if btn_m else (quoted[-1] if quoted else "")).strip()
+        if not button:
+            bare_btn = re.search(r"的([^'\"「」\s，。;；（(]+)按钮", text)
+            if bare_btn:
+                button = bare_btn.group(1).strip()
         if not row_hint:
+            task_id_m = re.search(r"任务[（(]([^）)]+)[）)]", text)
+            if task_id_m:
+                row_hint = task_id_m.group(1).strip()
             for block in reversed(re.findall(r"[（(]([^）)]+)[）)]", text)):
                 m = re.search(r"选择[了]?[「'\"]([^」'\"]+)[」'\"]", block)
                 if m:
@@ -725,7 +917,7 @@ def parse_table_row_click(
     if not button:
         return None
     if not row_hint:
-        if re.search(r"第一个|第一行|首行|首条", text):
+        if re.search(r"第一个|第一行|首行|首条|第一条", text):
             row_hint = FIRST_TABLE_ROW_KEY
         elif is_table_row_click_intent(text):
             row_hint = FIRST_TABLE_ROW_KEY
