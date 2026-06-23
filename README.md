@@ -87,7 +87,9 @@ ui_automation/
 │   │   ├── resolver.py         #   编排: L1→L2→L3→L4→L5
 │   │   ├── cache.py            #   L1 选择器缓存 (30min TTL)
 │   │   ├── memory.py           #   L2 长期记忆 (加减分)
-│   │   ├── page_structure_learner.py  # L4 结构学习 (跨批次持久化)
+│   │   ├── composite_learner.py#   L4 封装 (PageStructureLearner)
+│   │   ├── page_structure_learner.py  # L4 路由+组件模板+DOM 指纹
+│   │   ├── accel_paths.py      #   智能加速落盘路径 + 旧文件迁移
 │   │   ├── skill_resolver.py   #   L3 规则 skill 分发 + 组件类型推断
 │   │   ├── skill_dom_helpers.py#   build_* 选择器 (radio/checkbox/fill/…)
 │   │   ├── intent_route.py     #   意图 → 组件类型路由
@@ -104,6 +106,7 @@ ui_automation/
 │   │   ├── retry.py            #   带后校验重试 (值/选择器/两者/无)
 │   │   ├── retry_hint.py       #   后校验 hint 解析 (CSS/索引)
 │   │   ├── page_session.py     #   Tab 跟随 + 断言 DOM 复用
+│   │   ├── cross_case_session.py #   跨用例多角色切回时 reload
 │   │   └── runner.py           #   执行编排器 PlaywrightRunner
 │   ├── llm/                    # 步骤⑱ LLM 基础层
 │   │   ├── adapter.py          #   LLM 适配器 (重试 + JSON提取)
@@ -181,10 +184,16 @@ runner:
   pre_readiness_check: true   # 步骤前就绪检查
   post_step_check: true       # 步骤后校验 (防假操作)
   post_step_max_retries: 5    # 重试上限
+  cross_case_session: true    # 跨用例复用浏览器上下文 (多角色各一 context)
+  auto_navigate: false        # false: 由用例步骤自行导航
 
-# 步骤⑨ L3 大模型 DOM 窗口 (L3规则 仍扫完整 DOM)
+acceleration:
+  l1_ttl_minutes: 30
+  l4_similarity_threshold: 0.6  # L4 DOM 指纹相似页复用阈值
+
+# 步骤⑨ L5 大模型 DOM 窗口 (L3规则/L4学习 仍用全量 DOM)
 locating:
-  dom_limit: 80               # 喂给 element_decide LLM 的候选上限
+  dom_limit: 120              # 喂给 element_decide LLM 的候选上限
   intent_window: true         # 从完整 DOM 按 intent 抽相关节点; false 则取前 N 条
 ```
 
@@ -355,14 +364,11 @@ docker run -p 8000:8000 ui-automation
 
 ### 5. 五级定位链 (智能加速)
 
-定位顺序:**L1 缓存 → L2 记忆 → L3 规则 → L4 学习(Composite) → L5 大模型**. L1-L4 未命中或校验失败时进入下一级; L5 成功后回填 L1+L2+L4.
+定位顺序:**L1 缓存 → L2 记忆 → L3 规则 → L4 学习 → L5 大模型**. L1-L4 未命中或校验失败时进入下一级; L5 成功后回填 L1+L2+L4.
 
 ```
 L1 缓存 ──→ L2 记忆 ──→ L3 规则 ──→ L4 学习 ──→ L5 大模型
-   └ 自愈              └ 通用模板          ├─ 本地 fallback
-                                          ├─ 二次 LLM (confidence≤0.3)
-                                          ├─ L5 Skill / 节点纠偏
-                                          └─ auto_skill 升级
+   └ 自愈              └ 通用模板          └ L5 Skill / 节点纠偏 / intent_window
 ```
 
 | 级别 | 来源 | 说明 |
@@ -370,16 +376,20 @@ L1 缓存 ──→ L2 记忆 ──→ L3 规则 ──→ L4 学习 ──→ 
 | L1 缓存 | `智能加速/selector_cache/selector_cache.json` | 同 URL+意图; 命中可跳过 DOM; 含自愈分支 |
 | L2 记忆 | `智能加速/selector_memory/selector_memory.json` | 跨运行加减分 + selector_type; 含通用模板子策略 |
 | L3 规则 | IntentRuleEngine + build_* skill | 无 LLM 确定性规则 |
-| L4 学习 | PageStructureLearner | CompositeStructureLearner |
+| L4 学习 | `智能加速/page_structure_learner/page_structure_learner.json` | 按 route + 组件类型 + DOM 指纹学习选择器模板 |
 | L5 大模型 | `element_decide` | intent_window / dom_limit 限候选 |
+
+**落盘布局 (V3)**: 三层加速各一子目录 (`selector_cache/`、`selector_memory/`、`page_structure_learner/`). 首次启动若根目录仍有旧版平铺 `选择器缓存.json` / `选择器记忆库.json`, 会自动迁入对应子目录.
 
 **可观测性**: 批次末 `acceleration_stats()`; 用例/批次报告「可观测性」Tab 与 `report_overview.html` 展示五级命中率与 `resolve_distribution`.
 
-**DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L5大模型** 受 `dom_limit` / 意图窗口限制.
+**DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L5大模型** 受 `dom_limit` / 意图窗口限制. 导航类操作 (新开 tab / URL 变化 / `navigation_outcome`) 后 capture 会 **settle** (节点数连续稳定再落盘).
 
 **重试 hint**: 后校验给出的 `resolve_hint` 与 `exclude_selectors` 一并传入五级定位链, 不再短路强制复用选择器.
 
-**断言 DOM**: 同 URL 连续断言复用上一步操作后的 semantic_items; 提交类操作后断言走实时 DOM, 不用固化快照.
+**断言 DOM**: 同 URL 连续断言优先复用操作后 `settled` 缓存; 程序化未命中时走 live 区域文本 / 语义断言; 仅 **unsettled** 快照才 force_refresh 重抓.
+
+**跨用例会话** (`cross_case_session`): 多角色各建 browser context, 同角色跨 case 复用; 从其他角色切回时对当前页 `reload` 同步数据 (tab handoff 仍由 `page_session` 负责).
 
 框架 **不在 `core/` 硬编码业务字段**; 业务枚举、API、角色写在各项目 `业务知识.md` / `项目配置.yaml`.
 
