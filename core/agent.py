@@ -16,6 +16,7 @@ from playwright.sync_api import sync_playwright
 from . import codegen
 from .business_loader import BusinessLoader
 from .execution import ActionDispatcher, PlaywrightRunner
+from .execution.cross_case_session import refresh_page_on_role_reentry
 from .execution.script_helpers import (
     bring_page_to_front,
     find_list_tab_anchor,
@@ -34,6 +35,11 @@ from .llm import LLMAdapter, PromptLoader
 from .locating import (
     LLMElementDecider, LocatorResolver, SelectorCache, SelectorMemory,
     CompositeStructureLearner,
+)
+from .locating.accel_paths import (
+    migrate_legacy_accel_layout,
+    selector_cache_path,
+    selector_memory_path,
 )
 from .observability import ObservabilityCollector
 from .output import FileManager
@@ -96,18 +102,21 @@ class UITestAgent:
         # 步骤⑨ 智能加速层: L1 短期缓存 (30min TTL + 落盘), L2 长期记忆
         accel = self.root / "智能加速"
         accel_cfg = config.get("acceleration", {})
+        migrated = migrate_legacy_accel_layout(accel)
+        if migrated:
+            self.console.print(
+                f"[dim]智能加速目录已迁移: {', '.join(migrated)}[/dim]",
+            )
         l1_ttl = int(accel_cfg.get("l1_ttl_minutes", 30)) * 60
         l2_ttl = int(accel_cfg.get("l2_ttl_days", 10)) * 24 * 3600
         self.cache = SelectorCache(
             ttl_s=l1_ttl,
-            path=accel / "选择器缓存.json",
+            path=selector_cache_path(accel),
             self_heal=bool(accel_cfg.get("l1_self_heal", True)),
         )
-        self.memory = SelectorMemory(accel / "选择器记忆库.json", ttl_s=l2_ttl)
+        self.memory = SelectorMemory(selector_memory_path(accel), ttl_s=l2_ttl)
         self.learner = CompositeStructureLearner(
-            intent_path=accel / "页面结构学习.json",
             accel_dir=accel,
-            intent_fallback=bool(accel_cfg.get("l4_intent_fallback", True)),
             similarity_threshold=float(accel_cfg.get("l4_similarity_threshold", 0.6)),
         )
         self.decider = LLMElementDecider(
@@ -175,6 +184,7 @@ class UITestAgent:
         session_vars: dict[str, Any] = {}   # 跨用例共享变量池 (api_call 返回值等)
         cross_session = self.runner_cfg.get("cross_case_session", False)
         role_contexts: dict[str, tuple] = {} if cross_session else None  # 跨用例复用
+        batch_session_state: dict[str, Any] = {"last_role": None}
         with sync_playwright() as p:
             browser_type = getattr(p, self.pw_cfg.get("browser", "chromium"))
             browser = browser_type.launch(headless=self.pw_cfg.get("headless", False))
@@ -183,6 +193,7 @@ class UITestAgent:
                     case_results.append(self._run_one_case(
                         case, browser, fm, biz=biz, case_file=test_file,
                         session_vars=session_vars, role_contexts=role_contexts,
+                        batch_session_state=batch_session_state,
                     ))
                     self.cache.save()
                     self.memory.save()
@@ -246,6 +257,7 @@ class UITestAgent:
         self, case, browser, fm: FileManager, biz: BusinessLoader = None, case_file: str | Path = "",
         session_vars: dict[str, Any] | None = None,
         role_contexts: dict[str, tuple] | None = None,
+        batch_session_state: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.console.rule(f"[bold cyan]用例 {case.case_id}")
 
@@ -348,6 +360,21 @@ class UITestAgent:
                         pg = anchor
                 role_contexts[role] = (ctx, pg, primary)
                 bring_page_to_front(pg)
+                cross_session = self.runner_cfg.get("cross_case_session", False)
+                last_role = (
+                    (batch_session_state or {}).get("last_role")
+                    if batch_session_state is not None
+                    else None
+                )
+                refresh_page_on_role_reentry(
+                    pg,
+                    role=role,
+                    last_active_role=last_role,
+                    cross_case_session=cross_session,
+                    role_already_has_context=True,
+                    timeout_ms=default_timeout,
+                    console=self.console,
+                )
                 try:
                     handoff_url = pg.url or ""
                 except Exception:
@@ -590,6 +617,17 @@ class UITestAgent:
             self.console.print("[red]用例执行异常:[/red]", str(e))
             passed = False
         finally:
+            if (
+                batch_session_state is not None
+                and self.runner_cfg.get("cross_case_session", False)
+            ):
+                end_role = None
+                if runner is not None and getattr(runner, "_last_active_role", None):
+                    end_role = runner._last_active_role
+                else:
+                    end_role = case.role or primary_role or first_role
+                if end_role:
+                    batch_session_state["last_role"] = end_role
             # 跨用例会话模式: 不关闭上下文, 留给下一个 case 复用
             # 独立模式: 关闭所有角色的浏览器上下文
             if role_contexts is not None and not self.runner_cfg.get("cross_case_session", False):

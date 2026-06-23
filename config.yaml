@@ -86,11 +86,10 @@ runner:
 
 # 步骤⑨ 智能加速层 TTL
 acceleration:
-  l1_ttl_minutes: 30   # L1 短期缓存 TTL; 落盘到 智能加速/选择器缓存.json, 重启后 30min 内可复用
+  l1_ttl_minutes: 30   # L1 短期缓存 TTL; 落盘到 智能加速/selector_cache/selector_cache.json
   l1_self_heal: true   # L1 lookup 内建 V3 自愈 (text fuzzy / signature / XPath)
   l2_ttl_days: 10      # L2 记忆库文件, 超过此天数未更新则清理
-  l4_intent_fallback: true   # L4 PageStructureLearner 未命中时回退 intent Jaccard
-  l4_similarity_threshold: 0.6  # L4 页面结构相似度阈值 (注入 PageStructureLearner)
+  l4_similarity_threshold: 0.6  # L4 页面结构相似度阈值 (PageStructureLearner)
   page_ready_guard: true       # DOM 抽取前 PageReadyGuard + DOM stable wait
   dialog_retrigger: true       # intent 指向弹窗按钮但无弹窗时重触发
 

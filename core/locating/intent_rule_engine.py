@@ -212,22 +212,7 @@ def _extract_switch_anchor(intent: str, match: Optional[re.Match] = None) -> Opt
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _combobox_ids_near_label(semantic_dom: List[Dict[str, Any]], label: str) -> List[str]:
-    """从语义 DOM 中按表单项 label 查找邻近 combobox 的 id（如 Ant Design #source）。"""
-    label = (label or "").strip()
-    if not label or not semantic_dom:
-        return []
-    ids: List[str] = []
-    for i, node in enumerate(semantic_dom):
-        text = str(node.get("text") or "").strip()
-        if node.get("tag") != "label" or label not in text:
-            continue
-        for j in range(i, min(i + 25, len(semantic_dom))):
-            child = semantic_dom[j]
-            cid = str(child.get("id") or "").strip()
-            if child.get("role") == "combobox" and cid:
-                ids.append(cid)
-    return list(dict.fromkeys(ids))
+from .field_scope import combobox_ids_near_label
 
 
 def _build_dropdown_option_candidates(
@@ -269,24 +254,25 @@ def _build_dropdown_trigger_candidates(
     text_escaped = _escape_xpath_string(label)
 
     candidates: List[str] = []
-    for cid in _combobox_ids_near_label(semantic_dom, label):
+    # ① 本字段门禁通过的 #id
+    for cid in combobox_ids_near_label(semantic_dom, label):
         candidates.extend([
             f"#{cid}",
             f"#{cid} >> xpath=ancestor::div[contains(@class,'ant-select')][1]",
         ])
+    # ② ant-form-item / el-form-item XPath
     candidates.extend([
-        # Ant Design 表单项
         f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {text_escaped})]]//div[contains(@class,'ant-select')])[1]",
         f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {text_escaped})]]//*[@role='combobox'])[1]",
         f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {text_escaped})]]//span[contains(@class,'ant-select-arrow')])[1]",
-        # dialog 内 el-cascader
         f"(//div[@role='dialog']//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {text_escaped})]]//*[contains(@class,'el-cascader')]//*[contains(@class,'el-input__wrapper')])[1]",
         f"(//div[contains(@class,'el-dialog')]//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {text_escaped})]]//*[contains(@class,'el-select__wrapper')])[1]",
         f"(//div[@role='dialog']//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {text_escaped})]]//*[contains(@class,'el-select__wrapper')])[1]",
-        # 全局 el-form-item + el-select__wrapper
         f"(//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {text_escaped})]]//*[contains(@class,'el-select__wrapper')])[1]",
         f"(//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {text_escaped})]]//*[contains(@class,'el-input__wrapper')])[1]",
-        # placeholder 兜底
+    ])
+    # ③ placeholder 兜底
+    candidates.extend([
         f"(//input[contains(@placeholder, {text_escaped})]/ancestor::*[contains(@class,'el-select')][1]//div[contains(@class,'el-select__wrapper')])[1]",
         f"(//input[contains(@placeholder, {text_escaped})])[1]",
     ])

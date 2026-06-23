@@ -275,7 +275,9 @@ class PageSession:
             self.invalidate_dom()
             self.ensure_alive(max_polls=15)
             tab_ok = ensure_tab_fn(quick=False)
-            if _page_usable(self.active, timeout_ms=800):
+            probe_ms = 2000
+            retry_ms = 6000
+            if _page_usable(self.active, timeout_ms=probe_ms):
                 capture_fn()
             elif not tab_ok:
                 if backup:
@@ -293,7 +295,7 @@ class PageSession:
                         )
                     return True, list(st.get("semantic_items") or []), st.get("dom_summary") or "", ""
                 return False, [], "", "断言失败: 当前浏览器 tab 不可用或已关闭"
-            if not self.page_state and _page_usable(self.active, timeout_ms=2000):
+            if not self.page_state and _page_usable(self.active, timeout_ms=retry_ms):
                 capture_fn()
             if not self.page_state:
                 if backup:

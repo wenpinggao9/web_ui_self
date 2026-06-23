@@ -1,4 +1,4 @@
-"""L4 组合学习器: V3 PageStructureLearner + 意图 Jaccard fallback."""
+"""L4 页面结构学习: PageStructureLearner 封装."""
 from __future__ import annotations
 
 import logging
@@ -8,26 +8,20 @@ from typing import Any, Optional
 from .normalize import normalize_url, validate_selector
 from .page_structure_learner import PageStructureLearner
 from .skill_resolver import info_from_recommended_selector
-from .structure_learner import StructureLearner
 
 logger = logging.getLogger(__name__)
 
 
 class CompositeStructureLearner:
-    """L4: 页面结构模板学习为主, 旧版 intent Jaccard 为 fallback."""
+    """L4: 按 route + 组件类型 + DOM 指纹学习/复用选择器模板."""
 
     def __init__(
         self,
-        intent_path: str | Path,
         accel_dir: str | Path,
         *,
-        intent_fallback: bool = True,
         similarity_threshold: float = 0.6,
     ) -> None:
-        self.intent_path = Path(intent_path)
         self.accel_dir = Path(accel_dir)
-        self.intent_fallback = intent_fallback
-        self.intent = StructureLearner(self.intent_path)
         self.page = PageStructureLearner(similarity_threshold=similarity_threshold)
         self.page.load_from_file(self.accel_dir)
 
@@ -43,12 +37,11 @@ class CompositeStructureLearner:
         items = semantic_items or []
         route = normalize_url(url)
         sel = self.page.resolve_from_learned(route, intent, action_type, items)
-        if sel:
-            info = info_from_recommended_selector(sel)
-            if validate_selector(page, info):
-                return info
-        if self.intent_fallback:
-            return self.intent.resolve(page, url, action_type, intent)
+        if not sel:
+            return None
+        info = info_from_recommended_selector(sel)
+        if validate_selector(page, info):
+            return info
         return None
 
     def learn(
@@ -61,7 +54,6 @@ class CompositeStructureLearner:
         semantic_items: Optional[list[dict]] = None,
         component_library: str = "unknown",
     ) -> None:
-        self.intent.learn(url, action_type, intent, info)
         selector = info.get("selector") or ""
         if not selector:
             return
@@ -90,7 +82,7 @@ class CompositeStructureLearner:
         intent: str = "",
         component_type: str = "generic",
     ) -> None:
-        self.intent.record_failure(url, action_type, selector)
+        del intent, selector
         self.page.record_failure(
             normalize_url(url),
             action_type,
@@ -98,13 +90,8 @@ class CompositeStructureLearner:
         )
 
     def save(self) -> None:
-        self.intent.save()
         self.page.save_to_file(self.accel_dir)
 
     @property
     def stats(self) -> dict[str, Any]:
-        return {
-            **self.page.stats,
-            "intent_fallback": self.intent_fallback,
-            "intent_records": len(getattr(self.intent, "_records", [])),
-        }
+        return self.page.stats

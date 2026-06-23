@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
 
 # 旧版 querySelector 快照已移除; 抽取走 dom bridge (traverse + 下拉/option 专项).
@@ -35,6 +36,65 @@ def wait_for_dom_stable(page: Any, quiet_ms: int = 200, timeout_ms: int = 3000) 
         page.evaluate(f"(q) => Promise.race([{_DOM_STABLE_JS}(q), new Promise(r=>setTimeout(r,{timeout_ms}))])", quiet_ms)
     except Exception:
         pass
+
+
+def wait_for_semantic_items_settle(
+    page: Any,
+    *,
+    profile: str = "post_verify",
+    dialog_first: bool = True,
+    stable: bool = False,
+    selectors: Optional[dict[str, str]] = None,
+    poll_ms: int = 200,
+    stable_rounds: int = 2,
+    timeout_ms: int = 8000,
+    pre_quiet_ms: int = 1000,
+) -> list[dict]:
+    """轮询 semantic_items 数量直至连续 stable_rounds 次不变, 再返回最后一次抽取.
+
+    用于导航/异步块插入后 capture, 避免「DOM 已安静但节点数仍在增长」的半成品快照.
+    """
+    wait_for_dom_stable(
+        page,
+        quiet_ms=min(pre_quiet_ms, 2000),
+        timeout_ms=min(timeout_ms, 5000),
+    )
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    last_count = -1
+    stable_hits = 0
+    last_items: list[dict] = []
+
+    while time.monotonic() < deadline:
+        items = extract_items(
+            page,
+            profile=profile,
+            dialog_first=dialog_first,
+            stable=stable,
+            selectors=selectors,
+        )
+        count = len(items)
+        if count > 0 and count == last_count:
+            stable_hits += 1
+            if stable_hits >= stable_rounds:
+                return items
+        else:
+            stable_hits = 0
+        last_count = count
+        last_items = items
+        try:
+            page.wait_for_timeout(poll_ms)
+        except Exception:
+            break
+
+    if last_items:
+        return last_items
+    return extract_items(
+        page,
+        profile=profile,
+        dialog_first=dialog_first,
+        stable=stable,
+        selectors=selectors,
+    )
 
 
 def _snapshot_items(

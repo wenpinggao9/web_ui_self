@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "saved_at": 1782179646.046156,
+  "saved_at": 1782208748.3371232,
   "page_entries": {
     "/video/all-question|click|在筛选区点击来源下拉框": {
       "nth": 0,
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"来源\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 11,
+      "success_count": 14,
       "created_at": 1782121380.9641411,
-      "updated_at": 1782178862.050957,
+      "updated_at": 1782203978.069168,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -23,9 +23,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"策略\")])[1]",
       "method": "css",
-      "success_count": 11,
+      "success_count": 14,
       "created_at": 1782121397.6158369,
-      "updated_at": 1782178872.9696121,
+      "updated_at": 1782203999.001577,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -39,9 +39,9 @@
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学段\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 11,
+      "success_count": 14,
       "created_at": 1782121410.135294,
-      "updated_at": 1782178883.675325,
+      "updated_at": 1782204012.596639,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -55,9 +55,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]",
       "method": "css",
-      "success_count": 10,
+      "success_count": 13,
       "created_at": 1782121426.30214,
-      "updated_at": 1782178894.7457511,
+      "updated_at": 1782204024.978944,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -71,9 +71,9 @@
       "in_dialog": false,
       "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), \"学科\")]]//*[@role='combobox'])[1]",
       "method": "css",
-      "success_count": 10,
+      "success_count": 15,
       "created_at": 1782121437.823912,
-      "updated_at": 1782178904.72518,
+      "updated_at": 1782207833.4915998,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -87,9 +87,9 @@
       "in_dialog": false,
       "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"数学\")])[1]",
       "method": "css",
-      "success_count": 10,
+      "success_count": 15,
       "created_at": 1782121454.60553,
-      "updated_at": 1782178915.014994,
+      "updated_at": 1782207844.890174,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -106,9 +106,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=button[name=\"提 交\"]",
-      "success_count": 6,
+      "success_count": 8,
       "created_at": 1782121581.957115,
-      "updated_at": 1782179044.049758,
+      "updated_at": 1782205301.03912,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -141,9 +141,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=menuitem[name=\"待前审\"]",
-      "success_count": 3,
+      "success_count": 5,
       "created_at": 1782129762.0115871,
-      "updated_at": 1782171642.445708,
+      "updated_at": 1782205226.349216,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -160,9 +160,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=button[name=\"提 交\"]",
-      "success_count": 4,
+      "success_count": 8,
       "created_at": 1782138143.025463,
-      "updated_at": 1782178929.2879329,
+      "updated_at": 1782207860.233453,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -178,9 +178,9 @@
       "method": "text",
       "name": "全部题目",
       "exact": true,
-      "success_count": 4,
+      "success_count": 8,
       "created_at": 1782142954.8364859,
-      "updated_at": 1782178851.238243,
+      "updated_at": 1782203966.531709,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -197,9 +197,9 @@
       "role": "button",
       "name": "提 交",
       "exact": false,
-      "success_count": 4,
+      "success_count": 7,
       "created_at": 1782143045.139819,
-      "updated_at": 1782179156.635988,
+      "updated_at": 1782205484.923286,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -234,9 +234,9 @@
       "method": "text",
       "name": "工单ID",
       "exact": true,
-      "success_count": 4,
+      "success_count": 6,
       "created_at": 1782144900.1370492,
-      "updated_at": 1782179192.0096698,
+      "updated_at": 1782208182.243393,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -251,9 +251,9 @@
       "in_dialog": false,
       "selector": "input#searchText",
       "method": "css",
-      "success_count": 6,
+      "success_count": 8,
       "created_at": 1782138240.9022899,
-      "updated_at": 1782179205.7590232,
+      "updated_at": 1782205531.649643,
       "component_library": "ant-design",
       "node_signature": {
         "tag": "",
@@ -289,9 +289,9 @@
       "role": "button",
       "name": "领取",
       "exact": false,
-      "success_count": 4,
+      "success_count": 8,
       "created_at": 1782146590.337204,
-      "updated_at": 1782178994.550974,
+      "updated_at": 1782204143.499234,
       "component_library": "ant-design",
       "selector_type": "role",
       "node_signature": {
@@ -308,9 +308,9 @@
       "method": "text",
       "name": "待前审",
       "exact": true,
-      "success_count": 4,
+      "success_count": 7,
       "created_at": 1782146813.4398952,
-      "updated_at": 1782178977.049166,
+      "updated_at": 1782204122.207983,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -327,9 +327,9 @@
       "method": "text",
       "name": "全部题目",
       "exact": true,
-      "success_count": 2,
+      "success_count": 4,
       "created_at": 1782172484.3599591,
-      "updated_at": 1782179180.89807,
+      "updated_at": 1782208170.857285,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -366,9 +366,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=button[name=\"查 看\"]",
-      "success_count": 2,
+      "success_count": 4,
       "created_at": 1782172626.22586,
-      "updated_at": 1782179310.0900228,
+      "updated_at": 1782208299.4302778,
       "component_library": "ant-design",
       "selector_type": "role",
       "node_signature": {
@@ -385,9 +385,9 @@
       "method": "text",
       "name": "多题",
       "exact": true,
-      "success_count": 2,
+      "success_count": 4,
       "created_at": 1782172644.151654,
-      "updated_at": 1782179323.86797,
+      "updated_at": 1782208314.895654,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -404,9 +404,9 @@
       "method": "text",
       "name": "已审核",
       "exact": true,
-      "success_count": 1,
+      "success_count": 2,
       "created_at": 1782172736.983582,
-      "updated_at": 1782172736.983582,
+      "updated_at": 1782208380.7272298,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -424,9 +424,9 @@
       "nth": 0,
       "in_dialog": false,
       "selector": "role=button[name=\"查 看\"]",
-      "success_count": 1,
+      "success_count": 2,
       "created_at": 1782172752.177461,
-      "updated_at": 1782172752.177461,
+      "updated_at": 1782208395.255408,
       "component_library": "ant-design",
       "selector_type": "role",
       "node_signature": {
@@ -462,9 +462,9 @@
       "method": "text",
       "name": "已审核",
       "exact": true,
-      "success_count": 1,
+      "success_count": 2,
       "created_at": 1782179397.7167401,
-      "updated_at": 1782179397.7167401,
+      "updated_at": 1782186767.146399,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -481,9 +481,9 @@
       "method": "text",
       "name": "审核历史",
       "exact": true,
-      "success_count": 1,
+      "success_count": 2,
       "created_at": 1782179485.832546,
-      "updated_at": 1782179485.832546,
+      "updated_at": 1782208467.169248,
       "component_library": "ant-design",
       "selector_type": "css",
       "node_signature": {
@@ -492,17 +492,200 @@
         "role": "",
         "class_pattern": ""
       }
+    },
+    "/video/wait-preview|click|在待前审页面点击领取题目按钮": {
+      "method": "role",
+      "role": "button",
+      "name": "领取题目",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"领取题目\"]",
+      "success_count": 2,
+      "created_at": 1782186675.526876,
+      "updated_at": 1782208283.4643672,
+      "component_library": "ant-design",
+      "selector_type": "role",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
+    },
+    "/video/all-question|click|在筛选区点击工单id作为搜索类型": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"工单ID\"",
+      "method": "text",
+      "name": "工单ID",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782205519.0492082,
+      "updated_at": 1782205519.0492082,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/wait-preview|click|点击待前审进入前审列表页": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "text=\"待前审\"",
+      "method": "text",
+      "name": "待前审",
+      "exact": true,
+      "success_count": 1,
+      "created_at": 1782208227.511477,
+      "updated_at": 1782208227.511477,
+      "component_library": "generic",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|在筛选区点击类型下拉框": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '类型')]]//div[contains(@class,'ant-select')])[1]",
+      "method": "css",
+      "success_count": 1,
+      "created_at": 1782208481.7828832,
+      "updated_at": 1782208481.7828832,
+      "component_library": "ant-design",
+      "selector_type": "xpath",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|在下拉选项中点击前审": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"前审\")])[1]",
+      "method": "css",
+      "success_count": 1,
+      "created_at": 1782208496.7052958,
+      "updated_at": 1782208496.7052958,
+      "component_library": "ant-design",
+      "selector_type": "xpath",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|在下拉选项中点击大学": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]",
+      "method": "css",
+      "success_count": 1,
+      "created_at": 1782208525.084556,
+      "updated_at": 1782208525.084556,
+      "component_library": "ant-design",
+      "selector_type": "xpath",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|在下拉选项中点击举报/放弃": {
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"举报/放弃\")])[1]",
+      "method": "css",
+      "success_count": 1,
+      "created_at": 1782208553.160309,
+      "updated_at": 1782208553.160309,
+      "component_library": "ant-design",
+      "selector_type": "xpath",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|在筛选区点击审核时间日期选择框": {
+      "method": "placeholder",
+      "name": "开始日期",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "placeholder:\"开始日期\"",
+      "success_count": 1,
+      "created_at": 1782208585.214915,
+      "updated_at": 1782208585.214915,
+      "component_library": "ant-design",
+      "selector_type": "css",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "",
+        "class_pattern": ""
+      }
+    },
+    "/video/check-history|click|点击页面空白区域关闭日期选择器弹窗": {
+      "method": "role",
+      "role": "button",
+      "name": "重 置",
+      "exact": false,
+      "nth": 0,
+      "in_dialog": false,
+      "selector": "role=button[name=\"重 置\"]",
+      "success_count": 1,
+      "created_at": 1782208713.495754,
+      "updated_at": 1782208713.495754,
+      "component_library": "ant-design",
+      "selector_type": "role",
+      "node_signature": {
+        "tag": "",
+        "text": "",
+        "role": "button",
+        "class_pattern": ""
+      }
     }
   },
   "generic_entries": {
     "ant-design|dropdown_option": {
+      "selector_template": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"{text}\")])[1]",
+      "selector_type": "xpath",
+      "component_library": "ant-design",
+      "component_type": "dropdown_option",
+      "success_count": 3,
+      "created_at": 1782208496.7057862,
+      "updated_at": 1782208553.161081
+    },
+    "ant-design|select_trigger": {
+      "selector_template": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '{text}')]]//div[contains(@class,'ant-select')])[1]",
+      "selector_type": "xpath",
+      "component_library": "ant-design",
+      "component_type": "select_trigger",
+      "success_count": 1,
+      "created_at": 1782208481.7831628,
+      "updated_at": 1782208481.7831628
+    },
+    "ant-design|date_picker": {
       "selector_template": "text=\"{text}\"",
       "selector_type": "css",
       "component_library": "ant-design",
-      "component_type": "dropdown_option",
+      "component_type": "date_picker",
       "success_count": 1,
-      "created_at": 1782172644.151726,
-      "updated_at": 1782172644.151726
+      "created_at": 1782208565.415274,
+      "updated_at": 1782208565.415274
     }
   }
 }

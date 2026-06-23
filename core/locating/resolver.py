@@ -25,7 +25,13 @@ from ..dom.semantic_dom import (
 )
 from .cache import SelectorCache
 from .llm_decider import LLMElementDecider
-from .intent_route import is_ant_radio_option, is_checkbox, is_tree_checkbox
+from .intent_route import (
+    is_ant_radio_option,
+    is_checkbox,
+    is_dropdown_option,
+    is_tree_checkbox,
+    is_unsafe_dropdown_option_selector,
+)
 from .intent_rule_engine import IntentRuleEngine
 from .memory import SelectorMemory
 from .node_refiner import refine_node_index
@@ -34,7 +40,6 @@ from .playwright_api import info_key
 from .resolve_trace import ResolveChain
 from .selector_type import infer_selector_type
 from .composite_learner import CompositeStructureLearner
-from .structure_learner import StructureLearner
 from .locate_observability import summarize_locating_stats
 from .intent_window import pick_intent_window_indices
 from .skill_resolver import (
@@ -118,7 +123,7 @@ class LocatorResolver:
         decider: LLMElementDecider,
         cache: Optional[SelectorCache] = None,
         memory: Optional[SelectorMemory] = None,
-        learner: Optional[StructureLearner | CompositeStructureLearner] = None,
+        learner: Optional[CompositeStructureLearner] = None,
         rule_engine: Optional[IntentRuleEngine] = None,
         console: Optional[Console] = None,
         *,
@@ -218,6 +223,20 @@ class LocatorResolver:
             self._emit_chain(chain)
         return hit
 
+    @staticmethod
+    def _reject_unsafe_accel_hit(
+        intent: str,
+        info: dict,
+        chain: ResolveChain,
+        layer: str,
+    ) -> bool:
+        """True → 拒绝该 L1/L2 命中 (继续降级)."""
+        sel = info_key(info)
+        if is_unsafe_dropdown_option_selector(intent, sel):
+            chain.add(layer, "跳过(下拉option禁bare text)", sel)
+            return True
+        return False
+
     def _resolve_acceleration_layers(
         self,
         page: Any,
@@ -247,9 +266,11 @@ class LocatorResolver:
                     self.cache.put(url, action_type, intent, info, node=info)
                 if from_cache_heal:
                     chain.mark_hit("L1缓存", info_key(info), note="自愈")
+                    if not self._reject_unsafe_accel_hit(intent, info, chain, "L1缓存"):
+                        return self._tag_and_track(info, "L1缓存")
+                elif not self._reject_unsafe_accel_hit(intent, info, chain, "L1缓存"):
+                    chain.mark_hit("L1缓存", info_key(info))
                     return self._tag_and_track(info, "L1缓存")
-                chain.mark_hit("L1缓存", info_key(info))
-                return self._tag_and_track(info, "L1缓存")
 
         if self.memory:
             info = self.memory.lookup_validate(page, url, action_type, intent)
@@ -263,8 +284,9 @@ class LocatorResolver:
                         page, intent, info, semantic_items,
                     )
                     self._backfill_l1(url, action_type, intent, info)
-                    chain.mark_hit("L2记忆", info_key(info))
-                    return self._tag_and_track(info, "L2记忆")
+                    if not self._reject_unsafe_accel_hit(intent, info, chain, "L2记忆"):
+                        chain.mark_hit("L2记忆", info_key(info))
+                        return self._tag_and_track(info, "L2记忆")
             else:
                 info, upgraded, upgrade_label = self._maybe_upgrade_component_selector(
                     page, intent, info, semantic_items,
@@ -272,10 +294,12 @@ class LocatorResolver:
                 if upgraded:
                     chain.add("L2记忆", f"{upgrade_label}升级", info_key(info))
                 self._backfill_l1(url, action_type, intent, info)
-                chain.mark_hit("L2记忆", info_key(info))
-                return self._tag_and_track(info, "L2记忆")
+                if not self._reject_unsafe_accel_hit(intent, info, chain, "L2记忆"):
+                    chain.mark_hit("L2记忆", info_key(info))
+                    return self._tag_and_track(info, "L2记忆")
 
-        if self.memory and not skip_heuristics:
+        skip_generic = skip_heuristics or is_dropdown_option(intent)
+        if self.memory and not skip_generic:
             gen_items = semantic_items
             if not gen_items:
                 gen_items = extract_semantic_items(
@@ -292,8 +316,11 @@ class LocatorResolver:
                 chain.add("L2记忆", "通用·跳过(已排除)", info_key(gen_info))
             else:
                 self._backfill_l1(url, action_type, intent, gen_info)
-                chain.mark_hit("L2记忆", info_key(gen_info), note="通用模板")
-                return self._tag_and_track(gen_info, "L2记忆")
+                if not self._reject_unsafe_accel_hit(intent, gen_info, chain, "L2记忆"):
+                    chain.mark_hit("L2记忆", info_key(gen_info), note="通用模板")
+                    return self._tag_and_track(gen_info, "L2记忆")
+        elif self.memory and skip_generic and is_dropdown_option(intent):
+            chain.add("L2记忆", "通用·跳过(下拉option)")
 
         return None
 
@@ -357,7 +384,8 @@ class LocatorResolver:
 
         # 规则: V3 IntentRuleEngine → skill; LLM 用意图窗口或前 N 条
         rule_items = source_items
-        if not skip_heuristics:
+        run_l3_rules = not skip_heuristics or is_dropdown_option(intent)
+        if run_l3_rules:
             intent_rule_info = self._try_intent_rule_resolve(
                 page, intent, action_type, rule_items, excl, chain,
             )
@@ -378,7 +406,7 @@ class LocatorResolver:
         else:
             chain.add("L3规则", "跳过(重试)")
 
-        # L4 学习: PageStructureLearner + intent Jaccard fallback
+        # L4 学习: PageStructureLearner (route + 组件模板 + DOM 指纹)
         # skip_acceleration 仅跳过 L1/L2 重复查找; L4 仍应执行 (对齐 V3)
         if self.learner and not skip_heuristics:
             learn_info = self.learner.resolve(

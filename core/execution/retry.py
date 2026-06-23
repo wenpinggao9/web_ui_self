@@ -31,7 +31,6 @@ from .popup_recovery import (
 )
 from .optional_step import should_skip_optional_step
 from .post_check import PostStepChecker, upgrade_submit_post_result
-from .retry_hint import resolve_force_selector_from_hint
 from .submit_post_verify import finalize_submit_after_dispatch, submit_dispatch_should_succeed
 from .script_helpers import is_detail_submission_url, _page_usable, find_usable_context_pages
 from .page_session import PageSession
@@ -146,7 +145,7 @@ class RetryController:
                     attempt=attempt,
                     retry_focus=action.resolve_hint or "",
                     exclude=action.exclude_selectors,
-                    force_selector=action.force_selector,
+                    resolve_hint=action.resolve_hint,
                 )
             ok, msg = self.dispatcher.dispatch(action, case_id=case_id)
             last_ok, last_msg = ok, msg
@@ -367,7 +366,6 @@ class RetryController:
                 if attempt_submit_prerecovery(
                     self.dispatcher, action, self.console, prior_actions=prior,
                 ):
-                    action.force_selector = None
                     action.selector = None
                     action.resolve_hint = post.resolve_hint
                     action.skip_heuristics = True
@@ -403,10 +401,11 @@ class RetryController:
                     )
                     continue
 
-            # 失败连锁清理 (post_verify 未过即清缓存/记忆降权)
+            # 失败连锁清理: 换元素才 evict; 仅改值时保留 L1/L2 记忆
             page = self.dispatcher.page
-            self.resolver.evict(page, action.intent, action.type, last_selector)
-            self.resolver.penalize(page, action.intent, action.type, last_selector)
+            if post.retry_focus != "值" and last_selector:
+                self.resolver.evict(page, action.intent, action.type, last_selector)
+                self.resolver.penalize(page, action.intent, action.type, last_selector)
 
             if post.retry_focus == "无" or attempt == self.max_retries:
                 break
@@ -527,41 +526,15 @@ def _apply_retry(
         action.intent = _rewrite_intent_value(action.intent, suggested_value)
 
     if focus == "值":
-        # 值有问题但元素找对了 → 复用上次选择器
-        action.force_selector = last_selector
+        action.selector = None
         action.exclude_selectors = []
         action.resolve_hint = None
-    else:  # 选择器 / 两者 → 换元素
-        items = dispatcher.get_cached_semantic_items() if dispatcher else None
-        forced = resolve_force_selector_from_hint(resolve_hint, semantic_items=items)
-        if not forced and dispatcher and items:
-            from ..locating.skill_resolver import (
-                build_selector_via_skill,
-                extract_target_text_from_intent,
-                resolve_component_type,
-            )
-            comp = resolve_component_type(items, action.intent or "", action.type)
-            skill_map = {
-                "radio": "build_radio_selector",
-                "checkbox": "build_checkbox_selector",
-                "dropdown_option": "build_dropdown_option_selector",
-                "select_trigger": "build_el_select_trigger_selector",
-                "text_input": "build_fill_input_selector",
-            }
-            skill = skill_map.get(comp or "")
-            if skill:
-                forced = build_selector_via_skill(
-                    skill,
-                    items,
-                    action.intent or "",
-                    target_text=extract_target_text_from_intent(action.intent or "") or "",
-                    page=dispatcher.page,
-                )
-        action.force_selector = forced
+        action.skip_heuristics = False
+    else:  # 选择器 / 两者 → 换元素, 走 hint + exclude + 五级链
         action.selector = None
-        action.resolve_hint = resolve_hint if not forced else None
+        action.resolve_hint = resolve_hint
         action.exclude_selectors = list(exclude)
-    action.skip_heuristics = True
+        action.skip_heuristics = True
 
 
 def _merge_retry_plan(primary: "PostCheckResult", plan: "PostCheckResult") -> "PostCheckResult":

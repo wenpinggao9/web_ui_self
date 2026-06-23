@@ -34,8 +34,7 @@ def needs_popup_recovery(post: PostCheckResult, dispatch_ok: bool) -> bool:
 
 
 def reset_action_for_popup_retry(action: PlannedAction) -> None:
-    """关弹窗后清空排除/强制选择器, 用原 intent 重新定位."""
-    action.force_selector = None
+    """关弹窗后清空排除/选择器, 用原 intent 重新定位."""
     action.selector = None
     action.exclude_selectors = []
     action.resolve_hint = None

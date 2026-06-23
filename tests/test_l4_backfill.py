@@ -6,31 +6,24 @@ from unittest.mock import MagicMock
 from core.execution.dispatcher import ActionDispatcher  # noqa: F401
 
 from core.locating.cache import SelectorCache
+from core.locating.composite_learner import CompositeStructureLearner
 from core.locating.resolver import LocatorResolver
-from core.locating.structure_learner import StructureLearner
 
 
 def test_l4_hit_backfills_l1(tmp_path, monkeypatch):
     cache_path = tmp_path / "cache.json"
     cache = SelectorCache(path=cache_path)
-    learner = StructureLearner(tmp_path / "learn.json")
-    learner._records.append({
-        "route": "/p",
-        "action_type": "click",
-        "intent": "点按钮",
-        "tokens": {"点", "按钮"},
-        "selector": "#btn",
-        "nth": 0,
-    })
+    learner = CompositeStructureLearner(accel_dir=tmp_path)
+    monkeypatch.setattr(
+        learner,
+        "resolve",
+        lambda *_a, **_k: {"selector": "#btn", "nth": 0},
+    )
 
     page = MagicMock()
     page.url = "https://host/p"
     monkeypatch.setattr(
         "core.locating.resolver.validate_selector",
-        lambda _p, _info, timeout_ms=1500: True,
-    )
-    monkeypatch.setattr(
-        "core.locating.structure_learner.validate_selector",
         lambda _p, _info, timeout_ms=1500: True,
     )
 

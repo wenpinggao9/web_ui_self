@@ -87,7 +87,7 @@ ui_automation/
 │   │   ├── resolver.py         #   编排: L1→L2→L3→L4→L5
 │   │   ├── cache.py            #   L1 选择器缓存 (30min TTL)
 │   │   ├── memory.py           #   L2 长期记忆 (加减分)
-│   │   ├── structure_learner.py#   L4 结构学习 (跨批次持久化)
+│   │   ├── page_structure_learner.py  # L4 结构学习 (跨批次持久化)
 │   │   ├── skill_resolver.py   #   L3 规则 skill 分发 + 组件类型推断
 │   │   ├── skill_dom_helpers.py#   build_* 选择器 (radio/checkbox/fill/…)
 │   │   ├── intent_route.py     #   意图 → 组件类型路由
@@ -102,7 +102,7 @@ ui_automation/
 │   │   ├── dispatcher.py       #   动作分发器 (五级链 + Playwright)
 │   │   ├── post_check.py       #   步骤后校验 (防假操作)
 │   │   ├── retry.py            #   带后校验重试 (值/选择器/两者/无)
-│   │   ├── retry_hint.py       #   后校验 hint → force_selector
+│   │   ├── retry_hint.py       #   后校验 hint 解析 (CSS/索引)
 │   │   ├── page_session.py     #   Tab 跟随 + 断言 DOM 复用
 │   │   └── runner.py           #   执行编排器 PlaywrightRunner
 │   ├── llm/                    # 步骤⑱ LLM 基础层
@@ -133,9 +133,13 @@ ui_automation/
 │               ├── 测试用例.md
 │               └── 前审1.md …
 │
-└── 智能加速/                   # 运行时自动生成
-    ├── 选择器缓存.json         # L1 持久化 (进程内为主)
-    └── 选择器记忆库.json       # L2 长期记忆
+└── 智能加速/                   # 运行时自动生成 (V3 子目录布局)
+    ├── selector_cache/
+    │   └── selector_cache.json       # L1 短期缓存
+    ├── selector_memory/
+    │   └── selector_memory.json    # L2 长期记忆
+    └── page_structure_learner/
+        └── page_structure_learner.json  # L4 页面结构学习
 ```
 
 ---
@@ -363,17 +367,17 @@ L1 缓存 ──→ L2 记忆 ──→ L3 规则 ──→ L4 学习 ──→ 
 
 | 级别 | 来源 | 说明 |
 |------|------|------|
-| L1 缓存 | `智能加速/选择器缓存.json` | 同 URL+意图; 命中可跳过 DOM; 含自愈分支 |
-| L2 记忆 | `智能加速/选择器记忆库.json` | 跨运行加减分 + selector_type; 含通用模板子策略 |
+| L1 缓存 | `智能加速/selector_cache/selector_cache.json` | 同 URL+意图; 命中可跳过 DOM; 含自愈分支 |
+| L2 记忆 | `智能加速/selector_memory/selector_memory.json` | 跨运行加减分 + selector_type; 含通用模板子策略 |
 | L3 规则 | IntentRuleEngine + build_* skill | 无 LLM 确定性规则 |
-| L4 学习 | PageStructure + Jaccard fallback | CompositeStructureLearner |
+| L4 学习 | PageStructureLearner | CompositeStructureLearner |
 | L5 大模型 | `element_decide` | intent_window / dom_limit 限候选 |
 
 **可观测性**: 批次末 `acceleration_stats()`; 用例/批次报告「可观测性」Tab 与 `report_overview.html` 展示五级命中率与 `resolve_distribution`.
 
 **DOM 采集**: V3 traverse 抓取完整可交互元素 (弹窗/表单优先排序). **L3规则与后校验/断言用全量 items**; 仅 **L5大模型** 受 `dom_limit` / 意图窗口限制.
 
-**重试 hint**: 后校验若给出裸 CSS (如 `input#searchText`), `retry_hint` 会转为 `force_selector` 跳过后续 LLM 定位.
+**重试 hint**: 后校验给出的 `resolve_hint` 与 `exclude_selectors` 一并传入五级定位链, 不再短路强制复用选择器.
 
 **断言 DOM**: 同 URL 连续断言复用上一步操作后的 semantic_items; 提交类操作后断言走实时 DOM, 不用固化快照.
 

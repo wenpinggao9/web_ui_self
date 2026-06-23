@@ -20,6 +20,30 @@ def is_dropdown_option(intent: str) -> bool:
     return False
 
 
+def is_unsafe_dropdown_option_selector(intent: str, selector: str) -> bool:
+    """下拉选项 intent 禁止 bare text= / 表格行整段 text (易误点列表页同名列)."""
+    if not is_dropdown_option(intent):
+        return False
+    s = (selector or "").strip()
+    if not s:
+        return False
+    if any(
+        tok in s
+        for tok in (
+            "ant-select-dropdown",
+            "el-select-dropdown",
+            "role=option",
+            "ant-select-item-option",
+        )
+    ):
+        return False
+    if re.search(r"_list_\d+", s):
+        return False
+    if s.startswith("text=") or s.startswith('text="') or s.startswith("text='"):
+        return True
+    return False
+
+
 def is_select_trigger(intent: str) -> bool:
     if is_dropdown_option(intent):
         return False

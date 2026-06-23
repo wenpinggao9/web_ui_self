@@ -3,29 +3,22 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from core.locating.composite_learner import CompositeStructureLearner
 from core.locating.resolver import LocatorResolver
-from core.locating.structure_learner import StructureLearner
 
 
 def test_l4_lookup_with_skip_acceleration(tmp_path, monkeypatch):
-    learner = StructureLearner(tmp_path / "learn.json")
-    learner._records.append({
-        "route": "/p",
-        "action_type": "click",
-        "intent": "点按钮",
-        "tokens": {"点", "按钮"},
-        "selector": "#btn",
-        "nth": 0,
-    })
+    learner = CompositeStructureLearner(accel_dir=tmp_path)
+    monkeypatch.setattr(
+        learner,
+        "resolve",
+        lambda *_a, **_k: {"selector": "#btn", "nth": 0},
+    )
 
     page = MagicMock()
     page.url = "https://host/p"
     monkeypatch.setattr(
         "core.locating.resolver.validate_selector",
-        lambda _p, _info, timeout_ms=1500: True,
-    )
-    monkeypatch.setattr(
-        "core.locating.structure_learner.validate_selector",
         lambda _p, _info, timeout_ms=1500: True,
     )
 

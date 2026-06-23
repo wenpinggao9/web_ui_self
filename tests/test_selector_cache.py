@@ -18,7 +18,8 @@ def test_load_legacy_flat_format(tmp_path: Path):
             "ts": time.time(),
         }
     }
-    p = tmp_path / "选择器缓存.json"
+    p = tmp_path / "selector_cache" / "selector_cache.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(legacy), encoding="utf-8")
 
     cache = SelectorCache(ttl_s=1800, path=p)

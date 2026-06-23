@@ -661,6 +661,31 @@ def find_sibling_tab_anchor(current: Any) -> Any:
     return others[0] if others else None
 
 
+_NAV_SETTLE_OUTCOMES = frozenset({
+    "returned_to_list", "resource_id_changed", "route_changed",
+})
+
+
+def operation_caused_navigation(
+    meta: Optional[dict[str, Any]],
+    *,
+    url_before: str = "",
+    url_now: str = "",
+    outcome: str = "",
+) -> bool:
+    """操作后是否发生需 DOM settle 的导航 (与列表/详情等业务 URL 无关)."""
+    meta = meta or {}
+    if outcome in _NAV_SETTLE_OUTCOMES:
+        return True
+    if meta.get("new_tab_opened"):
+        return True
+    before = (url_before or "").strip()
+    now = (url_now or "").strip()
+    if before and now and normalize_url(before) != normalize_url(now):
+        return True
+    return False
+
+
 def classify_navigation_outcome(
     url_before: str,
     url_now: str,

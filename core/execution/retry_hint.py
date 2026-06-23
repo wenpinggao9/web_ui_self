@@ -1,4 +1,4 @@
-"""从后校验 resolve_hint 提取可强制执行的选择器."""
+"""从后校验 resolve_hint 提取选择器或 DOM 索引."""
 from __future__ import annotations
 
 import re
@@ -74,12 +74,12 @@ def extract_dom_index_from_resolve_hint(hint: Optional[str]) -> Optional[int]:
     return None
 
 
-def resolve_force_selector_from_hint(
+def resolve_selector_from_hint(
     hint: Optional[str],
     *,
     semantic_items: Optional[list[dict[str, Any]]] = None,
 ) -> Optional[str]:
-    """优先 CSS 选择器; 其次用 DOM 索引映射为选择器."""
+    """从 hint 提取 CSS 选择器; 或按 DOM 索引映射为选择器 (供 L5 等参考)."""
     sel = extract_selector_from_resolve_hint(hint)
     if sel:
         return sel
@@ -98,5 +98,5 @@ def resolve_force_selector_from_hint(
 __all__ = [
     "extract_dom_index_from_resolve_hint",
     "extract_selector_from_resolve_hint",
-    "resolve_force_selector_from_hint",
+    "resolve_selector_from_hint",
 ]

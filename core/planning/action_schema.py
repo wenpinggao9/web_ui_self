@@ -35,8 +35,7 @@ class PlannedAction(BaseModel):
     selector: Optional[str] = Field(None, exclude=True)
     intent_split: bool = Field(False, exclude=True, description="是否由意图拆分得到")
     is_recovery: bool = Field(False, exclude=True, description="是否为就绪检查的恢复动作")
-    # 步骤⑬ 重试用: 强制复用上次选择器 / 排除已试选择器 / 换元素提示
-    force_selector: Optional[str] = Field(None, exclude=True)
+    # 步骤⑬ 重试用: 排除已试选择器 / 换元素提示
     exclude_selectors: list[str] = Field(default_factory=list, exclude=True)
     resolve_hint: Optional[str] = Field(None, exclude=True)
     skip_acceleration: bool = Field(False, exclude=True, description="重试时跳过 L1/L2 缓存记忆")

@@ -5,12 +5,12 @@
     "前审功能",
     "Case 12"
   ],
-  "total_steps": 18,
-  "passed": 7,
-  "failed": 11,
+  "total_steps": 19,
+  "passed": 15,
+  "failed": 4,
   "summary": "失败",
-  "execution_time": "2分0秒",
-  "generated_time": "2026-06-23 09:54:05",
+  "execution_time": "4分7秒",
+  "generated_time": "2026-06-23 17:59:07",
   "details": [
     {
       "step": "步骤1: click",
@@ -27,7 +27,7 @@
       "resolved_html": "点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>",
       "dispatch_ok": true,
       "post_check_ok": true,
-      "post_check_reason": "点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。",
+      "post_check_reason": "URL已从/video/all-question变为/video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'项处于当前状态，点击审核历史导航成功。",
       "optional_skipped": false,
       "post_retries": [
         {
@@ -35,7 +35,7 @@
           "dispatch_ok": true,
           "post_check_ok": true,
           "message": "点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>",
-          "reason": "点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。",
+          "reason": "URL已从/video/all-question变为/video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'项处于当前状态，点击审核历史导航成功。",
           "retry_focus": "无"
         }
       ],
@@ -46,80 +46,57 @@
       "action": {
         "type": "click",
         "intent": "在筛选区点击'类型'下拉框",
-        "selector": "#supplier"
+        "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '类型')]]//div[contains(@class,'ant-select')])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-      "error": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-      "selector": "#supplier",
-      "resolved_html": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+      "error": "",
+      "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '类型')]]//div[contains(@class,'ant-select')])[1]",
+      "resolved_html": "点击 在筛选区点击'类型'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-se",
       "dispatch_ok": true,
-      "post_check_ok": false,
-      "post_check_reason": "intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。",
+      "post_check_ok": true,
+      "post_check_reason": "点击类型下拉框后，页面已展开下拉选项列表，可见前审、前审地雷题、录制、自审、自审地雷题、初审、初审地雷题、复审、内审、仲裁等选项（索引[1009]-[1018]），下拉框展开成功。",
       "optional_skipped": false,
       "post_retries": [
         {
           "attempt": 1,
           "dispatch_ok": true,
-          "post_check_ok": false,
-          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-          "reason": "意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的是供应商的下拉列表（supplier_list，含选项：-、测试、小视牛到、博雅智库等），而非'类型'字段的下拉。类型字段对应索引 [1]-[8] 区域，未见其下拉面板展开。",
-          "retry_focus": "选择器"
-        },
-        {
-          "attempt": 2,
-          "dispatch_ok": true,
-          "post_check_ok": false,
-          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-          "reason": "Intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），导致展开的是供应商的下拉列表（可见选项为：-、测试、小视牛到、博雅智库等），而非'类型'下拉框。类型字段（索引[1]-[8]）的下拉并未展开。",
-          "retry_focus": "选择器"
-        },
-        {
-          "attempt": 3,
-          "dispatch_ok": true,
-          "post_check_ok": false,
-          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-          "reason": "意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox (id=supplier)，展开的是供应商的下拉列表（显示了-、测试、小视牛到、博雅智库等供应商选项），而非'类型'的下拉选项（应显示前审等选项）。DOM中[1]~[8]为'类型'字段区域，其下拉未展开。",
-          "retry_focus": "选择器"
-        },
-        {
-          "attempt": 4,
-          "dispatch_ok": true,
-          "post_check_ok": false,
-          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-          "reason": "意图是点击'类型'下拉框展开，但实际点击的是'供应商'下拉框（id=supplier），从DOM可见展开的listbox是supplier_list，包含供应商选项（小视牛到、博雅智库等），而非类型选项。'类型'字段对应的是索引[1]-[8]区域，没有展开的下拉面板。",
-          "retry_focus": "选择器"
-        },
-        {
-          "attempt": 5,
-          "dispatch_ok": true,
-          "post_check_ok": false,
-          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
-          "reason": "intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。",
-          "retry_focus": "选择器"
+          "post_check_ok": true,
+          "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+          "reason": "点击类型下拉框后，页面已展开下拉选项列表，可见前审、前审地雷题、录制、自审、自审地雷题、初审、初审地雷题、复审、内审、仲裁等选项（索引[1009]-[1018]），下拉框展开成功。",
+          "retry_focus": "无"
         }
       ],
-      "gate_mismatch": true
+      "gate_mismatch": false
     },
     {
       "step": "步骤3: click",
       "action": {
         "type": "click",
         "intent": "在下拉选项中点击'前审'",
-        "selector": null
+        "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"前审\")])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在下拉选项中点击'前审' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"前审\"><div class=\"ant-select-item-option-content\">前审</div><span class=\"ant-select-item-opti",
+      "error": "",
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"前审\")])[1]",
+      "resolved_html": "点击 在下拉选项中点击'前审' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"前审\"><div class=\"ant-select-item-option-content\">前审</div><span cla",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "表单中第一个筛选项已显示选中值'前审'（索引[10]显示'前审'），下拉列表中'前审'选项标记为[已选]（索引[996]），下拉已收起（[hidden]），选择成功。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在下拉选项中点击'前审' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"前审\"><div class=\"ant-select-item-option-content\">前审</div><span class=\"ant-select-item-opti",
+          "reason": "表单中第一个筛选项已显示选中值'前审'（索引[10]显示'前审'），下拉列表中'前审'选项标记为[已选]（索引[996]），下拉已收起（[hidden]），选择成功。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
@@ -127,19 +104,28 @@
       "action": {
         "type": "click",
         "intent": "在筛选区点击'学段'下拉框",
-        "selector": null
+        "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '学段')]]//div[contains(@class,'ant-select')])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在筛选区点击'学段'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+      "error": "",
+      "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '学段')]]//div[contains(@class,'ant-select')])[1]",
+      "resolved_html": "点击 在筛选区点击'学段'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-se",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "学段下拉框已成功展开，可以看到 period_list 下拉面板（索引[1008]）已显示，包含小学、初中、高中、大学选项（索引[1024]-[1027]），且未标记为 hidden，说明下拉已正确打开。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在筛选区点击'学段'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+          "reason": "学段下拉框已成功展开，可以看到 period_list 下拉面板（索引[1008]）已显示，包含小学、初中、高中、大学选项（索引[1024]-[1027]），且未标记为 hidden，说明下拉已正确打开。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
@@ -147,19 +133,28 @@
       "action": {
         "type": "click",
         "intent": "在下拉选项中点击'大学'",
-        "selector": null
+        "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-state\" unselectable=\"on\" ar",
+      "error": "",
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"大学\")])[1]",
+      "resolved_html": "点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-sta",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "学段下拉框已成功选中'大学'，DOM [32] 显示选中值为'大学'，[1025] option [已选] 确认大学选项被选中，下拉已关闭（[hidden]），表格数据也均显示学段为大学。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-state\" unselectable=\"on\" ar",
+          "reason": "学段下拉框已成功选中'大学'，DOM [32] 显示选中值为'大学'，[1025] option [已选] 确认大学选项被选中，下拉已关闭（[hidden]），表格数据也均显示学段为大学。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
@@ -167,19 +162,28 @@
       "action": {
         "type": "click",
         "intent": "在筛选区点击'审核行为'下拉框",
-        "selector": null
+        "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '审核行为')]]//div[contains(@class,'ant-select')])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在筛选区点击'审核行为'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+      "error": "",
+      "selector": "xpath=(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), '审核行为')]]//div[contains(@class,'ant-select')])[1]",
+      "resolved_html": "点击 在筛选区点击'审核行为'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "审核行为下拉框已成功展开，可见 submitType_list 的选项（待处理、提交、举报/放弃、审核通过、审核不通过、超时、系统取消）已显示在页面中（索引[1052]-[1058]未标记hidden），下拉面板已打开，满足intent要求。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在筛选区点击'审核行为'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty",
+          "reason": "审核行为下拉框已成功展开，可见 submitType_list 的选项（待处理、提交、举报/放弃、审核通过、审核不通过、超时、系统取消）已显示在页面中（索引[1052]-[1058]未标记hidden），下拉面板已打开，满足intent要求。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
@@ -187,19 +191,28 @@
       "action": {
         "type": "click",
         "intent": "在下拉选项中点击'举报/放弃'",
-        "selector": null
+        "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"举报/放弃\")])[1]"
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在下拉选项中点击'举报/放弃' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"举报/放弃\"><div class=\"ant-select-item-option-content\">举报/放弃</div><span class=\"ant-select-item-option-state\" unselectable=\"",
+      "error": "",
+      "selector": "xpath=(//*[contains(@class,'ant-select-dropdown') and not(contains(@style,'display: none'))]//*[contains(@class,'ant-select-item-option') and contains(normalize-space(.), \"举报/放弃\")])[1]",
+      "resolved_html": "点击 在下拉选项中点击'举报/放弃' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"举报/放弃\"><div class=\"ant-select-item-option-content\">举报/放弃</div><span class=\"ant-select-item-o",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "审核行为下拉框已成功选中'举报/放弃'，DOM中[61]显示选中值为'举报/放弃'，[1048]的option标记为[已选]，[64]出现close-circle清除按钮，确认选择成功。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在下拉选项中点击'举报/放弃' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"举报/放弃\"><div class=\"ant-select-item-option-content\">举报/放弃</div><span class=\"ant-select-item-option-state\" unselectable=\"",
+          "reason": "审核行为下拉框已成功选中'举报/放弃'，DOM中[61]显示选中值为'举报/放弃'，[1048]的option标记为[已选]，[64]出现close-circle清除按钮，确认选择成功。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
@@ -207,33 +220,111 @@
       "action": {
         "type": "click",
         "intent": "在筛选区点击'审核时间'日期选择框",
-        "selector": null
+        "selector": "placeholder:\"开始日期\""
       },
-      "success": false,
-      "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": null,
-      "post_check_ok": false,
-      "post_check_reason": "",
+      "success": true,
+      "status": "passed",
+      "message": "点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <input id=\"submitTimeRange\" placeholder=\"开始日期\" size=\"12\" autocomplete=\"off\" value=\"\">",
+      "error": "",
+      "selector": "placeholder:\"开始日期\"",
+      "resolved_html": "点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <input id=\"submitTimeRange\" placeholder=\"开始日期\" size=\"12\" autocomplete=\"off\" value=\"\">",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "点击审核时间日期选择框成功，页面已展开日期选择面板，可见2026年6月和7月的日历表格（索引[1010]-[1227]），说明日期选择框已被激活并展开。",
       "optional_skipped": false,
-      "post_retries": [],
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": true,
+          "post_check_ok": false,
+          "message": "点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <label for=\"submitTimeRange\" class=\"\" title=\"审核时间\">审核时间</label>",
+          "reason": "点击实际落在了label元素上而非日期输入框本身，页面DOM中未出现日期选择面板（datepicker popup），审核时间日期选择框未被展开/聚焦。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 2,
+          "dispatch_ok": true,
+          "post_check_ok": true,
+          "message": "点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <input id=\"submitTimeRange\" placeholder=\"开始日期\" size=\"12\" autocomplete=\"off\" value=\"\">",
+          "reason": "点击审核时间日期选择框成功，页面已展开日期选择面板，可见2026年6月和7月的日历表格（索引[1010]-[1227]），说明日期选择框已被激活并展开。",
+          "retry_focus": "无"
+        }
+      ],
       "gate_mismatch": false
     },
     {
       "step": "步骤9: click",
       "action": {
         "type": "click",
-        "intent": "选择今天的日期",
+        "intent": "在日期选择中选择今天",
         "selector": null
       },
       "success": false,
       "status": "failed",
-      "message": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
-      "error": "前置 UI 操作后校验未通过, 跳过后续操作步骤",
+      "message": "找不到元素: 在日期选择中选择今天",
+      "error": "找不到元素: 在日期选择中选择今天",
       "selector": null,
+      "resolved_html": "",
+      "dispatch_ok": false,
+      "post_check_ok": false,
+      "post_check_reason": "分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（显示2026年6月和7月的日历），需要点击今天的日期（6月23日）对应的td/div元素。",
+      "optional_skipped": false,
+      "post_retries": [
+        {
+          "attempt": 1,
+          "dispatch_ok": false,
+          "post_check_ok": false,
+          "message": "找不到元素: 在日期选择中选择今天",
+          "reason": "dispatch_success为false，未能找到'今天'按钮元素。但从DOM可以看到日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），需要点击今天的日期（6月23日）。当前日历中第23天对应索引[1080]。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 2,
+          "dispatch_ok": false,
+          "post_check_ok": false,
+          "message": "找不到元素: 在日期选择中选择今天",
+          "reason": "分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器面板已展开（显示2026年6月和7月的日历），需要点击6月23日（今天）对应的日期单元格。表格中的审核时间显示今天是2026-06-23。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 3,
+          "dispatch_ok": false,
+          "post_check_ok": false,
+          "message": "找不到元素: 在日期选择中选择今天",
+          "reason": "分发失败，未能找到'今天'按钮。但从DOM可见日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），当前日期应为6月23日。需要直接点击日历中的23日单元格。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 4,
+          "dispatch_ok": false,
+          "post_check_ok": false,
+          "message": "找不到元素: 在日期选择中选择今天",
+          "reason": "dispatch_success为false，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（索引1010-1118为6月日历，1119-1227为7月日历），需要点击今天的日期（6月23日）。当前页面表格数据显示审核时间为2026-06-23，说明今天是6月23日，需要点击日历中的23。",
+          "retry_focus": "选择器"
+        },
+        {
+          "attempt": 5,
+          "dispatch_ok": false,
+          "post_check_ok": false,
+          "message": "找不到元素: 在日期选择中选择今天",
+          "reason": "分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（显示2026年6月和7月的日历），需要点击今天的日期（6月23日）对应的td/div元素。",
+          "retry_focus": "选择器"
+        }
+      ],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤10: click",
+      "action": {
+        "type": "click",
+        "intent": "[恢复] 点击页面空白区域关闭日期选择器弹窗",
+        "selector": "role=button[name=\"重 置\"]"
+      },
+      "success": false,
+      "status": "failed",
+      "message": "TimeoutError: Locator.click: Timeout 10000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"重 置\").first\n    - locator resolved to <button type=\"reset\" class=\"ant-btn ant-btn-default mr-4\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    19 × waiting for element to be visible, enabled and stable\n       - element is visible, enabled and stable\n       - scrolling into view if needed\n       - done scrolling\n       - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n     - retrying click action\n       - waiting 500ms\n",
+      "error": "TimeoutError: Locator.click: Timeout 10000ms exceeded.\nCall log:\n  - waiting for get_by_role(\"button\", name=\"重 置\").first\n    - locator resolved to <button type=\"reset\" class=\"ant-btn ant-btn-default mr-4\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    19 × waiting for element to be visible, enabled and stable\n       - element is visible, enabled and stable\n       - scrolling into view if needed\n       - done scrolling\n       - <th>Sa</th> from <div>…</div> subtree intercepts pointer events\n     - retrying click action\n       - waiting 500ms\n",
+      "selector": "role=button[name=\"重 置\"]",
       "resolved_html": "",
       "dispatch_ok": null,
       "post_check_ok": false,
@@ -243,7 +334,7 @@
       "gate_mismatch": false
     },
     {
-      "step": "步骤10: click",
+      "step": "步骤11: click",
       "action": {
         "type": "click",
         "intent": "点击'提交'按钮进行查询",
@@ -263,7 +354,7 @@
       "gate_mismatch": false
     },
     {
-      "step": "步骤11: assert_count",
+      "step": "步骤12: assert_count",
       "action": {
         "type": "assert_count",
         "intent": "验证当前总数大于0",
@@ -271,30 +362,10 @@
       },
       "success": true,
       "status": "passed",
-      "message": "计数断言(当前总数): 实际32176 > 0 → 通过",
+      "message": "计数断言(当前总数): 实际32199 > 0 → 通过",
       "error": "",
       "selector": null,
-      "resolved_html": "计数断言(当前总数): 实际32176 > 0 → 通过",
-      "dispatch_ok": true,
-      "post_check_ok": true,
-      "post_check_reason": "",
-      "optional_skipped": false,
-      "post_retries": [],
-      "gate_mismatch": false
-    },
-    {
-      "step": "步骤12: assert_text",
-      "action": {
-        "type": "assert_text",
-        "intent": "验证审核历史列表中存在工单ID为146567164的记录",
-        "selector": null
-      },
-      "success": true,
-      "status": "passed",
-      "message": "断言: 页面含 '146567164'",
-      "error": "",
-      "selector": null,
-      "resolved_html": "断言: 页面含 '146567164'",
+      "resolved_html": "计数断言(当前总数): 实际32199 > 0 → 通过",
       "dispatch_ok": true,
       "post_check_ok": true,
       "post_check_reason": "",
@@ -306,15 +377,15 @@
       "step": "步骤13: assert_text",
       "action": {
         "type": "assert_text",
-        "intent": "验证审核历史列表中存在工单ID为146567172的记录",
+        "intent": "验证审核历史列表中存在工单ID 146584877",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "断言: 页面含 '146567172'",
+      "message": "断言: 页面含 '146584877'",
       "error": "",
       "selector": null,
-      "resolved_html": "断言: 页面含 '146567172'",
+      "resolved_html": "断言: 页面含 '146584877'",
       "dispatch_ok": true,
       "post_check_ok": true,
       "post_check_reason": "",
@@ -323,18 +394,18 @@
       "gate_mismatch": false
     },
     {
-      "step": "步骤14: assert_table",
+      "step": "步骤14: assert_text",
       "action": {
-        "type": "assert_table",
-        "intent": "验证工单ID为146567164的审核老师UID为1001636",
+        "type": "assert_text",
+        "intent": "验证审核历史列表中存在工单ID 146584883",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "表格断言: 行标识 '146567164' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "message": "断言: 页面含 '146584883'",
       "error": "",
       "selector": null,
-      "resolved_html": "表格断言: 行标识 '146567164' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "resolved_html": "断言: 页面含 '146584883'",
       "dispatch_ok": true,
       "post_check_ok": true,
       "post_check_reason": "",
@@ -346,17 +417,17 @@
       "step": "步骤15: assert_table",
       "action": {
         "type": "assert_table",
-        "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」",
+        "intent": "验证工单ID为146584877的审核老师UID为1001636",
         "selector": null
       },
-      "success": false,
-      "status": "failed",
-      "message": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
-      "error": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
+      "success": true,
+      "status": "passed",
+      "message": "表格断言: 行标识 '146584877' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "error": "",
       "selector": null,
-      "resolved_html": "",
-      "dispatch_ok": false,
-      "post_check_ok": false,
+      "resolved_html": "表格断言: 行标识 '146584877' 列 '审核老师UID' 期望 '1001636' 实际 '1001636'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
       "post_check_reason": "",
       "optional_skipped": false,
       "post_retries": [],
@@ -366,13 +437,33 @@
       "step": "步骤16: assert_table",
       "action": {
         "type": "assert_table",
-        "intent": "验证工单ID为146567172的审核老师UID包含1001636",
+        "intent": "验证工单ID为146584877的举报原因为题目内容涉及不良导向/敏感信息",
+        "selector": null
+      },
+      "success": true,
+      "status": "passed",
+      "message": "表格断言: 行标识 '146584877' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 '题目内容涉及不良导向/敏感信息'",
+      "error": "",
+      "selector": null,
+      "resolved_html": "表格断言: 行标识 '146584877' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 '题目内容涉及不良导向/敏感信息'",
+      "dispatch_ok": true,
+      "post_check_ok": true,
+      "post_check_reason": "",
+      "optional_skipped": false,
+      "post_retries": [],
+      "gate_mismatch": false
+    },
+    {
+      "step": "步骤17: assert_table",
+      "action": {
+        "type": "assert_table",
+        "intent": "验证工单ID为146584883的审核老师UID包含1001636",
         "selector": null
       },
       "success": false,
       "status": "failed",
-      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
-      "error": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
+      "message": "表格断言: 行标识 '146584883' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
+      "error": "表格断言: 行标识 '146584883' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
       "selector": null,
       "resolved_html": "",
       "dispatch_ok": false,
@@ -383,18 +474,18 @@
       "gate_mismatch": false
     },
     {
-      "step": "步骤17: assert_table",
+      "step": "步骤18: assert_table",
       "action": {
         "type": "assert_table",
-        "intent": "验证工单ID为146567172的审核老师UID包含1001635",
+        "intent": "验证工单ID为146584883的审核老师UID包含1001635",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
+      "message": "表格断言: 行标识 '146584883' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
       "error": "",
       "selector": null,
-      "resolved_html": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
+      "resolved_html": "表格断言: 行标识 '146584883' 列 '审核老师UID' 期望 '1001635' 实际 '1001635'",
       "dispatch_ok": true,
       "post_check_ok": true,
       "post_check_reason": "",
@@ -403,18 +494,18 @@
       "gate_mismatch": false
     },
     {
-      "step": "步骤18: assert_table",
+      "step": "步骤19: assert_table",
       "action": {
         "type": "assert_table",
-        "intent": "验证工单ID为146567172的举报原因为「多题」",
+        "intent": "验证工单ID为146584883的举报原因为多题",
         "selector": null
       },
       "success": true,
       "status": "passed",
-      "message": "表格断言: 行标识 '146567172' 列 '举报原因' 期望 '多题' 实际 '多题'",
+      "message": "表格断言: 行标识 '146584883' 列 '举报原因' 期望 '多题' 实际 '多题'",
       "error": "",
       "selector": null,
-      "resolved_html": "表格断言: 行标识 '146567172' 列 '举报原因' 期望 '多题' 实际 '多题'",
+      "resolved_html": "表格断言: 行标识 '146584883' 列 '举报原因' 期望 '多题' 实际 '多题'",
       "dispatch_ok": true,
       "post_check_ok": true,
       "post_check_reason": "",
@@ -425,57 +516,49 @@
   ],
   "screenshot_timeline": [
     {
-      "step_idx": 2,
+      "step_idx": 9,
       "success": false,
-      "screenshot": "截图/step_002_fail.png",
-      "message": "点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls",
+      "screenshot": "截图/step_009_fail.png",
+      "message": "找不到元素: 在日期选择中选择今天",
       "action_type": "click",
-      "intent": "在筛选区点击'类型'下拉框"
+      "intent": "在日期选择中选择今天"
     },
     {
-      "step_idx": 15,
+      "step_idx": 17,
       "success": false,
-      "screenshot": "截图/step_015_fail.png",
-      "message": "表格断言: 行标识 '146567164' 列 '举报原因' 期望 '题目内容涉及不良导向/敏感信息' 实际 ''",
+      "screenshot": "截图/step_017_fail.png",
+      "message": "表格断言: 行标识 '146584883' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
       "action_type": "assert_table",
-      "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」"
-    },
-    {
-      "step_idx": 16,
-      "success": false,
-      "screenshot": "截图/step_016_fail.png",
-      "message": "表格断言: 行标识 '146567172' 列 '审核老师UID' 期望 '1001636' 实际 '1001635'",
-      "action_type": "assert_table",
-      "intent": "验证工单ID为146567172的审核老师UID包含1001636"
+      "intent": "验证工单ID为146584883的审核老师UID包含1001636"
     }
   ],
   "locating_stats": {
     "scope": "case",
     "selector_cache": {
-      "lookups": 36,
-      "hits": 12,
-      "hit_rate": 33.3,
+      "lookups": 50,
+      "hits": 22,
+      "hit_rate": 44.0,
       "self_heals": 0,
-      "entries": 20
+      "entries": 30
     },
     "selector_memory": {
-      "lookups": 17,
-      "hits": 17,
-      "hit_rate": 100.0,
-      "generic_lookups": 3,
-      "generic_hits": 0,
-      "generic_hit_rate": 0.0,
-      "page_entries": 27,
-      "generic_entries": 1
+      "lookups": 12,
+      "hits": 11,
+      "hit_rate": 91.7,
+      "generic_lookups": 8,
+      "generic_hits": 2,
+      "generic_hit_rate": 25.0,
+      "page_entries": 36,
+      "generic_entries": 3
     },
     "intent_rule_engine": {
-      "lookups": 7,
-      "hits": 7,
-      "misses": 0,
-      "hit_rate": 100.0,
+      "lookups": 11,
+      "hits": 6,
+      "misses": 5,
+      "hit_rate": 54.5,
       "rule_count": 11,
       "per_rule_hits": {
-        "generic_text_click": 6,
+        "generic_text_click": 5,
         "dropdown_trigger": 1
       }
     },
@@ -489,60 +572,56 @@
       "exact_hit_rate": 0.0,
       "similar_hit_rate": 0.0,
       "pages": 6,
-      "total_rules": 8,
-      "intent_fallback": true,
-      "intent_records": 87
+      "total_rules": 10
     },
     "element_decider": {
-      "llm_calls": 0,
-      "fallback_hits": 0,
-      "retry_llm_calls": 0,
-      "use_skill": 0,
-      "misses": 0,
-      "total_llm_calls": 1,
-      "fallback_rate": 0.0,
-      "hit_rate": 100.0
+      "llm_calls": 7,
+      "use_skill": 5,
+      "total_llm_calls": 7,
+      "fallback_rate": 0.0
     },
     "resolve_distribution": {
-      "L3规则": 2
+      "L5大模型": 2,
+      "L3规则": 5,
+      "L2记忆": 3
     },
     "overall": {
-      "total_resolves": 2,
-      "non_llm_resolves": 2,
-      "non_llm_rate": 100.0,
-      "llm_resolves": 0,
-      "total_module_lookups": 60,
-      "total_module_hits": 36,
-      "overall_module_hit_rate": 60.0
+      "total_resolves": 10,
+      "non_llm_resolves": 8,
+      "non_llm_rate": 80.0,
+      "llm_resolves": 2,
+      "total_module_lookups": 73,
+      "total_module_hits": 39,
+      "overall_module_hit_rate": 53.4
     }
   },
   "hit_rate_summary": {
     "scope": "case",
     "selector_cache": {
-      "lookups": 36,
-      "hits": 12,
-      "hit_rate": 33.3,
+      "lookups": 50,
+      "hits": 22,
+      "hit_rate": 44.0,
       "self_heals": 0,
-      "entries": 20
+      "entries": 30
     },
     "selector_memory": {
-      "lookups": 17,
-      "hits": 17,
-      "hit_rate": 100.0,
-      "generic_lookups": 3,
-      "generic_hits": 0,
-      "generic_hit_rate": 0.0,
-      "page_entries": 27,
-      "generic_entries": 1
+      "lookups": 12,
+      "hits": 11,
+      "hit_rate": 91.7,
+      "generic_lookups": 8,
+      "generic_hits": 2,
+      "generic_hit_rate": 25.0,
+      "page_entries": 36,
+      "generic_entries": 3
     },
     "intent_rule_engine": {
-      "lookups": 7,
-      "hits": 7,
-      "misses": 0,
-      "hit_rate": 100.0,
+      "lookups": 11,
+      "hits": 6,
+      "misses": 5,
+      "hit_rate": 54.5,
       "rule_count": 11,
       "per_rule_hits": {
-        "generic_text_click": 6,
+        "generic_text_click": 5,
         "dropdown_trigger": 1
       }
     },
@@ -556,58 +635,48 @@
       "exact_hit_rate": 0.0,
       "similar_hit_rate": 0.0,
       "pages": 6,
-      "total_rules": 8,
-      "intent_fallback": true,
-      "intent_records": 87
+      "total_rules": 10
     },
     "element_decider": {
-      "llm_calls": 0,
-      "fallback_hits": 0,
-      "retry_llm_calls": 0,
-      "use_skill": 0,
-      "misses": 0,
-      "total_llm_calls": 1,
-      "fallback_rate": 0.0,
-      "hit_rate": 100.0
+      "llm_calls": 7,
+      "use_skill": 5,
+      "total_llm_calls": 7,
+      "fallback_rate": 0.0
     },
     "resolve_distribution": {
-      "L3规则": 2
+      "L5大模型": 2,
+      "L3规则": 5,
+      "L2记忆": 3
     },
     "overall": {
-      "total_resolves": 2,
-      "non_llm_resolves": 2,
-      "non_llm_rate": 100.0,
-      "llm_resolves": 0,
-      "total_module_lookups": 60,
-      "total_module_hits": 36,
-      "overall_module_hit_rate": 60.0
+      "total_resolves": 10,
+      "non_llm_resolves": 8,
+      "non_llm_rate": 80.0,
+      "llm_resolves": 2,
+      "total_module_lookups": 73,
+      "total_module_hits": 39,
+      "overall_module_hit_rate": 53.4
     }
   },
   "failure_analysis": {
-    "total_failures": 3,
+    "total_failures": 2,
     "failures": [
       {
-        "step": "步骤2",
-        "intent": "在筛选区点击'类型'下拉框",
-        "classification": "unknown",
-        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
+        "step": "步骤9",
+        "intent": "在日期选择中选择今天",
+        "classification": "selector_stale",
+        "suggestion": "检查意图描述是否准确, 或页面是否就绪(弹窗/表单未打开)"
       },
       {
-        "step": "步骤15",
-        "intent": "验证工单ID为146567164的举报原因为「题目内容涉及不良导向/敏感信息」",
-        "classification": "unknown",
-        "suggestion": "查看完整错误与该步 DOM 快照定位原因"
-      },
-      {
-        "step": "步骤16",
-        "intent": "验证工单ID为146567172的审核老师UID包含1001636",
+        "step": "步骤17",
+        "intent": "验证工单ID为146584883的审核老师UID包含1001636",
         "classification": "unknown",
         "suggestion": "查看完整错误与该步 DOM 快照定位原因"
       }
     ]
   },
   "llm_call_summary": {
-    "total_calls": 22
+    "total_calls": 39
   },
   "llm_call_details": [
     {
@@ -621,14 +690,14 @@
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 点击'审核历史'\n输入值: \n分发成功: true\n分发消息: 点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n供应商\n学段\n学科\n来源\n审核行为\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖",
-          "response_preview": "{\"step_ok\": true, \"reason\": \"点击'审核历史'成功，当前页面URL为 /video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'为当前选中项。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+          "prompt_preview": "动作类型: click\n操作意图: 点击'审核历史'\n输入值: \n分发成功: true\n分发消息: 点击 点击'审核历史' | 实际目标: <span class=\"ant-pro-base-menu-inline-item-text pro-5612811137471852\">审核历史</span>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: {\"url_before\": \"https://www-gwp11-bc.suanshubang.com/video/all-question",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"URL已从/video/all-question变为/video/check-history，页面显示审核历史相关的筛选表单和数据表格，左侧菜单中'审核历史'项处于当前状态，点击审核历史导航成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
         }
       ]
     },
     {
       "step_idx": 2,
-      "success": false,
+      "success": true,
       "action": {
         "type": "click",
         "intent": "在筛选区点击'类型'下拉框"
@@ -637,61 +706,221 @@
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的是供应商的下拉列表（supplier_list，含选项：-、测试、小视牛到、博雅智库等），而非'类型'字段的下拉。类型字段对应索引 [1]-[8] 区域，未见其下拉面板展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"类型下拉框在索引[1]-[8]区域，尝试点击 div:has(> label:text('类型')) >>"
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击类型下拉框后，页面已展开下拉选项列表，可见前审、前审地雷题、录制、自审、自审地雷题、初审、初审地雷题、复审、内审、仲裁等选项（索引[1009]-[1018]），下拉框展开成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 3,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在下拉选项中点击'前审'"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在下拉选项中点击'前审'\n输入值: \n分发成功: true\n分发消息: 点击 在下拉选项中点击'前审' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option ant-select-item-option-active\" title=\"前审\"><div class=\"ant-select-item-option-content\">前审</div><span class=\"ant-select-item-opti\n当前页面 URL: https://www",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"表单中第一个筛选项已显示选中值'前审'（索引[10]显示'前审'），下拉列表中'前审'选项标记为[已选]（索引[996]），下拉已收起（[hidden]），选择成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 4,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'学段'下拉框"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'学段'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'学段'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty\n当前页面 URL: https://w",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"学段下拉框已成功展开，可以看到 period_list 下拉面板（索引[1008]）已显示，包含小学、初中、高中、大学选项（索引[1024]-[1027]），且未标记为 hidden，说明下拉已正确打开。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 5,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在下拉选项中点击'大学'"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在下拉选项中点击'大学'\n输入值: \n分发成功: true\n分发消息: 点击 在下拉选项中点击'大学' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"大学\"><div class=\"ant-select-item-option-content\">大学</div><span class=\"ant-select-item-option-state\" unselectable=\"on\" ar\n当前页面 URL: https://www",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"学段下拉框已成功选中'大学'，DOM [32] 显示选中值为'大学'，[1025] option [已选] 确认大学选项被选中，下拉已关闭（[hidden]），表格数据也均显示学段为大学。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 6,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'审核行为'下拉框"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'审核行为'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'审核行为'下拉框 | 实际目标: <div class=\"ant-select ant-select-in-form-item w-40 ant-select-single ant-select-allow-clear ant-select-show-arrow\"><div class=\"ant-select-selector\"><span class=\"ant-select-selection-search\"><input ty\n当前页面 URL: https",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"审核行为下拉框已成功展开，可见 submitType_list 的选项（待处理、提交、举报/放弃、审核通过、审核不通过、超时、系统取消）已显示在页面中（索引[1052]-[1058]未标记hidden），下拉面板已打开，满足intent要求。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 7,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在下拉选项中点击'举报/放弃'"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在下拉选项中点击'举报/放弃'\n输入值: \n分发成功: true\n分发消息: 点击 在下拉选项中点击'举报/放弃' | 实际目标: <div aria-selected=\"false\" class=\"ant-select-item ant-select-item-option\" title=\"举报/放弃\"><div class=\"ant-select-item-option-content\">举报/放弃</div><span class=\"ant-select-item-option-state\" unselectable=\"\n当前页面 URL: https",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"审核行为下拉框已成功选中'举报/放弃'，DOM中[61]显示选中值为'举报/放弃'，[1048]的option标记为[已选]，[64]出现close-circle清除按钮，确认选择成功。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 8,
+      "success": true,
+      "action": {
+        "type": "click",
+        "intent": "在筛选区点击'审核时间'日期选择框"
+      },
+      "llm_calls": [
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'审核时间'日期选择框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <label for=\"submitTimeRange\" class=\"\" title=\"审核时间\">审核时间</label>\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"点击实际落在了label元素上而非日期输入框本身，页面DOM中未出现日期选择面板（datepicker popup），审核时间日期选择框未被展开/聚焦。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应直接点击日期输入框而非label，使用选择器: input#submitTimeRange\"}"
         },
         {
           "model": "retry_plan",
           "latency_ms": 0,
-          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
-          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> .. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox，类型下拉框对应索引[1]-[8]区域，应点击类型字段对应的ant-select选择器区域来展开下拉\"\n}\n```"
+          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <label for=\"submitTimeRange\" class=\"\" title=\"审核时间\">审核时间</label>\n\ntype=click\nintent=在筛选区点击'审核时间'日期选择框\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n点击实际落在了label元素上而非日期输入框本身，页面DOM中未出现日期选择面板（datepicker popup），审核时间日期选择框未被展开/聚焦。\n\n当前 URL：https://",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"input#submitTimeRange\",\n  \"rationale\": \"上一轮点击落在了label元素上，应直接点击审核时间的开始日期input输入框（id=submitTimeRange）来触发日期选择面板\"\n}\n```"
+        },
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'审核时间'日期选择框\n\n【重试策略提示】上一步页面校验未通过, 请参考:\ninput#submitTimeRange\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单]\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <s",
+          "response_preview": "{\"index\": 125, \"reason\": \"重试策略提示指定 input#submitTimeRange，对应页面中 index 125 的 input 元素（id='submitTimeRange', placeholder='开始日期'），属于'审核时间'日期选择框的开始日期输入框，点击它可以触发日期选择器。\", \"confidence\": 0.95}"
         },
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": false, \"reason\": \"Intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），导致展开的是供应商的下拉列表（可见选项为：-、测试、小视牛到、博雅智库等），而非'类型'下拉框。类型字段（索引[1]-[8]）的下拉并未展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"类型下拉框对应索引[1]-[8]区域，应点击类型字段内的 span 触发展开。尝试选择器: form >> text=类型 >> xpath=.. >"
+          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'审核时间'日期选择框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'审核时间'日期选择框 | 实际目标: <input id=\"submitTimeRange\" placeholder=\"开始日期\" size=\"12\" autocomplete=\"off\" value=\"\">\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n",
+          "response_preview": "{\"step_ok\": true, \"reason\": \"点击审核时间日期选择框成功，页面已展开日期选择面板，可见2026年6月和7月的日历表格（索引[1010]-[1227]），说明日期选择框已被激活并展开。\", \"retry_focus\": \"无\", \"suggested_value\": null, \"resolve_hint\": null}"
+        }
+      ]
+    },
+    {
+      "step_idx": 9,
+      "success": false,
+      "action": {
+        "type": "click",
+        "intent": "在日期选择中选择今天"
+      },
+      "llm_calls": [
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <span> 前审 [表单]\n[11] <span #9>  [表单]\n[12] <span role=\"img\" name=\"down\" #2>  [表单]\n[13] <span role=\"img\" name=\"close-circle\" #3>  [表单]\n[17] <label> 供应商 [表单]\n[18] <span #10>  [表单]\n[19] <input id=\"sup",
+          "response_preview": "{\"use_skill\": {\"name\": \"build_date_picker_selector\", \"params\": {\"intent\": \"在日期选择中选择今天\", \"action\": \"click_today\"}}}"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n输入值: \n分发成功: false\n分发消息: 找不到元素: 在日期选择中选择今天\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"dispatch_success为false，未能找到'今天'按钮元素。但从DOM可以看到日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），需要点击今天的日期（6月23日）。当前日历中第23天对应索引[1080]。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"点击日历面板中的23号单元格，使用选择器: .ant-picker-panel:not(.ant-picker-panel-hidden) td[title=\\"
         },
         {
           "model": "retry_plan",
           "latency_ms": 0,
-          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
-          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> xpath=.. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox（id=supplier），应该点击'类型'字段对应的下拉选择器，类型字段在索引[1]-[8]区域，需定位到类型label旁边的ant-select组件\"\n}\n```"
+          "prompt_preview": "dispatch_success=false\ndispatch_message=找不到元素: 在日期选择中选择今天\n\ntype=click\nintent=在日期选择中选择今天\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\ndispatch_success为false，未能找到'今天'按钮元素。但从DOM可以看到日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），需要点击今天的日期（6月23日）。当前日历中第23天对应索引[1080]。\n\n当前 URL：https://www-gwp11-bc.suanshubang.com/video",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"td:has-text('23'):not(:has-text('2026'))\",\n  \"rationale\": \"日历面板已展开，没有'今天'按钮，需要直接点击日历中第23天的单元格，对应索引[1079]的td元素\"\n}\n```\n\nWait, let me reconsider. The index [1079] is a `<td>` with value 23, and [1080] is `<div>` with value "
+        },
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n\n【重试策略提示】上一步页面校验未通过, 请参考:\ntd:has-text('23'):not(:has-text('2026'))\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <span> 前审 [表单]\n[11] <span #9>  [表单]\n[12] <span role=\"img\" name=\"down\" #2>  [表单]\n[13] <span role=\"img\" name=\"close-circle\" #3>  [",
+          "response_preview": "{\"use_skill\": {\"name\": \"build_date_picker_selector\", \"params\": {\"target_date\": \"today\", \"hint\": \"td:has-text('23'):not(:has-text('2026'))\"}}}"
         },
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox (id=supplier)，展开的是供应商的下拉列表（显示了-、测试、小视牛到、博雅智库等供应商选项），而非'类型'的下拉选项（应显示前审等选项）。DOM中[1]~[8]为'类型'字段区域，其下拉未展开。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'字段对应的下拉区域，尝试选择器: form >> text=类型 >> nth=0 >> .. >> .ant"
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n输入值: \n分发成功: false\n分发消息: 找不到元素: 在日期选择中选择今天\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器面板已展开（显示2026年6月和7月的日历），需要点击6月23日（今天）对应的日期单元格。表格中的审核时间显示今天是2026-06-23。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"日历面板已展开，今天是6月23日。点击左侧日历（Jun）中的23号单元格。使用选择器: td:has(div:text-is('23')) 在第一个日历表格中，或者更精确地: .ant-picker-pane"
         },
         {
           "model": "retry_plan",
           "latency_ms": 0,
-          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
-          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> div:has(> label:has-text('类型')) >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商的combobox，应该点击'类型'字段对应的下拉选择器区域，DOM中[1]~[8]为类型字段区域，需定位到类型label所在div内的ant-select-selector元素\"\n}\n```"
+          "prompt_preview": "dispatch_success=false\ndispatch_message=找不到元素: 在日期选择中选择今天\n\ntype=click\nintent=在日期选择中选择今天\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器面板已展开（显示2026年6月和7月的日历），需要点击6月23日（今天）对应的日期单元格。表格中的审核时间显示今天是2026-06-23。\n\n当前 URL：https://www-gwp11-bc.suanshubang.com/video/check-history\n\n页面元素摘要（节",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"td:has-text('23'):not(:has-text('2026'))\",\n  \"rationale\": \"日期选择器面板已展开显示6月日历，今天是23号，需要点击6月日历中值为23的单元格div，对应索引[1080]\"\n}\n```"
+        },
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n\n【重试策略提示】上一步页面校验未通过, 请参考:\ntd:has-text('23'):not(:has-text('2026'))\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <span> 前审 [表单]\n[11] <span #9>  [表单]\n[12] <span role=\"img\" name=\"down\" #2>  [表单]\n[13] <span role=\"img\" name=\"close-circle\" #3>  [",
+          "response_preview": "{\"use_skill\": {\"name\": \"build_date_picker_selector\", \"params\": {\"target_date\": \"today\", \"hint\": \"td:has-text('23'):not(:has-text('2026'))\"}}}"
         },
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": false, \"reason\": \"意图是点击'类型'下拉框展开，但实际点击的是'供应商'下拉框（id=supplier），从DOM可见展开的listbox是supplier_list，包含供应商选项（小视牛到、博雅智库等），而非类型选项。'类型'字段对应的是索引[1]-[8]区域，没有展开的下拉面板。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'下拉框区域，尝试选择器: div:has(> label:text('类型')) .ant-select-selector "
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n输入值: \n分发成功: false\n分发消息: 找不到元素: 在日期选择中选择今天\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，未能找到'今天'按钮。但从DOM可见日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），当前日期应为6月23日。需要直接点击日历中的23日单元格。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"点击6月日历中的23日单元格，使用选择器: td div:text-is('23') 在第一个日历面板中，或更精确地 .ant-picker-panel:first-child td[title='2026-06-23'"
         },
         {
           "model": "retry_plan",
           "latency_ms": 0,
-          "prompt_preview": "dispatch_success=true\ndispatch_message=点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n\ntype=click\nintent=在筛选区点击'类型'下拉框\nva",
-          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"form >> label:has-text('类型') >> xpath=.. >> .ant-select-selector\",\n  \"rationale\": \"上一轮误点了供应商下拉框（id=supplier），应该点击'类型'标签旁边的下拉框，对应索引[1]-[8]区域，需要定位到类型label同级的select选择器。\"\n}\n```"
+          "prompt_preview": "dispatch_success=false\ndispatch_message=找不到元素: 在日期选择中选择今天\n\ntype=click\nintent=在日期选择中选择今天\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\n分发失败，未能找到'今天'按钮。但从DOM可见日期选择器日历面板已展开（索引[1010]-[1118]显示2026年6月日历），当前日期应为6月23日。需要直接点击日历中的23日单元格。\n\n当前 URL：https://www-gwp11-bc.suanshubang.com/video/check-history\n\n页面元素摘要（节选）：\n[0",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"td:has-text('23'):not(:has-text('2026'))\",\n  \"rationale\": \"日历面板已展开，索引[1079]是6月23日的td单元格，应直接点击该日期单元格而非寻找'今天'按钮\"\n}\n```"
+        },
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n\n【重试策略提示】上一步页面校验未通过, 请参考:\ntd:has-text('23'):not(:has-text('2026'))\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <span> 前审 [表单]\n[11] <span #9>  [表单]\n[12] <span role=\"img\" name=\"down\" #2>  [表单]\n[13] <span role=\"img\" name=\"close-circle\" #3>  [",
+          "response_preview": "{\"use_skill\": {\"name\": \"build_date_picker_selector\", \"params\": {\"target_date\": \"today\", \"hint\": \"td:has-text('23'):not(:has-text('2026'))\"}}}"
         },
         {
           "model": "post_check",
           "latency_ms": 0,
-          "prompt_preview": "动作类型: click\n操作意图: 在筛选区点击'类型'下拉框\n输入值: \n分发成功: true\n分发消息: 点击 在筛选区点击'类型'下拉框 | 实际目标: <input type=\"search\" id=\"supplier\" autocomplete=\"off\" class=\"ant-select-selection-search-input\" role=\"combobox\" aria-haspopup=\"listbox\" aria-owns=\"supplier_list\" aria-autocomplete=\"list\" aria-controls\n当前页面 URL: https://w",
-          "response_preview": "{\"step_ok\": false, \"reason\": \"intent 是点击'类型'下拉框展开，但实际点击了'供应商'字段的 combobox（id=supplier），从 DOM 可见展开的下拉列表是供应商列表（含'小视牛到'、'博雅智库'等选项），而非类型下拉框的选项。类型字段对应的是 [1]-[8] 区域，其中没有展开的 listbox/下拉面板。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"应点击'类型'字段对应的下拉触发区域，尝试选择器: div:has(> div > label:text-"
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n输入值: \n分发成功: false\n分发消息: 找不到元素: 在日期选择中选择今天\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"dispatch_success为false，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（索引1010-1118为6月日历，1119-1227为7月日历），需要点击今天的日期（6月23日）。当前页面表格数据显示审核时间为2026-06-23，说明今天是6月23日，需要点击日历中的23。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"点击6月日历中的23日单元格，使用选择器: .ant-picker-panel:first-chi"
+        },
+        {
+          "model": "retry_plan",
+          "latency_ms": 0,
+          "prompt_preview": "dispatch_success=false\ndispatch_message=找不到元素: 在日期选择中选择今天\n\ntype=click\nintent=在日期选择中选择今天\nvalue=\n\nfailure_reason（页面校验未通过的主要原因）:\ndispatch_success为false，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（索引1010-1118为6月日历，1119-1227为7月日历），需要点击今天的日期（6月23日）。当前页面表格数据显示审核时间为2026-06-23，说明今天是6月23日，需要点击日历中的23。\n\n当前 URL：https://www",
+          "response_preview": "```json\n{\n  \"retry_focus\": \"选择器\",\n  \"suggested_value\": null,\n  \"resolve_hint\": \"td:has-text('23'):not(:has-text('2026'))\",\n  \"rationale\": \"日历面板已展开，没有'今天'按钮，需要直接点击6月日历中的23日单元格，对应索引[1079]的td元素\"\n}\n```"
+        },
+        {
+          "model": "element_decide",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n\n【重试策略提示】上一步页面校验未通过, 请参考:\ntd:has-text('23'):not(:has-text('2026'))\n\n页面元素 (编号从 0 开始, 方括号内为 index):\n[4] <label> 类型 [表单]\n[9] <span #8>  [表单]\n[10] <span> 前审 [表单]\n[11] <span #9>  [表单]\n[12] <span role=\"img\" name=\"down\" #2>  [表单]\n[13] <span role=\"img\" name=\"close-circle\" #3>  [",
+          "response_preview": "{\"use_skill\": {\"name\": \"build_date_picker_selector\", \"params\": {\"target_date\": \"today\", \"hint\": \"td:has-text('23'):not(:has-text('2026'))\"}}}"
+        },
+        {
+          "model": "post_check",
+          "latency_ms": 0,
+          "prompt_preview": "动作类型: click\n操作意图: 在日期选择中选择今天\n输入值: \n分发成功: false\n分发消息: 找不到元素: 在日期选择中选择今天\n当前页面 URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n分发结构化上下文: (无)\n\n当前页面DOM摘要:\n[0] <form> 类型\n前审\n供应商\n学段\n大学\n学科\n来源\n审核行为\n举报/放弃\n审核老师等级\n复审结果\n申诉状态\n审核模式\n奖励原因\n题目难度\n抽审类型\n审核时间\n复审结束时间\n申诉结束时间\n题目ID\n工单ID\n任务ID\n审核老师UID\n重 置提 交导 出 [表单",
+          "response_preview": "{\"step_ok\": false, \"reason\": \"分发失败，未能找到'今天'按钮元素。但从DOM可见日期选择器日历面板已展开（显示2026年6月和7月的日历），需要点击今天的日期（6月23日）对应的td/div元素。\", \"retry_focus\": \"选择器\", \"suggested_value\": null, \"resolve_hint\": \"日历面板已展开，当前月份为2026年6月。今天是6月23日，需点击第一个日历表（June）中的23号单元格。使用选择器: td:has(div:text-is('23')) >> nth=0 在第一个table中，或尝试 .ant-pick"
         },
         {
           "model": "readiness",
           "latency_ms": 0,
-          "prompt_preview": "当前URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n必填项: 共0个, 未填0个\n未填字段名: (无)\n\n下一步动作: type=click intent=在筛选区点击'类型'下拉框 value=\n\n用例备注/业务提示:\n备注:\n- 大学前审遇到非目标题目时，全部选择「题目内容涉及不良导向/敏感信息」让工单退场，不占用后续 case 的题池资源\n- 管理员审核历史中包括大学前审信息\n\n用例操作步骤 (原始):\n- 管理员点击「审核历史」\n- 筛选「类型」为「前审」，「学段」为「大学」，「审核行为」为「举报/放弃」，「审",
+          "prompt_preview": "当前URL: https://www-gwp11-bc.suanshubang.com/video/check-history\n必填项: 共0个, 未填0个\n未填字段名: (无)\n\n下一步动作: type=click intent=在日期选择中选择今天 value=\n\n用例备注/业务提示:\n备注:\n- 大学前审遇到非目标题目时，全部选择「题目内容涉及不良导向/敏感信息」让工单退场，不占用后续 case 的题池资源\n- 管理员审核历史中包括大学前审信息\n\n用例操作步骤 (原始):\n- 管理员点击「审核历史」\n- 筛选「类型」为「前审」，「学段」为「大学」，「审核行为」为「举报/放弃」，「审核时间",
           "response_preview": "{\"ready\": true, \"recovery\": []}"
         }
       ]

@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+from .field_scope import combobox_ids_near_label
+
 # 语义 DOM 单节点类型别名
 SemanticNode = Dict[str, Any]
 
@@ -34,25 +36,6 @@ def _detect_ant_design_from_dom(semantic_dom: List[SemanticNode]) -> bool:
         if "ant-" in cls:
             return True
     return False
-
-
-def _combobox_ids_near_label(semantic_dom: List[SemanticNode], label: str) -> List[str]:
-    """按表单项 label 在语义 DOM 中查找邻近 combobox 的 id（如 Ant Design #source）。"""
-    label = (label or "").strip()
-    if not label:
-        return []
-    ids: List[str] = []
-    for i, node in enumerate(semantic_dom):
-        if str(node.get("tag") or "").lower() != "label":
-            continue
-        if label not in str(node.get("text") or ""):
-            continue
-        for j in range(i, min(i + 25, len(semantic_dom))):
-            child = semantic_dom[j]
-            cid = str(child.get("id") or "").strip()
-            if str(child.get("role") or "").lower() == "combobox" and cid:
-                ids.append(cid)
-    return list(dict.fromkeys(ids))
 
 
 # =============================================================================
@@ -559,29 +542,33 @@ def build_el_select_trigger_selector(
     candidates: List[str] = []
 
     if _detect_ant_design_from_dom(semantic_dom):
-        for cid in _combobox_ids_near_label(semantic_dom, field):
+        for cid in combobox_ids_near_label(semantic_dom, field):
             candidates.extend(
                 [
                     f"#{cid}",
-                    f"#{cid} >> xpath=ancestor::div[contains(@class,'ant-select'))[1]",
+                    f"#{cid} >> xpath=ancestor::div[contains(@class,'ant-select')][1]",
                 ]
             )
         candidates.extend(
             [
-                f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {te})]]//div[contains(@class,'ant-select'))[1]",
+                f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {te})]]//div[contains(@class,'ant-select')])[1]",
                 f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {te})]]//*[@role='combobox'])[1]",
-                f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {te})]]//span[contains(@class,'ant-select-arrow'))[1]",
+                f"(//div[contains(@class,'ant-form-item')][.//label[contains(normalize-space(.), {te})]]//span[contains(@class,'ant-select-arrow')])[1]",
             ]
         )
 
     candidates.extend(
         [
-            f"(//div[@role='dialog']//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper'))[1]",
-            f"(//div[contains(@class,'el-dialog')]//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper'))[1]",
-            f"(//*[contains(@class,'el-overlay-dialog')]//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper'))[1]",
-            f"(//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper'))[1]",
+            f"(//div[@role='dialog']//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper')])[1]",
+            f"(//div[contains(@class,'el-dialog')]//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper')])[1]",
+            f"(//*[contains(@class,'el-overlay-dialog')]//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper')])[1]",
+            f"(//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper')])[1]",
             f"(//div[@role='dialog']//div[contains(@class,'el-form-item')][.//*[contains(normalize-space(.), {te})]]//*[contains(@class,'el-select__wrapper')]//input[@role='combobox'])[1]",
-            f"(//input[contains(@placeholder, {te})]/ancestor::*[contains(@class,'el-select')][1]//div[contains(@class,'el-select__wrapper'))[1]",
+        ]
+    )
+    candidates.extend(
+        [
+            f"(//input[contains(@placeholder, {te})]/ancestor::*[contains(@class,'el-select')][1]//div[contains(@class,'el-select__wrapper')])[1]",
         ]
     )
     deduped: List[str] = []

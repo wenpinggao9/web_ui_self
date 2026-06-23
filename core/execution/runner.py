@@ -645,7 +645,6 @@ class PlaywrightRunner:
                     )
                     retry_action = action.model_copy(
                         update={
-                            "force_selector": None,
                             "selector": None,
                             "exclude_selectors": [],
                             "resolve_hint": None,
@@ -674,7 +673,6 @@ class PlaywrightRunner:
             return True, "恢复动作已达成此步骤意图", False, seq
         retry_action = action.model_copy(
             update={
-                "force_selector": None,
                 "selector": None,
                 "exclude_selectors": [],
                 "resolve_hint": None,

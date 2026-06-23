@@ -155,7 +155,7 @@ class ExecutionTrace:
         elif phase == "retry":
             c.print(
                 f"[dim]  ├─ 后校验重试[/dim] 第{data.get('attempt')}次 "
-                f"exclude={data.get('exclude')} force_selector={data.get('force_selector')!r}"
+                f"exclude={data.get('exclude')} hint={data.get('resolve_hint')!r}"
             )
             if data.get("retry_focus"):
                 c.print(f"[dim]  │   hint: {str(data.get('retry_focus'))[:120]}[/dim]")

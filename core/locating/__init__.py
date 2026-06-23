@@ -5,10 +5,9 @@ from .llm_decider import LLMElementDecider
 from .memory import SelectorMemory
 from .resolver import LocatorResolver
 from .composite_learner import CompositeStructureLearner
-from .structure_learner import StructureLearner
 
 __all__ = [
     "LocatorResolver", "LLMElementDecider", "SelectorCache",
-    "SelectorMemory", "StructureLearner", "CompositeStructureLearner",
+    "SelectorMemory", "CompositeStructureLearner",
     "IntentRuleEngine",
 ]

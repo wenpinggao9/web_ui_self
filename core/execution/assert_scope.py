@@ -276,6 +276,74 @@ def try_scoped_literal_items(
     return False, f"区域断言: {scope_label(scope)} 不含 {target!r}"
 
 
+def _xpath_page_contains_text(page: Any, target: str) -> bool:
+    """页面级文本搜索 (对齐 V3 assert 兜底, 不绑定具体组件)."""
+    truncated = (target or "").strip()[:50]
+    if not truncated:
+        return False
+    try:
+        if "'" not in truncated:
+            sel = f"xpath=//*[contains(text(), '{truncated}')]"
+        elif '"' not in truncated:
+            sel = f'xpath=//*[contains(text(), "{truncated}")]'
+        else:
+            return False
+        loc = page.locator(sel)
+        count = min(loc.count(), 5)
+        for i in range(count):
+            try:
+                t = loc.nth(i).evaluate(
+                    "el => (el.textContent || el.innerText || '').trim()",
+                )
+                if _text_contains(target, str(t or "")):
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def try_live_scoped_text(
+    page: Any,
+    scope: AssertScope,
+    target: str,
+    *,
+    negate: bool = False,
+) -> Optional[tuple[bool, str]]:
+    """字面/scoped 未命中缓存 DOM 时, 从活页作用域文本或页面级 XPath 再判一次."""
+    if not target:
+        return None
+    haystack = ""
+    try:
+        regions = extract_page_regions(page)
+        if scope.explicit_region or scope.field_hint or scope.exclude_nav:
+            haystack = get_scoped_text(regions, scope)
+        if not haystack:
+            haystack = regions.get("main") or regions.get("body") or ""
+    except Exception:
+        haystack = ""
+    if not haystack:
+        try:
+            haystack = (page.inner_text("body") or "")[:6000]
+        except Exception:
+            haystack = ""
+
+    if negate:
+        present = _text_contains(target, haystack) or _xpath_page_contains_text(page, target)
+        return (
+            (not present),
+            f"live否定断言: 页面{'仍包含' if present else '不包含'} {target!r}",
+        )
+
+    if _text_contains(target, haystack):
+        label = scope_label(scope) if scope.explicit_region else "页面"
+        return True, f"live区域断言: {label} 含 {target!r}"
+    if _xpath_page_contains_text(page, target):
+        return True, f"live页面搜索: 含 {target!r}"
+    return None
+
+
 def build_semantic_text_summary_from_items(
     items: list[dict], scope: AssertScope,
 ) -> str:
